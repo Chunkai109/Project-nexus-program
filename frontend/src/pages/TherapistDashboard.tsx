@@ -9,7 +9,6 @@ import { Settings } from 'lucide-react'
 
 export function TherapistDashboard() {
   const [tab, setTab] = useState('creator')
-  const [focusPatientId, setFocusPatientId] = useState<string | undefined>(undefined)
 
   return (
     <PageShell className="flex">
@@ -20,14 +19,9 @@ export function TherapistDashboard() {
           <>
             <div className="mb-10">
               <h1 className="text-[28px] font-semibold tracking-tight text-ink">Patient Roster</h1>
-              <p className="mt-1.5 text-[15px] text-ink-muted">Active rehabilitation patients under your care.</p>
+              <p className="mt-1.5 text-[15px] text-ink-muted">Patients who have signed in to SmartPhysio.</p>
             </div>
-            <PatientRosterGrid
-              onOpenPatient={(id) => {
-                setFocusPatientId(id)
-                setTab('analytics')
-              }}
-            />
+            <PatientRosterGrid />
           </>
         )}
 
@@ -41,7 +35,7 @@ export function TherapistDashboard() {
             </div>
             <div className="flex flex-col gap-6">
               <ProtocolBuilder />
-              <TelemetrySection initialPatientId={focusPatientId} />
+              <TelemetrySection />
             </div>
           </>
         )}
@@ -52,7 +46,7 @@ export function TherapistDashboard() {
               <h1 className="text-[28px] font-semibold tracking-tight text-ink">Session Analytics</h1>
               <p className="mt-1.5 text-[15px] text-ink-muted">Deep-dive into a single patient's telemetry history.</p>
             </div>
-            <TelemetrySection initialPatientId={focusPatientId} />
+            <TelemetrySection />
           </>
         )}
 

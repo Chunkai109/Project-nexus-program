@@ -1,43 +1,43 @@
-import { ArrowRight } from 'lucide-react'
+import { UserRound } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
-import { ProgressBar } from '@/components/ui/ProgressBar'
-import { PATIENT_ROSTER } from '@/lib/mockData'
+import { useAppData } from '@/lib/data/AppDataContext'
+import { formatRelativeTime, hashColor } from '@/lib/formatRelativeTime'
 
-export function PatientRosterGrid({ onOpenPatient }: { onOpenPatient: (id: string) => void }) {
+export function PatientRosterGrid() {
+  const { patients } = useAppData()
+
+  if (patients.length === 0) {
+    return (
+      <Card className="flex flex-col items-center gap-3 p-16 text-center">
+        <UserRound className="h-8 w-8 text-ink-faint" />
+        <p className="text-[15px] font-medium text-ink">No patients yet</p>
+        <p className="max-w-sm text-[13px] text-ink-faint">
+          This list populates automatically the first time a patient signs in — there's nothing to seed manually.
+        </p>
+      </Card>
+    )
+  }
+
   return (
     <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
-      {PATIENT_ROSTER.map((p) => (
+      {patients.map((p) => (
         <Card key={p.id} className="p-6">
-          <div className="mb-5 flex items-center gap-3">
+          <div className="mb-4 flex items-center gap-3">
             <div
-              className="flex h-10 w-10 items-center justify-center rounded-full text-sm font-semibold text-white"
-              style={{ background: p.avatarColor }}
+              className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full text-sm font-semibold text-white"
+              style={{ background: hashColor(p.email) }}
             >
-              {p.name.charAt(0)}
+              {p.name.charAt(0).toUpperCase()}
             </div>
             <div className="min-w-0">
               <p className="truncate text-[14px] font-semibold text-ink">{p.name}</p>
-              <p className="truncate text-[13px] text-ink-faint">{p.condition}</p>
+              <p className="truncate text-[13px] text-ink-faint">{p.email}</p>
             </div>
-          </div>
-
-          <div className="mb-5">
-            <div className="mb-2 flex items-center justify-between text-[13px]">
-              <span className="text-ink-muted">Adherence</span>
-              <span className="font-medium text-ink">{p.adherence}%</span>
-            </div>
-            <ProgressBar value={p.adherence} tone={p.adherence > 85 ? 'emerald' : p.adherence > 70 ? 'accent' : 'amber'} />
           </div>
 
           <div className="flex items-center justify-between text-[13px]">
-            <span className="text-ink-faint">Last session: {p.lastSession}</span>
-            <button
-              onClick={() => onOpenPatient(p.id)}
-              className="flex items-center gap-1 font-medium text-accent transition-opacity duration-200 hover:opacity-80"
-            >
-              View Protocol
-              <ArrowRight className="h-3 w-3" />
-            </button>
+            <span className="text-ink-faint">Last active: {formatRelativeTime(p.lastSeenAt)}</span>
+            <span className="text-ink-faint">Since {formatRelativeTime(p.firstSeenAt)}</span>
           </div>
         </Card>
       ))}

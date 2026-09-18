@@ -14,9 +14,10 @@ export interface AuthUser {
 
 export type PodSignal = 'strong' | 'weak' | 'offline'
 export type PodKind = 'EMG+IMU' | 'IMU+Haptics' | 'IMU'
+export type PodId = 1 | 2 | 3 | 4 | 5 | 6
 
 export interface Pod {
-  id: number
+  id: PodId
   label: string
   location: string
   kind: PodKind
@@ -37,6 +38,10 @@ export interface Exercise {
   therapistNote: string
   setupInstructions: string
   estMinutes: number
+  /** The two sensor nodes whose relative angle this exercise's ROM/fault targets are measured against. */
+  nodeA: PodId
+  nodeB: PodId
+  createdAt: number
 }
 
 export interface SessionMetrics {
@@ -66,11 +71,11 @@ export interface SymmetryPoint {
   right: number
 }
 
-export interface PatientRosterEntry {
+/** A real patient, recorded the first time they sign in — not a fake profile. */
+export interface PatientRecord {
   id: string
   name: string
-  condition: string
-  lastSession: string
-  adherence: number
-  avatarColor: string
+  email: string
+  firstSeenAt: number
+  lastSeenAt: number
 }

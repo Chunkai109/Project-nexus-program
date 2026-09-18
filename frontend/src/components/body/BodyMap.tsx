@@ -21,12 +21,15 @@ export function BodyMap({
   activePod,
   onSelect,
   hapticPodId,
+  selectedPods,
   height = 200,
 }: {
   pods: Pod[]
   activePod?: number | null
   onSelect?: (id: number) => void
   hapticPodId?: number | null
+  /** Pods highlighted as a deliberate selection (e.g. the two reference nodes for an exercise's angle), distinct from live activity. */
+  selectedPods?: number[]
   height?: number
 }) {
   return (
@@ -57,7 +60,8 @@ export function BodyMap({
         if (!pos) return null
         const isActive = activePod === pod.id
         const isHaptic = hapticPodId === pod.id
-        const color = isHaptic ? 'var(--color-crimson)' : signalDot[pod.signal]
+        const isSelected = selectedPods?.includes(pod.id) ?? false
+        const color = isHaptic ? 'var(--color-crimson)' : isSelected ? 'var(--color-accent)' : signalDot[pod.signal]
         return (
           <g
             key={pod.id}
@@ -71,11 +75,14 @@ export function BodyMap({
                 <animate attributeName="opacity" values="0.4;0;0.4" dur={isHaptic ? '0.7s' : '2.4s'} repeatCount="indefinite" />
               </circle>
             )}
+            {isSelected && (
+              <circle r={13} fill="none" stroke="var(--color-accent)" strokeOpacity={0.35} strokeWidth={2} />
+            )}
             <circle
-              r={isActive || isHaptic ? 10 : 8}
+              r={isActive || isHaptic || isSelected ? 10 : 8}
               fill="var(--color-surface)"
               stroke={color}
-              strokeWidth={isActive || isHaptic ? 2.5 : 2}
+              strokeWidth={isActive || isHaptic || isSelected ? 2.5 : 2}
               style={{ transition: 'r 150ms ease' }}
             />
             <text

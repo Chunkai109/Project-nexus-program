@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Bluetooth, BluetoothOff, CircleCheck, Loader2, TriangleAlert, Vibrate, Zap } from 'lucide-react'
+import { ArrowLeft, Bluetooth, BluetoothOff, CircleCheck, Loader2, TriangleAlert, Vibrate, Zap } from 'lucide-react'
 import { PageShell } from '@/components/layout/PageShell'
 import { Logo } from '@/components/layout/Logo'
 import { ThemeToggle } from '@/components/ui/ThemeToggle'
@@ -8,7 +8,9 @@ import { Breadcrumb } from '@/components/ui/Breadcrumb'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { BodyMap } from '@/components/body/BodyMap'
-import { PODS, EXERCISES } from '@/lib/mockData'
+import { PODS } from '@/lib/mockData'
+import { useAppData } from '@/lib/data/AppDataContext'
+import { podLabel } from '@/lib/podUtils'
 import { useBleHub } from '@/lib/ble/BleProvider'
 import type { PodId } from '@/lib/ble/protocol'
 import { clsx } from 'clsx'
@@ -49,7 +51,8 @@ const signalTone: Record<string, { icon: typeof CircleCheck; text: string; class
 export function SensorSetup() {
   const { exerciseId } = useParams()
   const navigate = useNavigate()
-  const exercise = EXERCISES.find((e) => e.id === exerciseId) ?? EXERCISES[0]
+  const { exercises } = useAppData()
+  const exercise = exercises.find((e) => e.id === exerciseId)
   const [activePod, setActivePod] = useState<number | null>(null)
   const [vibrating, setVibrating] = useState(false)
   const [hapticSendError, setHapticSendError] = useState<string | null>(null)
@@ -84,6 +87,23 @@ export function SensorSetup() {
     setTimeout(() => setVibrating(false), 1600)
   }
 
+  if (!exercise) {
+    return (
+      <PageShell>
+        <main className="flex min-h-screen flex-col items-center justify-center gap-4 px-10 text-center">
+          <p className="text-[17px] font-semibold text-ink">Exercise not found</p>
+          <p className="max-w-sm text-[14px] text-ink-faint">
+            This protocol may have been removed by your physiotherapist. Head back to your exercise list to see what's currently assigned.
+          </p>
+          <Button onClick={() => navigate('/patient/exercises')}>
+            <ArrowLeft className="h-4 w-4" />
+            Back to Exercises
+          </Button>
+        </main>
+      </PageShell>
+    )
+  }
+
   return (
     <PageShell>
       <header className="translucent-header sticky top-0 z-20 flex items-center justify-between border-b border-border px-10 py-4">
@@ -101,8 +121,17 @@ export function SensorSetup() {
           <h2 className="mb-1 self-start text-[15px] font-semibold text-ink">Satellite Pod Map</h2>
           <p className="mb-5 self-start text-[13px] text-ink-faint">{exercise.title} · tap a pod for details</p>
           <div className={clsx('py-2', vibrating && 'animate-pulse')}>
-            <BodyMap pods={displayPods} activePod={activePod} onSelect={setActivePod} height={340} />
+            <BodyMap
+              pods={displayPods}
+              activePod={activePod}
+              onSelect={setActivePod}
+              selectedPods={[exercise.nodeA, exercise.nodeB]}
+              height={340}
+            />
           </div>
+          <p className="mb-1 text-center text-[12px] text-ink-faint">
+            Highlighted nodes: {podLabel(exercise.nodeA)} ↔ {podLabel(exercise.nodeB)}
+          </p>
 
           <div className="mt-5 flex w-full flex-col gap-2">
             {displayPods.map((pod) => {
@@ -139,7 +168,8 @@ export function SensorSetup() {
           <Card className="p-7">
             <h2 className="mb-1 text-[15px] font-semibold text-ink">Pod Placement Instructions</h2>
             <p className="mb-6 text-[13px] text-ink-faint">
-              Follow each step in order. Setup note from your physiotherapist: “{exercise.setupInstructions}”
+              Follow each step in order.
+              {exercise.setupInstructions && <> Setup note from your physiotherapist: "{exercise.setupInstructions}"</>}
             </p>
 
             <ol className="flex flex-col gap-5">

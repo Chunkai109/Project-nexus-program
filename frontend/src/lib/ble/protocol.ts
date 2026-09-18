@@ -30,7 +30,8 @@ export const CHARACTERISTIC_UUID = {
   HAPTIC_CONTROL: '0000fe44-cc7a-482a-984a-7f2ed5b3e58f',
 } as const
 
-export type PodId = 1 | 2 | 3 | 4 | 5 | 6
+export type { PodId } from '@/types'
+import type { PodId } from '@/types'
 
 // ---------------------------------------------------------------------------
 // IMU_DATA — notify, 7 bytes
