@@ -3,8 +3,9 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { TriangleAlert, Vibrate, Timer, Repeat, ScanEye } from 'lucide-react'
 import { PageShell } from '@/components/layout/PageShell'
 import { Logo } from '@/components/layout/Logo'
+import { ThemeToggle } from '@/components/ui/ThemeToggle'
 import { Breadcrumb } from '@/components/ui/Breadcrumb'
-import { GlassCard } from '@/components/ui/GlassCard'
+import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { RadialGauge } from '@/components/charts/RadialGauge'
 import { EmgActivationBar } from '@/components/charts/EmgActivationBar'
@@ -79,25 +80,26 @@ export function LiveSession() {
 
   return (
     <PageShell>
-      <header className="flex items-center justify-between border-b border-border px-8 py-5">
+      <header className="translucent-header sticky top-0 z-20 flex items-center justify-between border-b border-border px-10 py-4">
         <Logo size="sm" />
         <Breadcrumb
           steps={[{ label: 'Step 1: Sensor Placement' }, { label: 'Step 2: Calibration' }, { label: 'Step 3: Live Session' }]}
           activeIndex={2}
         />
-        <div className="flex items-center gap-4 text-sm text-ink-muted">
+        <div className="flex items-center gap-5 text-sm text-ink-muted">
           <span className="flex items-center gap-1.5">
-            <Timer className="h-4 w-4 text-electric" />
+            <Timer className="h-4 w-4 text-accent" />
             {mm}:{ss}
           </span>
           <span className="flex items-center gap-1.5">
-            <Repeat className="h-4 w-4 text-electric" />
+            <Repeat className="h-4 w-4 text-accent" />
             {simulated.repCount} reps
           </span>
+          <ThemeToggle />
         </div>
       </header>
 
-      <main className="grid grid-cols-1 gap-6 px-8 py-8 lg:grid-cols-[1.5fr_1fr]">
+      <main className="grid grid-cols-1 gap-6 px-10 py-10 lg:grid-cols-[1.5fr_1fr]">
         {/* Primary viewport */}
         <div className="flex flex-col gap-4">
           <CameraViewport
@@ -120,19 +122,19 @@ export function LiveSession() {
             </div>
           </CameraViewport>
 
-          <GlassCard className="flex items-start gap-2 p-4">
-            <ScanEye className="mt-0.5 h-4 w-4 flex-shrink-0 text-electric" />
-            <p className="text-xs text-ink-faint">
+          <Card className="flex items-start gap-2.5 p-5">
+            <ScanEye className="mt-0.5 h-4 w-4 flex-shrink-0 text-accent" />
+            <p className="text-[13px] text-ink-faint">
               {usingVision
                 ? 'Knee angle is being measured live from your camera via MediaPipe Pose. Wearable pods still supply EMG and localized limb rotation the camera alone can\'t see.'
                 : 'No live camera reading right now, so the knee angle and fault state below are simulated from the wearable stream, per the hybrid multimodal decision engine.'}
             </p>
-          </GlassCard>
+          </Card>
         </div>
 
         {/* Secondary column */}
-        <div className="flex flex-col gap-5">
-          <GlassCard className="flex flex-col items-center p-5">
+        <div className="flex flex-col gap-6">
+          <Card className="flex flex-col items-center p-6">
             <RadialGauge
               value={kneeFlexionDeg}
               min={40}
@@ -143,30 +145,30 @@ export function LiveSession() {
               fault={faultActive}
             />
             <span
-              className={`mt-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${usingVision ? 'bg-electric/10 text-electric' : 'bg-white/5 text-ink-faint'}`}
+              className={`mt-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium ${usingVision ? 'bg-accent/10 text-accent' : 'bg-surface-secondary text-ink-faint'}`}
             >
               {usingVision ? 'Source: Live Camera (MediaPipe)' : 'Source: Wearable Simulation'}
             </span>
-          </GlassCard>
+          </Card>
 
-          <GlassCard className="flex flex-col gap-4 p-5">
+          <Card className="flex flex-col gap-5 p-6">
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-ink">EMG Activation</h3>
+              <h3 className="text-[15px] font-semibold text-ink">EMG Activation</h3>
               <span
-                className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${usingHubEmg ? 'bg-emerald/10 text-emerald' : 'bg-white/5 text-ink-faint'}`}
+                className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${usingHubEmg ? 'bg-emerald/10 text-emerald' : 'bg-surface-secondary text-ink-faint'}`}
               >
                 {usingHubEmg ? 'Source: Live Hub' : 'Source: Wearable Simulation'}
               </span>
             </div>
             <EmgActivationBar label="Left Quad" value={emgLeft} target={exercise.targetEmgMvc} />
             <EmgActivationBar label="Right Quad" value={emgRight} target={exercise.targetEmgMvc} />
-          </GlassCard>
+          </Card>
 
-          <GlassCard className="p-5">
-            <div className="mb-3 flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-ink">Haptic Biofeedback</h3>
+          <Card className="p-6">
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-[15px] font-semibold text-ink">Haptic Biofeedback</h3>
               {activeHapticPod && (
-                <span className="flex items-center gap-1.5 text-xs font-semibold text-crimson">
+                <span className="flex items-center gap-1.5 text-[13px] font-semibold text-crimson">
                   <Vibrate className="h-3.5 w-3.5" />
                   Pod {activeHapticPod} Active
                 </span>
@@ -175,12 +177,12 @@ export function LiveSession() {
             <div>
               <BodyMap pods={PODS} hapticPodId={activeHapticPod} height={170} />
             </div>
-            <p className="mt-2 text-center text-xs text-ink-muted">
+            <p className="mt-3 text-center text-[13px] text-ink-muted">
               {activeHapticPod
                 ? 'Vibrotactile Correction Active — realign right knee over ankle'
                 : 'Form within target corridor — no correction needed'}
             </p>
-          </GlassCard>
+          </Card>
 
           <Button variant="danger" size="lg" className="w-full" onClick={handleEnd} disabled={ending}>
             {ending ? 'Syncing session data…' : 'End Session & Sync Data'}

@@ -158,7 +158,7 @@ export function CameraViewport({
 
       {cameraOk && poseStatus === 'loading' && (
         <div className="absolute top-3 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-full bg-black/40 px-3 py-1.5 backdrop-blur-sm">
-          <Loader2 className="h-3.5 w-3.5 animate-spin text-electric" />
+          <Loader2 className="h-3.5 w-3.5 animate-spin text-accent" />
           <p className="text-xs text-ink-faint">Loading pose model…</p>
         </div>
       )}

@@ -57,28 +57,19 @@ export function PoseOverlay({
   const hipMid: Point = { x: cx, y: hipY }
   const shoulderMid: Point = { x: cx, y: shoulderY }
 
-  const EMERALD = '#10b981'
-  const CRIMSON = '#ef4444'
-  const NEUTRAL = '#38bdf8'
+  // Fixed (theme-independent) palette: this sits on the camera viewport's
+  // permanently dark backdrop, so it uses the same vivid tones in both themes.
+  const EMERALD = '#32d74b'
+  const CRIMSON = '#ff453a'
+  const NEUTRAL = '#0a84ff'
 
   const rightLegColor = faultActive ? CRIMSON : EMERALD
 
-  const seg = (p1: Point, p2: Point, color: string, width = 3, glow = true) => (
-    <line
-      x1={p1.x}
-      y1={p1.y}
-      x2={p2.x}
-      y2={p2.y}
-      stroke={color}
-      strokeWidth={width}
-      strokeLinecap="round"
-      style={glow ? { filter: `drop-shadow(0 0 5px ${color})` } : undefined}
-    />
+  const seg = (p1: Point, p2: Point, color: string, width = 3) => (
+    <line x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y} stroke={color} strokeWidth={width} strokeLinecap="round" />
   )
 
-  const dot = (p: Point, color: string, r = 3.2) => (
-    <circle cx={p.x} cy={p.y} r={r} fill={color} style={{ filter: `drop-shadow(0 0 4px ${color})` }} />
-  )
+  const dot = (p: Point, color: string, r = 3) => <circle cx={p.x} cy={p.y} r={r} fill={color} />
 
   const allPoints: [Point, string][] = [
     [nose, NEUTRAL],
@@ -105,10 +96,10 @@ export function PoseOverlay({
   return (
     <svg viewBox="0 0 640 360" className="pointer-events-none absolute inset-0 h-full w-full">
       {/* face */}
-      {seg(lEar, lEye, NEUTRAL, 1.5, false)}
-      {seg(rEar, rEye, NEUTRAL, 1.5, false)}
-      {seg(lEye, nose, NEUTRAL, 1.5, false)}
-      {seg(rEye, nose, NEUTRAL, 1.5, false)}
+      {seg(lEar, lEye, NEUTRAL, 1.5)}
+      {seg(rEar, rEye, NEUTRAL, 1.5)}
+      {seg(lEye, nose, NEUTRAL, 1.5)}
+      {seg(rEye, nose, NEUTRAL, 1.5)}
 
       {/* torso / spine — always assessed as correct form */}
       {seg(shoulderMid, hipMid, EMERALD, 4)}

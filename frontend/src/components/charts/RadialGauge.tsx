@@ -44,7 +44,7 @@ export function RadialGauge({
   const r = size / 2 - 18
   const inTarget = value >= targetMin && value <= targetMax && !fault
 
-  const valueColor = fault ? 'var(--color-crimson)' : inTarget ? 'var(--color-emerald)' : 'var(--color-electric)'
+  const valueColor = fault ? 'var(--color-crimson)' : inTarget ? 'var(--color-emerald)' : 'var(--color-accent)'
 
   return (
     <div className="flex flex-col items-center">
@@ -70,14 +70,14 @@ export function RadialGauge({
           stroke={valueColor}
           strokeWidth={14}
           strokeLinecap="round"
-          style={{ filter: `drop-shadow(0 0 6px ${valueColor})`, transition: 'all 200ms ease-out' }}
+          style={{ transition: 'all 200ms ease-out' }}
         />
         <text
           x={cx}
           y={cy - 6}
           textAnchor="middle"
           className="fill-ink"
-          style={{ fontSize: 40, fontWeight: 700, transition: 'all 200ms ease-out' }}
+          style={{ fontSize: 40, fontWeight: 600, letterSpacing: '-0.02em', transition: 'all 200ms ease-out' }}
         >
           {Math.round(value)}
           <tspan style={{ fontSize: 20, fill: 'var(--color-ink-muted)' }}>{unit}</tspan>

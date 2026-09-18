@@ -1,6 +1,7 @@
 import { Bluetooth, BatteryMedium, LogOut } from 'lucide-react'
 import { Logo } from './Logo'
 import { ProgressBar } from '@/components/ui/ProgressBar'
+import { ThemeToggle } from '@/components/ui/ThemeToggle'
 import { useAuth } from '@/lib/AuthContext'
 import { useNavigate } from 'react-router-dom'
 
@@ -19,10 +20,10 @@ export function PatientTopNav({
   const navigate = useNavigate()
 
   return (
-    <header className="flex items-center justify-between gap-6 border-b border-border px-8 py-5">
+    <header className="translucent-header sticky top-0 z-20 flex items-center justify-between gap-6 border-b border-border px-8 py-4">
       <Logo size="sm" />
 
-      <div className="flex items-center gap-3 rounded-xl border border-border bg-surface/60 px-4 py-2">
+      <div className="flex items-center gap-3 rounded-full bg-surface-secondary px-4 py-2">
         <div className="flex items-center gap-2 text-sm">
           <span className={bleConnected ? 'relative flex h-2 w-2' : 'flex h-2 w-2'}>
             {bleConnected && (
@@ -30,12 +31,12 @@ export function PatientTopNav({
             )}
             <span className={`relative inline-flex h-2 w-2 rounded-full ${bleConnected ? 'bg-emerald' : 'bg-crimson'}`} />
           </span>
-          <Bluetooth className="h-4 w-4 text-electric" />
+          <Bluetooth className="h-4 w-4 text-ink-muted" />
           <span className="text-ink-muted">{bleConnected ? 'ESP32 Connected' : 'ESP32 Disconnected'}</span>
         </div>
-        <div className="h-4 w-px bg-border" />
+        <div className="h-4 w-px bg-border-strong" />
         <div className="flex items-center gap-1.5 text-sm text-ink-muted">
-          <BatteryMedium className="h-4 w-4 text-emerald" />
+          <BatteryMedium className="h-4 w-4" />
           {battery}%
         </div>
       </div>
@@ -52,7 +53,8 @@ export function PatientTopNav({
         </div>
 
         <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-electric to-violet text-sm font-semibold text-slate-950">
+          <ThemeToggle />
+          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-accent text-sm font-semibold text-white">
             {(user?.name ?? 'A').charAt(0).toUpperCase()}
           </div>
           <div className="hidden text-sm leading-tight md:block">
@@ -64,7 +66,7 @@ export function PatientTopNav({
               signOut()
               navigate('/login')
             }}
-            className="ml-1 rounded-lg p-2 text-ink-faint transition-colors hover:bg-white/5 hover:text-crimson"
+            className="ml-1 rounded-full p-2 text-ink-faint transition-colors duration-200 hover:bg-surface-secondary hover:text-crimson"
             aria-label="Sign out"
             title="Sign out"
           >

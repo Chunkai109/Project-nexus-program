@@ -16,18 +16,18 @@ export function TrendChart({ data, height = 260 }: { data: TelemetryPoint[]; hei
   return (
     <ResponsiveContainer width="100%" height={height}>
       <ComposedChart data={chartData} margin={{ top: 8, right: 12, bottom: 0, left: -12 }}>
-        <CartesianGrid stroke="#334155" strokeOpacity={0.4} vertical={false} />
+        <CartesianGrid stroke="var(--color-border)" vertical={false} />
         <XAxis
           dataKey="t"
-          tick={{ fill: '#64748b', fontSize: 11 }}
-          axisLine={{ stroke: '#334155' }}
+          tick={{ fill: 'var(--color-ink-faint)', fontSize: 11 }}
+          axisLine={{ stroke: 'var(--color-border-strong)' }}
           tickLine={false}
           interval={4}
-          label={{ value: 'Rep sequence', position: 'insideBottom', offset: -2, fill: '#64748b', fontSize: 11 }}
+          label={{ value: 'Rep sequence', position: 'insideBottom', offset: -2, fill: 'var(--color-ink-faint)', fontSize: 11 }}
         />
         <YAxis
-          tick={{ fill: '#64748b', fontSize: 11 }}
-          axisLine={{ stroke: '#334155' }}
+          tick={{ fill: 'var(--color-ink-faint)', fontSize: 11 }}
+          axisLine={{ stroke: 'var(--color-border-strong)' }}
           tickLine={false}
           width={40}
           domain={[60, 140]}
@@ -35,21 +35,22 @@ export function TrendChart({ data, height = 260 }: { data: TelemetryPoint[]; hei
         />
         <Tooltip
           contentStyle={{
-            background: '#1e293b',
-            border: '1px solid #334155',
-            borderRadius: 10,
+            background: 'var(--color-surface)',
+            border: '1px solid var(--color-border)',
+            borderRadius: 12,
             fontSize: 12,
-            color: '#f1f5f9',
+            color: 'var(--color-ink)',
+            boxShadow: 'var(--shadow-ambient)',
           }}
-          labelStyle={{ color: '#94a3b8' }}
+          labelStyle={{ color: 'var(--color-ink-muted)' }}
         />
         <Area dataKey="targetMin" stackId="band" fill="transparent" stroke="none" isAnimationActive={false} />
         <Area
           dataKey="bandHeight"
           stackId="band"
-          fill="#10b981"
-          fillOpacity={0.14}
-          stroke="#10b981"
+          fill="var(--color-emerald)"
+          fillOpacity={0.12}
+          stroke="var(--color-emerald)"
           strokeOpacity={0.3}
           strokeWidth={1}
           isAnimationActive={false}
@@ -58,7 +59,7 @@ export function TrendChart({ data, height = 260 }: { data: TelemetryPoint[]; hei
         <Line
           type="monotone"
           dataKey="angle"
-          stroke="#38bdf8"
+          stroke="var(--color-accent)"
           strokeWidth={2.5}
           dot={false}
           isAnimationActive={false}

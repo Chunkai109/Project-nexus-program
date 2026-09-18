@@ -16,9 +16,11 @@ const IDX = {
   RIGHT_FOOT_INDEX: 32,
 }
 
-const EMERALD = '#10b981'
-const CRIMSON = '#ef4444'
-const NEUTRAL = '#38bdf8'
+// Fixed (theme-independent) palette: this draws on the camera viewport's
+// permanently dark backdrop, so it uses the same vivid tones in both themes.
+const EMERALD = '#32d74b'
+const CRIMSON = '#ff453a'
+const NEUTRAL = '#0a84ff'
 
 function legConnections(side: 'left' | 'right') {
   const hip = side === 'left' ? IDX.LEFT_HIP : IDX.RIGHT_HIP
@@ -93,9 +95,7 @@ export function drawPoseSkeleton(
     if (!a || !b || a.visibility < 0.4 || b.visibility < 0.4) continue
     const color = colorFor(start, end)
     ctx.strokeStyle = color
-    ctx.lineWidth = color === monitoredColor && faultActive ? 5 : 3.5
-    ctx.shadowColor = color
-    ctx.shadowBlur = 6
+    ctx.lineWidth = color === monitoredColor && faultActive ? 4.5 : 3
     ctx.beginPath()
     ctx.moveTo(a.x, a.y)
     ctx.lineTo(b.x, b.y)
@@ -113,11 +113,8 @@ export function drawPoseSkeleton(
     if (!p || p.visibility < 0.4) continue
     const color = dotColorFor(i)
     ctx.fillStyle = color
-    ctx.shadowColor = color
-    ctx.shadowBlur = 5
     ctx.beginPath()
-    ctx.arc(p.x, p.y, 3.2, 0, Math.PI * 2)
+    ctx.arc(p.x, p.y, 3, 0, Math.PI * 2)
     ctx.fill()
   }
-  ctx.shadowBlur = 0
 }

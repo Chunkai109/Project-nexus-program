@@ -1,5 +1,6 @@
 import { Users, Dumbbell, LineChart, Settings, LogOut } from 'lucide-react'
 import { Logo } from './Logo'
+import { ThemeToggle } from '@/components/ui/ThemeToggle'
 import { useAuth } from '@/lib/AuthContext'
 import { useNavigate } from 'react-router-dom'
 import { clsx } from 'clsx'
@@ -24,10 +25,13 @@ export function PhysioSidebar({
   const [hover, setHover] = useState<string | null>(null)
 
   return (
-    <aside className="flex h-screen w-64 flex-shrink-0 flex-col border-r border-border bg-base-raised/60 px-4 py-6">
-      <div className="px-2">
-        <Logo size="sm" />
-        <p className="mt-1 pl-0.5 text-xs text-ink-faint">Physiotherapist Portal</p>
+    <aside className="flex h-screen w-64 flex-shrink-0 flex-col border-r border-border bg-surface px-4 py-6">
+      <div className="flex items-center justify-between px-2">
+        <div>
+          <Logo size="sm" />
+          <p className="mt-1 pl-0.5 text-xs text-ink-faint">Physiotherapist Portal</p>
+        </div>
+        <ThemeToggle />
       </div>
 
       <nav className="mt-8 flex flex-1 flex-col gap-1">
@@ -40,11 +44,11 @@ export function PhysioSidebar({
               onMouseEnter={() => setHover(key)}
               onMouseLeave={() => setHover(null)}
               className={clsx(
-                'flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors',
+                'flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors duration-200',
                 isActive
-                  ? 'bg-electric/10 text-electric'
+                  ? 'bg-accent/10 text-accent'
                   : hover === key
-                    ? 'bg-white/5 text-ink'
+                    ? 'bg-surface-secondary text-ink'
                     : 'text-ink-muted',
               )}
             >
@@ -55,8 +59,8 @@ export function PhysioSidebar({
         })}
       </nav>
 
-      <div className="mt-auto flex items-center gap-3 rounded-xl border border-border bg-surface/50 px-3 py-3">
-        <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-emerald to-electric text-sm font-semibold text-slate-950">
+      <div className="mt-auto flex items-center gap-3 rounded-xl bg-surface-secondary px-3 py-3">
+        <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-accent text-sm font-semibold text-white">
           {(user?.name ?? 'P').charAt(0).toUpperCase()}
         </div>
         <div className="min-w-0 flex-1 text-sm leading-tight">
@@ -68,7 +72,7 @@ export function PhysioSidebar({
             signOut()
             navigate('/login')
           }}
-          className="flex-shrink-0 rounded-lg p-1.5 text-ink-faint transition-colors hover:bg-white/5 hover:text-crimson"
+          className="flex-shrink-0 rounded-full p-1.5 text-ink-faint transition-colors duration-200 hover:bg-surface-hover hover:text-crimson"
           aria-label="Sign out"
           title="Sign out"
         >

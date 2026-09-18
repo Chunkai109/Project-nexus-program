@@ -7,9 +7,9 @@ function statusFor(value: number, target: number): { label: string; tone: 'emera
 }
 
 const toneBar = {
-  emerald: 'bg-emerald shadow-[0_0_10px_-1px_rgba(16,185,129,0.7)]',
-  amber: 'bg-amber shadow-[0_0_10px_-1px_rgba(245,158,11,0.7)]',
-  crimson: 'bg-crimson shadow-[0_0_10px_-1px_rgba(239,68,68,0.7)]',
+  emerald: 'bg-emerald',
+  amber: 'bg-amber',
+  crimson: 'bg-crimson',
 }
 const toneText = {
   emerald: 'text-emerald',
@@ -36,7 +36,7 @@ export function EmgActivationBar({
           {value}% MVC · {statusLabel}
         </span>
       </div>
-      <div className="relative h-3 w-full overflow-hidden rounded-full bg-white/5">
+      <div className="relative h-2 w-full overflow-hidden rounded-full bg-surface-secondary">
         <div
           className="absolute top-0 h-full w-0.5 bg-ink-faint/60"
           style={{ left: `${Math.min(100, target)}%` }}

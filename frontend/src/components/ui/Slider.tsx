@@ -6,7 +6,7 @@ export function Slider({
   step = 1,
   unit = '',
   onChange,
-  tone = 'electric',
+  tone = 'accent',
 }: {
   label: string
   value: number
@@ -15,10 +15,10 @@ export function Slider({
   step?: number
   unit?: string
   onChange: (value: number) => void
-  tone?: 'electric' | 'amber'
+  tone?: 'accent' | 'amber'
 }) {
   const pct = ((value - min) / (max - min)) * 100
-  const fillColor = tone === 'amber' ? '#f59e0b' : '#38bdf8'
+  const fillColor = tone === 'amber' ? 'var(--color-amber)' : 'var(--color-accent)'
 
   return (
     <div>
@@ -29,14 +29,16 @@ export function Slider({
           {unit}
         </span>
       </div>
-      <div className="relative flex h-4 items-center">
+      <div className="relative flex h-5 items-center">
         <div
-          className="absolute h-1.5 w-full rounded-full bg-white/5"
-          style={{ background: `linear-gradient(to right, ${fillColor} ${pct}%, rgba(255,255,255,0.06) ${pct}%)` }}
+          className="absolute h-1 w-full rounded-full"
+          style={{
+            background: `linear-gradient(to right, ${fillColor} ${pct}%, var(--color-border-strong) ${pct}%)`,
+          }}
         />
         <input
           type="range"
-          className="range-thumb relative h-4 w-full"
+          className="range-thumb relative h-5 w-full"
           min={min}
           max={max}
           step={step}

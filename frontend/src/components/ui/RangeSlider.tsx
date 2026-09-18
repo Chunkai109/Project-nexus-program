@@ -30,16 +30,16 @@ export function RangeSlider({
           {unit}
         </span>
       </div>
-      <div className="relative flex h-4 items-center">
+      <div className="relative flex h-5 items-center">
         <div
-          className="absolute h-1.5 w-full rounded-full bg-white/5"
+          className="absolute h-1 w-full rounded-full"
           style={{
-            background: `linear-gradient(to right, rgba(255,255,255,0.06) ${pctMin}%, #10b981 ${pctMin}%, #10b981 ${pctMax}%, rgba(255,255,255,0.06) ${pctMax}%)`,
+            background: `linear-gradient(to right, var(--color-border-strong) ${pctMin}%, var(--color-accent) ${pctMin}%, var(--color-accent) ${pctMax}%, var(--color-border-strong) ${pctMax}%)`,
           }}
         />
         <input
           type="range"
-          className="range-thumb absolute h-4 w-full"
+          className="range-thumb absolute h-5 w-full"
           min={min}
           max={max}
           value={valueMin}
@@ -47,7 +47,7 @@ export function RangeSlider({
         />
         <input
           type="range"
-          className="range-thumb absolute h-4 w-full"
+          className="range-thumb absolute h-5 w-full"
           min={min}
           max={max}
           value={valueMax}

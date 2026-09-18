@@ -3,8 +3,9 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { Bluetooth, BluetoothOff, CircleCheck, Loader2, TriangleAlert, Vibrate, Zap } from 'lucide-react'
 import { PageShell } from '@/components/layout/PageShell'
 import { Logo } from '@/components/layout/Logo'
+import { ThemeToggle } from '@/components/ui/ThemeToggle'
 import { Breadcrumb } from '@/components/ui/Breadcrumb'
-import { GlassCard } from '@/components/ui/GlassCard'
+import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { BodyMap } from '@/components/body/BodyMap'
 import { PODS, EXERCISES } from '@/lib/mockData'
@@ -85,24 +86,25 @@ export function SensorSetup() {
 
   return (
     <PageShell>
-      <header className="flex items-center justify-between border-b border-border px-8 py-5">
+      <header className="translucent-header sticky top-0 z-20 flex items-center justify-between border-b border-border px-10 py-4">
         <Logo size="sm" />
         <Breadcrumb
           steps={[{ label: 'Step 1: Sensor Placement' }, { label: 'Step 2: Calibration' }, { label: 'Step 3: Live Session' }]}
           activeIndex={0}
         />
+        <ThemeToggle />
       </header>
 
-      <main className="grid grid-cols-1 gap-6 px-8 py-8 lg:grid-cols-[380px_1fr]">
+      <main className="grid grid-cols-1 gap-6 px-10 py-10 lg:grid-cols-[380px_1fr]">
         {/* Left column: body map + pod status */}
-        <GlassCard className="flex flex-col items-center p-6">
-          <h2 className="mb-1 self-start text-sm font-semibold text-ink">Satellite Pod Map</h2>
-          <p className="mb-4 self-start text-xs text-ink-faint">{exercise.title} · tap a pod for details</p>
+        <Card className="flex flex-col items-center p-7">
+          <h2 className="mb-1 self-start text-[15px] font-semibold text-ink">Satellite Pod Map</h2>
+          <p className="mb-5 self-start text-[13px] text-ink-faint">{exercise.title} · tap a pod for details</p>
           <div className={clsx('py-2', vibrating && 'animate-pulse')}>
             <BodyMap pods={displayPods} activePod={activePod} onSelect={setActivePod} height={340} />
           </div>
 
-          <div className="mt-4 flex w-full flex-col gap-2">
+          <div className="mt-5 flex w-full flex-col gap-2">
             {displayPods.map((pod) => {
               const tone = signalTone[pod.signal]
               const Icon = tone.icon
@@ -111,12 +113,12 @@ export function SensorSetup() {
                   key={pod.id}
                   onClick={() => setActivePod(pod.id)}
                   className={clsx(
-                    'flex items-center justify-between rounded-lg border px-3 py-2 text-left text-xs transition-colors',
-                    activePod === pod.id ? 'border-electric/50 bg-electric/5' : 'border-border bg-white/[0.02] hover:bg-white/[0.04]',
+                    'flex items-center justify-between rounded-xl px-3.5 py-2.5 text-left text-[13px] transition-colors duration-200',
+                    activePod === pod.id ? 'bg-accent/8 ring-1 ring-accent/30' : 'bg-surface-secondary hover:bg-surface-hover',
                   )}
                 >
                   <span className="flex items-center gap-2">
-                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-white/5 text-[10px] font-bold text-ink">
+                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-surface text-[10px] font-semibold text-ink">
                       {pod.id}
                     </span>
                     <span className="font-medium text-ink">{pod.label}</span>
@@ -130,46 +132,46 @@ export function SensorSetup() {
               )
             })}
           </div>
-        </GlassCard>
+        </Card>
 
         {/* Right column: instructions */}
         <div className="flex flex-col gap-6">
-          <GlassCard className="p-6">
-            <h2 className="mb-1 text-sm font-semibold text-ink">Pod Placement Instructions</h2>
-            <p className="mb-5 text-xs text-ink-faint">
+          <Card className="p-7">
+            <h2 className="mb-1 text-[15px] font-semibold text-ink">Pod Placement Instructions</h2>
+            <p className="mb-6 text-[13px] text-ink-faint">
               Follow each step in order. Setup note from your physiotherapist: “{exercise.setupInstructions}”
             </p>
 
-            <ol className="flex flex-col gap-4">
+            <ol className="flex flex-col gap-5">
               {PLACEMENT_STEPS.map((step, i) => (
                 <li key={step.title} className="flex gap-4">
-                  <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full border border-electric/30 bg-electric/10 text-sm font-bold text-electric">
+                  <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-accent/10 text-sm font-semibold text-accent">
                     {i + 1}
                   </div>
                   <div>
-                    <p className="text-sm font-medium text-ink">{step.title}</p>
-                    <p className="mt-0.5 text-xs leading-relaxed text-ink-muted">{step.detail}</p>
+                    <p className="text-[14px] font-medium text-ink">{step.title}</p>
+                    <p className="mt-0.5 text-[13px] leading-relaxed text-ink-muted">{step.detail}</p>
                   </div>
                 </li>
               ))}
             </ol>
-          </GlassCard>
+          </Card>
 
-          <GlassCard className="flex flex-col gap-4 p-5">
+          <Card className="flex flex-col gap-5 p-6">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-3">
                 <div
                   className={clsx(
-                    'flex h-10 w-10 items-center justify-center rounded-xl',
-                    hubConnected ? 'bg-emerald/10' : hub.connectionState === 'error' ? 'bg-crimson/10' : 'bg-electric/10',
+                    'flex h-10 w-10 items-center justify-center rounded-full',
+                    hubConnected ? 'bg-emerald/10' : hub.connectionState === 'error' ? 'bg-crimson/10' : 'bg-accent/10',
                   )}
                 >
                   {hub.connectionState === 'connecting' ? (
-                    <Loader2 className="h-5 w-5 animate-spin text-electric" />
+                    <Loader2 className="h-5 w-5 animate-spin text-accent" />
                   ) : !hub.supported ? (
                     <BluetoothOff className="h-5 w-5 text-ink-faint" />
                   ) : (
-                    <Bluetooth className={clsx('h-5 w-5', hubConnected ? 'text-emerald' : 'text-electric')} />
+                    <Bluetooth className={clsx('h-5 w-5', hubConnected ? 'text-emerald' : 'text-accent')} />
                   )}
                 </div>
                 <div className="text-sm">
@@ -180,7 +182,7 @@ export function SensorSetup() {
                     {hub.connectionState === 'connected' && `Connected — ${hub.deviceName}`}
                     {hub.connectionState === 'error' && 'Connection failed'}
                   </p>
-                  <p className="text-xs text-ink-faint">
+                  <p className="text-[13px] text-ink-faint">
                     {!hub.supported
                       ? 'Try Chrome or Edge on desktop or Android to pair real hardware.'
                       : hub.connectionState === 'error'
@@ -210,8 +212,10 @@ export function SensorSetup() {
                 <p className="font-semibold text-ink">
                   {allConnected ? 'All 6 pods connected' : 'Waiting for full pod connection'}
                 </p>
-                <p className="text-xs text-ink-faint">ESP32-WROOM-32D hub · BLE GATT stream {hubConnected ? '(live)' : '(simulated)'}</p>
-                {hapticSendError && <p className="mt-1 text-xs text-crimson">{hapticSendError}</p>}
+                <p className="text-[13px] text-ink-faint">
+                  ESP32-WROOM-32D hub · BLE GATT stream {hubConnected ? '(live)' : '(simulated)'}
+                </p>
+                {hapticSendError && <p className="mt-1 text-[13px] text-crimson">{hapticSendError}</p>}
               </div>
               <div className="flex gap-3">
                 <Button variant="secondary" onClick={testVibration}>
@@ -224,7 +228,7 @@ export function SensorSetup() {
                 </Button>
               </div>
             </div>
-          </GlassCard>
+          </Card>
         </div>
       </main>
     </PageShell>

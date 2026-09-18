@@ -5,11 +5,16 @@ export function SymmetryBarChart({ data, height = 240 }: { data: SymmetryPoint[]
   return (
     <ResponsiveContainer width="100%" height={height}>
       <BarChart data={data} margin={{ top: 8, right: 12, bottom: 0, left: 0 }} barGap={4}>
-        <CartesianGrid stroke="#334155" strokeOpacity={0.4} vertical={false} />
-        <XAxis dataKey="session" tick={{ fill: '#64748b', fontSize: 11 }} axisLine={{ stroke: '#334155' }} tickLine={false} />
+        <CartesianGrid stroke="var(--color-border)" vertical={false} />
+        <XAxis
+          dataKey="session"
+          tick={{ fill: 'var(--color-ink-faint)', fontSize: 11 }}
+          axisLine={{ stroke: 'var(--color-border-strong)' }}
+          tickLine={false}
+        />
         <YAxis
-          tick={{ fill: '#64748b', fontSize: 11 }}
-          axisLine={{ stroke: '#334155' }}
+          tick={{ fill: 'var(--color-ink-faint)', fontSize: 11 }}
+          axisLine={{ stroke: 'var(--color-border-strong)' }}
           tickLine={false}
           width={46}
           domain={[0, 100]}
@@ -18,18 +23,19 @@ export function SymmetryBarChart({ data, height = 240 }: { data: SymmetryPoint[]
         />
         <Tooltip
           contentStyle={{
-            background: '#1e293b',
-            border: '1px solid #334155',
-            borderRadius: 10,
+            background: 'var(--color-surface)',
+            border: '1px solid var(--color-border)',
+            borderRadius: 12,
             fontSize: 12,
-            color: '#f1f5f9',
+            color: 'var(--color-ink)',
+            boxShadow: 'var(--shadow-ambient)',
           }}
-          labelStyle={{ color: '#94a3b8' }}
-          cursor={{ fill: 'rgba(255,255,255,0.03)' }}
+          labelStyle={{ color: 'var(--color-ink-muted)' }}
+          cursor={{ fill: 'var(--color-surface-secondary)' }}
         />
-        <Legend wrapperStyle={{ fontSize: 12, color: '#94a3b8' }} />
-        <Bar dataKey="left" name="Left Limb" fill="#38bdf8" radius={[4, 4, 0, 0]} isAnimationActive={false} />
-        <Bar dataKey="right" name="Right Limb" fill="#10b981" radius={[4, 4, 0, 0]} isAnimationActive={false} />
+        <Legend wrapperStyle={{ fontSize: 12, color: 'var(--color-ink-muted)' }} />
+        <Bar dataKey="left" name="Left Limb" fill="var(--color-accent)" radius={[4, 4, 0, 0]} isAnimationActive={false} />
+        <Bar dataKey="right" name="Right Limb" fill="var(--color-emerald)" radius={[4, 4, 0, 0]} isAnimationActive={false} />
       </BarChart>
     </ResponsiveContainer>
   )
