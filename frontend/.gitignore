@@ -12,6 +12,10 @@ dist
 dist-ssr
 *.local
 
+# Vendored by scripts/copy-mediapipe-wasm.mjs (postinstall) — regenerated
+# from node_modules, not committed (it's ~34MB of prebuilt WASM binaries).
+public/mediapipe/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

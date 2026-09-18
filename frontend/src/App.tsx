@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { AuthProvider, useAuth } from '@/lib/AuthContext'
+import { BleProvider } from '@/lib/ble/BleProvider'
 import { LoginPage } from '@/pages/LoginPage'
 import { PatientExercises } from '@/pages/PatientExercises'
 import { SensorSetup } from '@/pages/SensorSetup'
@@ -59,7 +60,9 @@ function AppRoutes() {
 function App() {
   return (
     <AuthProvider>
-      <AppRoutes />
+      <BleProvider>
+        <AppRoutes />
+      </BleProvider>
     </AuthProvider>
   )
 }
