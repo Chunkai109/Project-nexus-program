@@ -1,0 +1,159 @@
+import { useState } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
+import { Bluetooth, CircleCheck, TriangleAlert, Vibrate, Zap } from 'lucide-react'
+import { PageShell } from '@/components/layout/PageShell'
+import { Logo } from '@/components/layout/Logo'
+import { Breadcrumb } from '@/components/ui/Breadcrumb'
+import { GlassCard } from '@/components/ui/GlassCard'
+import { Button } from '@/components/ui/Button'
+import { BodyMap } from '@/components/body/BodyMap'
+import { PODS, EXERCISES } from '@/lib/mockData'
+import { clsx } from 'clsx'
+
+const PLACEMENT_STEPS = [
+  {
+    title: 'Prep the skin',
+    detail: 'Wipe each electrode site with an alcohol swab and let it air-dry for 10 seconds to reduce impedance noise.',
+  },
+  {
+    title: 'Place EMG electrodes (Pods 1–2)',
+    detail: 'Snap Ag/AgCl electrodes onto Pod 1 & 2, aligned along the vastus medialis fiber direction, 2cm apart.',
+  },
+  {
+    title: 'Secure knee IMU + haptics (Pods 3–4)',
+    detail: 'Strap Pod 3 & 4 directly over the lateral knee joint line using the neoprene band — snug, not restrictive.',
+  },
+  {
+    title: 'Attach shin/ankle pods (Pods 5–6)',
+    detail: 'Position Pod 5 & 6 just above the malleolus. Leave slack in the ribbon cable for full range of motion.',
+  },
+  {
+    title: 'Route the ribbon harness',
+    detail: 'Run the 6-core silicone ribbon along the limb\'s lateral line, clipping with velcro every ~10cm to avoid pinch points.',
+  },
+  {
+    title: 'Confirm connection',
+    detail: 'Check the pod list on the left — every pod should read a green "Signal Strong" badge before proceeding.',
+  },
+]
+
+const signalTone: Record<string, { icon: typeof CircleCheck; text: string; className: string }> = {
+  strong: { icon: CircleCheck, text: 'Signal Strong', className: 'text-emerald' },
+  weak: { icon: TriangleAlert, text: 'Signal Weak', className: 'text-amber' },
+  offline: { icon: TriangleAlert, text: 'Offline', className: 'text-crimson' },
+}
+
+export function SensorSetup() {
+  const { exerciseId } = useParams()
+  const navigate = useNavigate()
+  const exercise = EXERCISES.find((e) => e.id === exerciseId) ?? EXERCISES[0]
+  const [activePod, setActivePod] = useState<number | null>(null)
+  const [vibrating, setVibrating] = useState(false)
+
+  const allConnected = PODS.every((p) => p.signal !== 'offline')
+
+  function testVibration() {
+    setVibrating(true)
+    setTimeout(() => setVibrating(false), 1600)
+  }
+
+  return (
+    <PageShell>
+      <header className="flex items-center justify-between border-b border-border px-8 py-5">
+        <Logo size="sm" />
+        <Breadcrumb
+          steps={[{ label: 'Step 1: Sensor Placement' }, { label: 'Step 2: Calibration' }, { label: 'Step 3: Live Session' }]}
+          activeIndex={0}
+        />
+      </header>
+
+      <main className="grid grid-cols-1 gap-6 px-8 py-8 lg:grid-cols-[380px_1fr]">
+        {/* Left column: body map + pod status */}
+        <GlassCard className="flex flex-col items-center p-6">
+          <h2 className="mb-1 self-start text-sm font-semibold text-ink">Satellite Pod Map</h2>
+          <p className="mb-4 self-start text-xs text-ink-faint">{exercise.title} · tap a pod for details</p>
+          <div className={clsx('py-2', vibrating && 'animate-pulse')}>
+            <BodyMap pods={PODS} activePod={activePod} onSelect={setActivePod} height={340} />
+          </div>
+
+          <div className="mt-4 flex w-full flex-col gap-2">
+            {PODS.map((pod) => {
+              const tone = signalTone[pod.signal]
+              const Icon = tone.icon
+              return (
+                <button
+                  key={pod.id}
+                  onClick={() => setActivePod(pod.id)}
+                  className={clsx(
+                    'flex items-center justify-between rounded-lg border px-3 py-2 text-left text-xs transition-colors',
+                    activePod === pod.id ? 'border-electric/50 bg-electric/5' : 'border-border bg-white/[0.02] hover:bg-white/[0.04]',
+                  )}
+                >
+                  <span className="flex items-center gap-2">
+                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-white/5 text-[10px] font-bold text-ink">
+                      {pod.id}
+                    </span>
+                    <span className="font-medium text-ink">{pod.label}</span>
+                    <span className="text-ink-faint">· {pod.location}</span>
+                  </span>
+                  <span className={clsx('flex items-center gap-1 font-semibold', tone.className)}>
+                    <Icon className="h-3.5 w-3.5" />
+                    {tone.text}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+        </GlassCard>
+
+        {/* Right column: instructions */}
+        <div className="flex flex-col gap-6">
+          <GlassCard className="p-6">
+            <h2 className="mb-1 text-sm font-semibold text-ink">Pod Placement Instructions</h2>
+            <p className="mb-5 text-xs text-ink-faint">
+              Follow each step in order. Setup note from your physiotherapist: “{exercise.setupInstructions}”
+            </p>
+
+            <ol className="flex flex-col gap-4">
+              {PLACEMENT_STEPS.map((step, i) => (
+                <li key={step.title} className="flex gap-4">
+                  <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full border border-electric/30 bg-electric/10 text-sm font-bold text-electric">
+                    {i + 1}
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-ink">{step.title}</p>
+                    <p className="mt-0.5 text-xs leading-relaxed text-ink-muted">{step.detail}</p>
+                  </div>
+                </li>
+              ))}
+            </ol>
+          </GlassCard>
+
+          <GlassCard className="flex items-center justify-between gap-4 p-5">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-electric/10">
+                <Bluetooth className="h-5 w-5 text-electric" />
+              </div>
+              <div className="text-sm">
+                <p className="font-semibold text-ink">
+                  {allConnected ? 'All 6 pods connected' : 'Waiting for full pod connection'}
+                </p>
+                <p className="text-xs text-ink-faint">ESP32-WROOM-32D hub · BLE GATT stream active</p>
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <Button variant="secondary" onClick={testVibration}>
+                <Vibrate className="h-4 w-4" />
+                {vibrating ? 'Pulsing…' : 'Test Pod Vibration'}
+              </Button>
+              <Button onClick={() => navigate(`/patient/session/${exercise.id}`)}>
+                <Zap className="h-4 w-4" />
+                Proceed to Camera Check
+              </Button>
+            </div>
+          </GlassCard>
+        </div>
+      </main>
+    </PageShell>
+  )
+}
