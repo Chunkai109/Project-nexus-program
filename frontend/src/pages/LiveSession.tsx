@@ -160,7 +160,7 @@ export function LiveSession() {
         <div className="flex flex-col gap-4">
           <CameraViewport
             monitoredSide={monitoredSide}
-            faultThresholdDeg={exercise.faultThresholdDeg}
+            faultThresholdDeg={primaryAngle?.faultThresholdDeg ?? 8}
             onVisionMetrics={setVision}
             fallbackSkeleton={
               <PoseOverlay squatDepth={squatDepth} faultActive={faultActive} faultDeg={faultDeg} />

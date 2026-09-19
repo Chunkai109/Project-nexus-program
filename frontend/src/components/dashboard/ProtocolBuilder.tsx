@@ -23,7 +23,6 @@ interface FormState {
   muscleGroups: string[]
   sets: number
   reps: number
-  faultThresholdDeg: number
   targetEmgMvc: number
   therapistNote: string
   setupInstructions: string
@@ -34,6 +33,7 @@ interface FormState {
   draftNodes: PodId[]
   draftMin: number
   draftMax: number
+  draftFaultThresholdDeg: number
 }
 
 function blankForm(): FormState {
@@ -42,7 +42,6 @@ function blankForm(): FormState {
     muscleGroups: [],
     sets: 3,
     reps: 12,
-    faultThresholdDeg: 8,
     targetEmgMvc: 65,
     therapistNote: '',
     setupInstructions: '',
@@ -52,6 +51,7 @@ function blankForm(): FormState {
     draftNodes: [],
     draftMin: 90,
     draftMax: 110,
+    draftFaultThresholdDeg: 8,
   }
 }
 
@@ -61,7 +61,6 @@ function formFromExercise(ex: Exercise): FormState {
     muscleGroups: ex.muscleGroups,
     sets: ex.sets,
     reps: ex.reps,
-    faultThresholdDeg: ex.faultThresholdDeg,
     targetEmgMvc: ex.targetEmgMvc,
     therapistNote: ex.therapistNote,
     setupInstructions: ex.setupInstructions,
@@ -71,7 +70,13 @@ function formFromExercise(ex: Exercise): FormState {
     draftNodes: [],
     draftMin: 90,
     draftMax: 110,
+    draftFaultThresholdDeg: 8,
   }
+}
+
+/** Same two joints regardless of which node was tapped first. */
+function sameNodePair(a: AngleConfig, nodeA: PodId, nodeB: PodId): boolean {
+  return (a.nodeA === nodeA && a.nodeB === nodeB) || (a.nodeA === nodeB && a.nodeB === nodeA)
 }
 
 function describeAngleConfigs(configs: AngleConfig[]): string {
@@ -127,19 +132,36 @@ export function ProtocolBuilder() {
   function confirmAngle() {
     setForm((f) => {
       if (f.draftNodes.length !== 2 || podSide(f.draftNodes[0]) !== podSide(f.draftNodes[1])) return f
+      const [nodeA, nodeB] = f.draftNodes
+      const existingIndex = f.angleConfigs.findIndex((c) => sameNodePair(c, nodeA, nodeB))
       const newConfig: AngleConfig = {
-        id: crypto.randomUUID(),
-        nodeA: f.draftNodes[0],
-        nodeB: f.draftNodes[1],
+        id: existingIndex >= 0 ? f.angleConfigs[existingIndex].id : crypto.randomUUID(),
+        nodeA,
+        nodeB,
         targetMin: f.draftMin,
         targetMax: f.draftMax,
+        faultThresholdDeg: f.draftFaultThresholdDeg,
       }
-      return { ...f, angleConfigs: [...f.angleConfigs, newConfig], draftNodes: [], draftMin: 90, draftMax: 110 }
+      const angleConfigs =
+        existingIndex >= 0
+          ? f.angleConfigs.map((c, i) => (i === existingIndex ? newConfig : c))
+          : [...f.angleConfigs, newConfig]
+      return { ...f, angleConfigs, draftNodes: [], draftMin: 90, draftMax: 110, draftFaultThresholdDeg: 8 }
     })
   }
 
   function removeAngleConfig(id: string) {
     setForm((f) => ({ ...f, angleConfigs: f.angleConfigs.filter((c) => c.id !== id) }))
+  }
+
+  function loadAngleIntoDraft(c: AngleConfig) {
+    setForm((f) => ({
+      ...f,
+      draftNodes: [c.nodeA, c.nodeB],
+      draftMin: c.targetMin,
+      draftMax: c.targetMax,
+      draftFaultThresholdDeg: c.faultThresholdDeg,
+    }))
   }
 
   function handleSave() {
@@ -149,7 +171,6 @@ export function ProtocolBuilder() {
       muscleGroups: form.muscleGroups,
       sets: form.sets,
       reps: form.reps,
-      faultThresholdDeg: form.faultThresholdDeg,
       targetEmgMvc: form.targetEmgMvc,
       therapistNote: form.therapistNote,
       setupInstructions: form.setupInstructions,
@@ -444,6 +465,17 @@ export function ProtocolBuilder() {
                 onChangeMax={(v) => setForm((f) => ({ ...f, draftMax: v }))}
               />
             </div>
+            <div className="w-full">
+              <Slider
+                label="Fault Angle Threshold"
+                value={form.draftFaultThresholdDeg}
+                min={1}
+                max={30}
+                unit="° deviation"
+                onChange={(v) => setForm((f) => ({ ...f, draftFaultThresholdDeg: v }))}
+                tone="amber"
+              />
+            </div>
             <Button size="sm" className="mt-2 w-full" onClick={confirmAngle} disabled={!draftValid}>
               <Check className="h-3.5 w-3.5" />
               Confirm This Angle
@@ -462,13 +494,20 @@ export function ProtocolBuilder() {
               <div className="flex flex-col gap-2">
                 {form.angleConfigs.map((c) => (
                   <div key={c.id} className="flex items-center justify-between gap-3 rounded-lg bg-surface px-3.5 py-2.5">
-                    <span className="flex items-center gap-1.5 text-[13px] text-ink">
+                    <button
+                      type="button"
+                      onClick={() => loadAngleIntoDraft(c)}
+                      className="flex min-w-0 items-center gap-1.5 text-left text-[13px] text-ink"
+                      title="Load into the editor above — confirming again will override this angle"
+                    >
                       <Check className="h-3.5 w-3.5 flex-shrink-0 text-emerald" />
-                      {podLabel(c.nodeA)} ↔ {podLabel(c.nodeB)}
-                      <span className="font-medium text-accent">
-                        · {c.targetMin}°–{c.targetMax}°
+                      <span className="truncate">
+                        {podLabel(c.nodeA)} ↔ {podLabel(c.nodeB)}
                       </span>
-                    </span>
+                      <span className="flex-shrink-0 font-medium text-accent">
+                        · {c.targetMin}°–{c.targetMax}° · ±{c.faultThresholdDeg}° fault
+                      </span>
+                    </button>
                     <button
                       type="button"
                       onClick={() => removeAngleConfig(c.id)}
@@ -486,15 +525,6 @@ export function ProtocolBuilder() {
           <div className="h-px bg-border" />
 
           <Slider
-            label="Fault Angle Threshold"
-            value={form.faultThresholdDeg}
-            min={1}
-            max={30}
-            unit="° deviation"
-            onChange={(v) => setForm((f) => ({ ...f, faultThresholdDeg: v }))}
-            tone="amber"
-          />
-          <Slider
             label="Target EMG %MVC"
             value={form.targetEmgMvc}
             min={0}
@@ -504,8 +534,8 @@ export function ProtocolBuilder() {
           />
 
           <div className="mt-auto rounded-lg bg-surface p-3.5 text-[13px] leading-relaxed text-ink-faint">
-            A live skeleton segment turns <span className="font-medium text-crimson">red</span> when deviation exceeds{' '}
-            <span className="font-medium text-ink">{form.faultThresholdDeg}°</span>, and EMG bars flag{' '}
+            A live skeleton segment turns <span className="font-medium text-crimson">red</span> when deviation exceeds each
+            confirmed angle's own fault threshold, and EMG bars flag{' '}
             <span className="font-medium text-ink">below {Math.round(form.targetEmgMvc * 0.55)}%</span> activation as weak.
           </div>
         </div>

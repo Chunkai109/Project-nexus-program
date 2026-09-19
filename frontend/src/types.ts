@@ -25,13 +25,14 @@ export interface Pod {
   battery: number
 }
 
-/** One physio-confirmed joint angle target: two sensor nodes and the ROM range measured between them. */
+/** One physio-confirmed joint angle target: two sensor nodes, the ROM range, and the fault deviation threshold measured between them. */
 export interface AngleConfig {
   id: string
   nodeA: PodId
   nodeB: PodId
   targetMin: number
   targetMax: number
+  faultThresholdDeg: number
 }
 
 export interface Exercise {
@@ -40,7 +41,6 @@ export interface Exercise {
   muscleGroups: string[]
   sets: number
   reps: number
-  faultThresholdDeg: number
   targetEmgMvc: number
   therapistNote: string
   setupInstructions: string

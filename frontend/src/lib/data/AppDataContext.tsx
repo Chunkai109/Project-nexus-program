@@ -38,16 +38,36 @@ function writeJson<T>(key: string, value: T) {
 
 /**
  * Exercises saved before angleConfigs/assignedPatientId existed are stored as
- * a flat nodeA/nodeB/targetRomMin/targetRomMax shape. Migrate those in place
+ * a flat nodeA/nodeB/targetRomMin/targetRomMax(/faultThresholdDeg) shape, and
+ * exercises saved after that but before per-angle fault thresholds existed
+ * have angleConfigs entries missing faultThresholdDeg. Migrate both in place
  * on read so browsers with older SmartPhysio data don't crash on the new schema.
  */
-function normalizeExercise(raw: Exercise & Partial<{ nodeA: PodId; nodeB: PodId; targetRomMin: number; targetRomMax: number }>): Exercise {
-  const angleConfigs: AngleConfig[] =
-    raw.angleConfigs ??
-    (raw.nodeA && raw.nodeB
-      ? [{ id: crypto.randomUUID(), nodeA: raw.nodeA, nodeB: raw.nodeB, targetMin: raw.targetRomMin ?? 90, targetMax: raw.targetRomMax ?? 110 }]
-      : [])
-  return { ...raw, angleConfigs, assignedPatientId: raw.assignedPatientId ?? null }
+type LegacyExerciseFields = Partial<{
+  nodeA: PodId
+  nodeB: PodId
+  targetRomMin: number
+  targetRomMax: number
+  faultThresholdDeg: number
+}>
+
+function normalizeExercise(raw: Exercise & LegacyExerciseFields): Exercise {
+  const { nodeA, nodeB, targetRomMin, targetRomMax, faultThresholdDeg: legacyFaultThresholdDeg, ...rest } = raw
+  const angleConfigs: AngleConfig[] = raw.angleConfigs
+    ? raw.angleConfigs.map((c) => ({ ...c, faultThresholdDeg: c.faultThresholdDeg ?? legacyFaultThresholdDeg ?? 8 }))
+    : nodeA && nodeB
+      ? [
+          {
+            id: crypto.randomUUID(),
+            nodeA,
+            nodeB,
+            targetMin: targetRomMin ?? 90,
+            targetMax: targetRomMax ?? 110,
+            faultThresholdDeg: legacyFaultThresholdDeg ?? 8,
+          },
+        ]
+      : []
+  return { ...rest, angleConfigs, assignedPatientId: raw.assignedPatientId ?? null }
 }
 
 function loadExercises(): Exercise[] {
