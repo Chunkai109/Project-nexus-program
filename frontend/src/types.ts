@@ -25,22 +25,30 @@ export interface Pod {
   battery: number
 }
 
+/** One physio-confirmed joint angle target: two sensor nodes and the ROM range measured between them. */
+export interface AngleConfig {
+  id: string
+  nodeA: PodId
+  nodeB: PodId
+  targetMin: number
+  targetMax: number
+}
+
 export interface Exercise {
   id: string
   title: string
   muscleGroups: string[]
   sets: number
   reps: number
-  targetRomMin: number
-  targetRomMax: number
   faultThresholdDeg: number
   targetEmgMvc: number
   therapistNote: string
   setupInstructions: string
   estMinutes: number
-  /** The two sensor nodes whose relative angle this exercise's ROM/fault targets are measured against. */
-  nodeA: PodId
-  nodeB: PodId
+  /** Every angle confirmed for this exercise; the first is the primary pair a live session tracks. */
+  angleConfigs: AngleConfig[]
+  /** Patient this exercise is assigned to, or null to assign it to every patient. */
+  assignedPatientId: string | null
   createdAt: number
 }
 

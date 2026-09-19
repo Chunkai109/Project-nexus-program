@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
-import type { Exercise, PatientRecord, SessionRecord } from '@/types'
+import type { AngleConfig, Exercise, PatientRecord, PodId, SessionRecord } from '@/types'
 
 /**
  * Shared app data (exercises physios create, real patients who've signed in,
@@ -36,6 +36,24 @@ function writeJson<T>(key: string, value: T) {
   }
 }
 
+/**
+ * Exercises saved before angleConfigs/assignedPatientId existed are stored as
+ * a flat nodeA/nodeB/targetRomMin/targetRomMax shape. Migrate those in place
+ * on read so browsers with older SmartPhysio data don't crash on the new schema.
+ */
+function normalizeExercise(raw: Exercise & Partial<{ nodeA: PodId; nodeB: PodId; targetRomMin: number; targetRomMax: number }>): Exercise {
+  const angleConfigs: AngleConfig[] =
+    raw.angleConfigs ??
+    (raw.nodeA && raw.nodeB
+      ? [{ id: crypto.randomUUID(), nodeA: raw.nodeA, nodeB: raw.nodeB, targetMin: raw.targetRomMin ?? 90, targetMax: raw.targetRomMax ?? 110 }]
+      : [])
+  return { ...raw, angleConfigs, assignedPatientId: raw.assignedPatientId ?? null }
+}
+
+function loadExercises(): Exercise[] {
+  return readJson<Exercise[]>(EXERCISES_KEY, []).map(normalizeExercise)
+}
+
 export type NewExercise = Omit<Exercise, 'id' | 'createdAt'>
 export type NewSessionRecord = Omit<SessionRecord, 'id'>
 
@@ -53,13 +71,13 @@ interface AppDataValue {
 const AppDataContext = createContext<AppDataValue | null>(null)
 
 export function AppDataProvider({ children }: { children: ReactNode }) {
-  const [exercises, setExercises] = useState<Exercise[]>(() => readJson(EXERCISES_KEY, []))
+  const [exercises, setExercises] = useState<Exercise[]>(() => loadExercises())
   const [patients, setPatients] = useState<PatientRecord[]>(() => readJson(PATIENTS_KEY, []))
   const [sessions, setSessions] = useState<SessionRecord[]>(() => readJson(SESSIONS_KEY, []))
 
   useEffect(() => {
     function onStorage(e: StorageEvent) {
-      if (e.key === EXERCISES_KEY) setExercises(readJson(EXERCISES_KEY, []))
+      if (e.key === EXERCISES_KEY) setExercises(loadExercises())
       if (e.key === PATIENTS_KEY) setPatients(readJson(PATIENTS_KEY, []))
       if (e.key === SESSIONS_KEY) setSessions(readJson(SESSIONS_KEY, []))
     }

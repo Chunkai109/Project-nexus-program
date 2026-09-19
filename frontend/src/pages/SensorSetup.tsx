@@ -125,12 +125,15 @@ export function SensorSetup() {
               pods={displayPods}
               activePod={activePod}
               onSelect={setActivePod}
-              selectedPods={[exercise.nodeA, exercise.nodeB]}
+              selectedPods={Array.from(new Set(exercise.angleConfigs.flatMap((c) => [c.nodeA, c.nodeB])))}
               height={340}
             />
           </div>
           <p className="mb-1 text-center text-[12px] text-ink-faint">
-            Highlighted nodes: {podLabel(exercise.nodeA)} ↔ {podLabel(exercise.nodeB)}
+            Highlighted nodes:{' '}
+            {exercise.angleConfigs.length > 0
+              ? exercise.angleConfigs.map((c) => `${podLabel(c.nodeA)} ↔ ${podLabel(c.nodeB)}`).join(' · ')
+              : 'None configured'}
           </p>
 
           <div className="mt-5 flex w-full flex-col gap-2">

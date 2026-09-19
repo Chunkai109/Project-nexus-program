@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Bold, Check, Italic, List, Pencil, Plus, Save, Trash2, X } from 'lucide-react'
+import { Bold, Check, ChevronDown, Italic, List, Pencil, Plus, Save, Trash2, X } from 'lucide-react'
 import { clsx } from 'clsx'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
@@ -11,7 +11,7 @@ import { BodyMap } from '@/components/body/BodyMap'
 import { useAppData, type NewExercise } from '@/lib/data/AppDataContext'
 import { PODS } from '@/lib/mockData'
 import { podLabel, podSide } from '@/lib/podUtils'
-import type { Exercise, PodId } from '@/types'
+import type { AngleConfig, Exercise, PodId } from '@/types'
 
 const MUSCLE_TAGS = ['Quadriceps', 'Hamstrings', 'Glutes', 'Calves', 'Stabilizers', 'Ankle Complex', 'Core']
 
@@ -23,14 +23,17 @@ interface FormState {
   muscleGroups: string[]
   sets: number
   reps: number
-  targetRomMin: number
-  targetRomMax: number
   faultThresholdDeg: number
   targetEmgMvc: number
   therapistNote: string
   setupInstructions: string
   estMinutes: number
-  nodes: PodId[]
+  angleConfigs: AngleConfig[]
+  assignedPatientId: string | null
+  /** The angle currently being defined, before it's confirmed into angleConfigs. */
+  draftNodes: PodId[]
+  draftMin: number
+  draftMax: number
 }
 
 function blankForm(): FormState {
@@ -39,14 +42,16 @@ function blankForm(): FormState {
     muscleGroups: [],
     sets: 3,
     reps: 12,
-    targetRomMin: 90,
-    targetRomMax: 110,
     faultThresholdDeg: 8,
     targetEmgMvc: 65,
     therapistNote: '',
     setupInstructions: '',
     estMinutes: 10,
-    nodes: [],
+    angleConfigs: [],
+    assignedPatientId: null,
+    draftNodes: [],
+    draftMin: 90,
+    draftMax: 110,
   }
 }
 
@@ -56,19 +61,27 @@ function formFromExercise(ex: Exercise): FormState {
     muscleGroups: ex.muscleGroups,
     sets: ex.sets,
     reps: ex.reps,
-    targetRomMin: ex.targetRomMin,
-    targetRomMax: ex.targetRomMax,
     faultThresholdDeg: ex.faultThresholdDeg,
     targetEmgMvc: ex.targetEmgMvc,
     therapistNote: ex.therapistNote,
     setupInstructions: ex.setupInstructions,
     estMinutes: ex.estMinutes,
-    nodes: [ex.nodeA, ex.nodeB],
+    angleConfigs: ex.angleConfigs,
+    assignedPatientId: ex.assignedPatientId,
+    draftNodes: [],
+    draftMin: 90,
+    draftMax: 110,
   }
 }
 
+function describeAngleConfigs(configs: AngleConfig[]): string {
+  if (configs.length === 0) return 'No angles configured'
+  const first = `${podLabel(configs[0].nodeA)} ↔ ${podLabel(configs[0].nodeB)} (${configs[0].targetMin}°–${configs[0].targetMax}°)`
+  return configs.length === 1 ? first : `${first} +${configs.length - 1} more`
+}
+
 export function ProtocolBuilder() {
-  const { exercises, addExercise, updateExercise, deleteExercise } = useAppData()
+  const { exercises, patients, addExercise, updateExercise, deleteExercise } = useAppData()
   const [mode, setMode] = useState<'list' | 'form'>('list')
   const [editingId, setEditingId] = useState<string | null>(null)
   const [form, setForm] = useState<FormState>(blankForm())
@@ -99,17 +112,35 @@ export function ProtocolBuilder() {
     }))
   }
 
-  function toggleNode(id: PodId) {
+  function toggleDraftNode(id: PodId) {
     setForm((f) => {
-      if (f.nodes.includes(id)) return { ...f, nodes: f.nodes.filter((n) => n !== id) }
-      if (f.nodes.length < 2) return { ...f, nodes: [...f.nodes, id] }
-      return { ...f, nodes: [id] }
+      if (f.draftNodes.includes(id)) return { ...f, draftNodes: f.draftNodes.filter((n) => n !== id) }
+      if (f.draftNodes.length < 2) return { ...f, draftNodes: [...f.draftNodes, id] }
+      return { ...f, draftNodes: [id] }
     })
   }
 
-  const nodesValid = form.nodes.length === 2 && podSide(form.nodes[0]) === podSide(form.nodes[1])
-  const sideMismatch = form.nodes.length === 2 && !nodesValid
-  const canSave = form.title.trim().length > 0 && nodesValid
+  const draftValid = form.draftNodes.length === 2 && podSide(form.draftNodes[0]) === podSide(form.draftNodes[1])
+  const draftSideMismatch = form.draftNodes.length === 2 && !draftValid
+  const canSave = form.title.trim().length > 0 && form.angleConfigs.length > 0
+
+  function confirmAngle() {
+    setForm((f) => {
+      if (f.draftNodes.length !== 2 || podSide(f.draftNodes[0]) !== podSide(f.draftNodes[1])) return f
+      const newConfig: AngleConfig = {
+        id: crypto.randomUUID(),
+        nodeA: f.draftNodes[0],
+        nodeB: f.draftNodes[1],
+        targetMin: f.draftMin,
+        targetMax: f.draftMax,
+      }
+      return { ...f, angleConfigs: [...f.angleConfigs, newConfig], draftNodes: [], draftMin: 90, draftMax: 110 }
+    })
+  }
+
+  function removeAngleConfig(id: string) {
+    setForm((f) => ({ ...f, angleConfigs: f.angleConfigs.filter((c) => c.id !== id) }))
+  }
 
   function handleSave() {
     if (!canSave) return
@@ -118,15 +149,13 @@ export function ProtocolBuilder() {
       muscleGroups: form.muscleGroups,
       sets: form.sets,
       reps: form.reps,
-      targetRomMin: form.targetRomMin,
-      targetRomMax: form.targetRomMax,
       faultThresholdDeg: form.faultThresholdDeg,
       targetEmgMvc: form.targetEmgMvc,
       therapistNote: form.therapistNote,
       setupInstructions: form.setupInstructions,
       estMinutes: form.estMinutes,
-      nodeA: form.nodes[0],
-      nodeB: form.nodes[1],
+      angleConfigs: form.angleConfigs,
+      assignedPatientId: form.assignedPatientId,
     }
     if (editingId) {
       updateExercise(editingId, payload)
@@ -165,40 +194,46 @@ export function ProtocolBuilder() {
           </div>
         ) : (
           <div className="flex flex-col gap-3">
-            {exercises.map((ex) => (
-              <div key={ex.id} className="flex items-center justify-between gap-4 rounded-xl bg-surface-secondary p-4">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <p className="truncate text-[14px] font-semibold text-ink">{ex.title}</p>
-                    <Badge tone="accent">{ex.sets}×{ex.reps}</Badge>
+            {exercises.map((ex) => {
+              const assignedPatient = patients.find((p) => p.id === ex.assignedPatientId)
+              return (
+                <div key={ex.id} className="flex items-center justify-between gap-4 rounded-xl bg-surface-secondary p-4">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="truncate text-[14px] font-semibold text-ink">{ex.title}</p>
+                      <Badge tone="accent">{ex.sets}×{ex.reps}</Badge>
+                      {assignedPatient ? (
+                        <Badge tone="violet">{assignedPatient.name}</Badge>
+                      ) : (
+                        <span className="text-[12px] text-ink-faint">All Patients</span>
+                      )}
+                    </div>
+                    <p className="mt-0.5 truncate text-[13px] text-ink-faint">{describeAngleConfigs(ex.angleConfigs)}</p>
                   </div>
-                  <p className="mt-0.5 truncate text-[13px] text-ink-faint">
-                    {podLabel(ex.nodeA)} ↔ {podLabel(ex.nodeB)} · {ex.targetRomMin}°–{ex.targetRomMax}° ROM
-                  </p>
+                  {pendingDeleteId === ex.id ? (
+                    <div className="flex flex-shrink-0 items-center gap-2">
+                      <span className="text-[13px] text-ink-muted">Delete this exercise?</span>
+                      <Button variant="ghost" size="sm" onClick={() => setPendingDeleteId(null)}>
+                        Cancel
+                      </Button>
+                      <Button variant="danger" size="sm" onClick={() => confirmDelete(ex.id)}>
+                        <Trash2 className="h-3.5 w-3.5" />
+                        Delete
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="flex flex-shrink-0 gap-2">
+                      <Button variant="ghost" size="sm" onClick={() => startEdit(ex)}>
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => setPendingDeleteId(ex.id)}>
+                        <Trash2 className="h-3.5 w-3.5 text-crimson" />
+                      </Button>
+                    </div>
+                  )}
                 </div>
-                {pendingDeleteId === ex.id ? (
-                  <div className="flex flex-shrink-0 items-center gap-2">
-                    <span className="text-[13px] text-ink-muted">Delete this exercise?</span>
-                    <Button variant="ghost" size="sm" onClick={() => setPendingDeleteId(null)}>
-                      Cancel
-                    </Button>
-                    <Button variant="danger" size="sm" onClick={() => confirmDelete(ex.id)}>
-                      <Trash2 className="h-3.5 w-3.5" />
-                      Delete
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="flex flex-shrink-0 gap-2">
-                    <Button variant="ghost" size="sm" onClick={() => startEdit(ex)}>
-                      <Pencil className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button variant="ghost" size="sm" onClick={() => setPendingDeleteId(ex.id)}>
-                      <Trash2 className="h-3.5 w-3.5 text-crimson" />
-                    </Button>
-                  </div>
-                )}
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
         {saved && <p className="mt-4 text-center text-[13px] font-medium text-emerald">Saved.</p>}
@@ -235,6 +270,30 @@ export function ProtocolBuilder() {
               placeholder="e.g. Bilateral Squat Rehab"
               className={fieldClass}
             />
+          </label>
+
+          <label className="block">
+            <span className="mb-2 block text-[13px] font-medium text-ink-muted">Assign to Patient</span>
+            <div className="relative">
+              <select
+                value={form.assignedPatientId ?? ''}
+                onChange={(e) => setForm((f) => ({ ...f, assignedPatientId: e.target.value || null }))}
+                className={clsx(fieldClass, 'appearance-none pr-9')}
+              >
+                <option value="">All Patients</option>
+                {patients.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name} · {p.email}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-faint" />
+            </div>
+            {patients.length === 0 && (
+              <p className="mt-1.5 text-[12px] text-ink-faint">
+                No patients have signed in yet — this exercise will be visible to whoever signs in until you assign it.
+              </p>
+            )}
           </label>
 
           <div>
@@ -330,34 +389,32 @@ export function ProtocolBuilder() {
         <div className="flex flex-col gap-7 rounded-xl bg-surface-secondary p-6">
           <div>
             <div className="mb-1 flex items-center justify-between">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-ink-faint">Reference Nodes</p>
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-ink-faint">Angle Configuration</p>
               <span
                 className={clsx(
                   'flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium',
-                  nodesValid ? 'bg-emerald/10 text-emerald' : 'bg-surface text-ink-faint',
+                  form.angleConfigs.length > 0 ? 'bg-emerald/10 text-emerald' : 'bg-surface text-ink-faint',
                 )}
               >
-                {nodesValid && <Check className="h-3 w-3" />}
-                {nodesValid ? 'Configured' : 'Pending'}
+                {form.angleConfigs.length > 0 && <Check className="h-3 w-3" />}
+                {form.angleConfigs.length > 0 ? `${form.angleConfigs.length} Confirmed` : 'Pending'}
               </span>
             </div>
             <p className="mb-4 text-[13px] text-ink-muted">
-              Tap the two sensor nodes whose relative angle defines this exercise's range of motion.
+              Tap two sensor nodes, dial in the ROM range below, then confirm to save it as a tracked angle for this exercise.
             </p>
-            <BodyMap pods={PODS} selectedPods={form.nodes} onSelect={(id) => toggleNode(id as PodId)} height={220} />
+            <BodyMap pods={PODS} selectedPods={form.draftNodes} onSelect={(id) => toggleDraftNode(id as PodId)} height={220} />
             <div className="mt-4 text-center text-[13px]">
-              {form.nodes.length === 0 && <span className="text-ink-faint">No nodes selected yet</span>}
-              {form.nodes.length === 1 && (
-                <span className="text-ink-muted">
-                  {podLabel(form.nodes[0])} selected — pick one more node
-                </span>
+              {form.draftNodes.length === 0 && <span className="text-ink-faint">No nodes selected yet</span>}
+              {form.draftNodes.length === 1 && (
+                <span className="text-ink-muted">{podLabel(form.draftNodes[0])} selected — pick one more node</span>
               )}
-              {form.nodes.length === 2 && nodesValid && (
+              {form.draftNodes.length === 2 && draftValid && (
                 <span className="font-medium text-accent">
-                  {podLabel(form.nodes[0])} ↔ {podLabel(form.nodes[1])} · Monitoring {podSide(form.nodes[0])} side
+                  {podLabel(form.draftNodes[0])} ↔ {podLabel(form.draftNodes[1])} · Monitoring {podSide(form.draftNodes[0])} side
                 </span>
               )}
-              {sideMismatch && (
+              {draftSideMismatch && (
                 <span className="font-medium text-crimson">Pick two nodes on the same side (both left or both right).</span>
               )}
             </div>
@@ -366,31 +423,68 @@ export function ProtocolBuilder() {
           <div className="h-px bg-border" />
 
           <div className="flex flex-col items-center gap-1 rounded-lg bg-surface p-4">
-            <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-ink-faint">
-              Angle Customisation Preview
-            </p>
+            <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-ink-faint">Angle Customisation Preview</p>
             <RadialGauge
-              value={(form.targetRomMin + form.targetRomMax) / 2}
+              value={(form.draftMin + form.draftMax) / 2}
               min={0}
               max={180}
-              targetMin={form.targetRomMin}
-              targetMax={form.targetRomMax}
-              label={nodesValid ? `${podLabel(form.nodes[0])} ↔ ${podLabel(form.nodes[1])}` : 'Select two nodes to preview'}
+              targetMin={form.draftMin}
+              targetMax={form.draftMax}
+              label={draftValid ? `${podLabel(form.draftNodes[0])} ↔ ${podLabel(form.draftNodes[1])}` : 'Select two nodes to preview'}
               size={160}
             />
+            <div className="w-full">
+              <RangeSlider
+                label="Min/Max Joint ROM Range"
+                valueMin={form.draftMin}
+                valueMax={form.draftMax}
+                min={0}
+                max={180}
+                onChangeMin={(v) => setForm((f) => ({ ...f, draftMin: v }))}
+                onChangeMax={(v) => setForm((f) => ({ ...f, draftMax: v }))}
+              />
+            </div>
+            <Button size="sm" className="mt-2 w-full" onClick={confirmAngle} disabled={!draftValid}>
+              <Check className="h-3.5 w-3.5" />
+              Confirm This Angle
+            </Button>
+          </div>
+
+          <div>
+            <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-ink-faint">
+              Confirmed Angles ({form.angleConfigs.length})
+            </p>
+            {form.angleConfigs.length === 0 ? (
+              <p className="rounded-lg bg-surface p-3.5 text-center text-[13px] text-ink-faint">
+                No angles confirmed yet — set one above and it'll be saved as a property of this exercise.
+              </p>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {form.angleConfigs.map((c) => (
+                  <div key={c.id} className="flex items-center justify-between gap-3 rounded-lg bg-surface px-3.5 py-2.5">
+                    <span className="flex items-center gap-1.5 text-[13px] text-ink">
+                      <Check className="h-3.5 w-3.5 flex-shrink-0 text-emerald" />
+                      {podLabel(c.nodeA)} ↔ {podLabel(c.nodeB)}
+                      <span className="font-medium text-accent">
+                        · {c.targetMin}°–{c.targetMax}°
+                      </span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => removeAngleConfig(c.id)}
+                      className="flex-shrink-0 rounded p-1 text-ink-faint transition-colors duration-200 hover:bg-surface-hover hover:text-crimson"
+                      aria-label={`Remove ${podLabel(c.nodeA)} to ${podLabel(c.nodeB)} angle`}
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="h-px bg-border" />
 
-          <RangeSlider
-            label="Min/Max Joint ROM Range"
-            valueMin={form.targetRomMin}
-            valueMax={form.targetRomMax}
-            min={0}
-            max={180}
-            onChangeMin={(v) => setForm((f) => ({ ...f, targetRomMin: v }))}
-            onChangeMax={(v) => setForm((f) => ({ ...f, targetRomMax: v }))}
-          />
           <Slider
             label="Fault Angle Threshold"
             value={form.faultThresholdDeg}

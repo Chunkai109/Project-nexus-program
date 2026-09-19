@@ -34,10 +34,11 @@ export function LiveSession() {
   const hub = useBleHub()
   const hubConnected = hub.connectionState === 'connected'
 
-  const monitoredSide = exercise ? podSide(exercise.nodeA) : 'right'
+  const primaryAngle = exercise?.angleConfigs[0] ?? null
+  const monitoredSide = primaryAngle ? podSide(primaryAngle.nodeA) : 'right'
   const hapticPod = kneePodForSide(monitoredSide)
 
-  const simulated = useSensorStream(!ending, exercise)
+  const simulated = useSensorStream(!ending, primaryAngle?.targetMin ?? null, primaryAngle?.targetMax ?? null)
   const squatDepth = Math.max(0, Math.min(1, 1 - (simulated.kneeFlexionDeg - 70) / 60))
 
   // Hybrid multimodal decision engine: prefer the camera's real joint-angle
@@ -122,8 +123,8 @@ export function LiveSession() {
         exerciseTitle: exercise.title,
         completedAt: Date.now(),
         durationSec: simulated.elapsedSec,
-        targetMin: exercise.targetRomMin,
-        targetMax: exercise.targetRomMax,
+        targetMin: primaryAngle?.targetMin ?? simulated.targetMin,
+        targetMax: primaryAngle?.targetMax ?? simulated.targetMax,
         reps: repSamples,
       })
     }

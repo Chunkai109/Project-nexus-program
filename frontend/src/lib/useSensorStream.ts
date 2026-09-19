@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { Exercise, SessionMetrics } from '@/types'
+import type { SessionMetrics } from '@/types'
 
 /**
  * Simulates the on-chip sensor pipeline described in the proposal's
@@ -21,11 +21,11 @@ function emgActivation(vrms: number): number {
   return Math.max(0, Math.min(100, pct))
 }
 
-export function useSensorStream(active: boolean, exercise: Exercise | null) {
+export function useSensorStream(active: boolean, targetMin: number | null, targetMax: number | null) {
   const [metrics, setMetrics] = useState<SessionMetrics>({
-    kneeFlexionDeg: exercise ? (exercise.targetRomMin + exercise.targetRomMax) / 2 : 90,
-    targetMin: exercise?.targetRomMin ?? 90,
-    targetMax: exercise?.targetRomMax ?? 110,
+    kneeFlexionDeg: targetMin != null && targetMax != null ? (targetMin + targetMax) / 2 : 90,
+    targetMin: targetMin ?? 90,
+    targetMax: targetMax ?? 110,
     emgLeft: 0,
     emgRight: 0,
     faultActive: false,
@@ -41,15 +41,15 @@ export function useSensorStream(active: boolean, exercise: Exercise | null) {
   const lastRepEdgeRef = useRef(false)
 
   useEffect(() => {
-    if (!active || !exercise) return
+    if (!active || targetMin == null || targetMax == null) return
 
     const start = performance.now()
     const interval = setInterval(() => {
       tRef.current += TICK_MS / 1000
       repPhaseRef.current += 0.045
 
-      const mid = (exercise.targetRomMin + exercise.targetRomMax) / 2
-      const amp = (exercise.targetRomMax - exercise.targetRomMin) / 2
+      const mid = (targetMin + targetMax) / 2
+      const amp = (targetMax - targetMin) / 2
       const cycle = Math.sin(repPhaseRef.current)
       const jitter = (Math.sin(tRef.current * 5.3) + Math.sin(tRef.current * 2.1)) * 1.5
 
@@ -71,8 +71,8 @@ export function useSensorStream(active: boolean, exercise: Exercise | null) {
 
       setMetrics((prev) => ({
         kneeFlexionDeg: angle,
-        targetMin: exercise.targetRomMin,
-        targetMax: exercise.targetRomMax,
+        targetMin,
+        targetMax,
         emgLeft: Math.round(emgActivation(vrmsLeft)),
         emgRight: Math.round(emgActivation(vrmsRight)),
         faultActive: faultRoll,
@@ -85,7 +85,7 @@ export function useSensorStream(active: boolean, exercise: Exercise | null) {
     }, TICK_MS)
 
     return () => clearInterval(interval)
-  }, [active, exercise])
+  }, [active, targetMin, targetMax])
 
   return metrics
 }

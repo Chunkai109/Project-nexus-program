@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Activity, CalendarClock, Clock, Dumbbell, MessageSquareQuote, Target } from 'lucide-react'
 import { PageShell } from '@/components/layout/PageShell'
@@ -6,10 +7,17 @@ import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { useAppData } from '@/lib/data/AppDataContext'
+import { useAuth } from '@/lib/AuthContext'
 
 export function PatientExercises() {
   const navigate = useNavigate()
-  const { exercises } = useAppData()
+  const { user } = useAuth()
+  const { exercises, patients } = useAppData()
+  const myPatientId = patients.find((p) => p.email === user?.email)?.id
+  const visibleExercises = useMemo(
+    () => exercises.filter((ex) => ex.assignedPatientId == null || ex.assignedPatientId === myPatientId),
+    [exercises, myPatientId],
+  )
 
   return (
     <PageShell>
@@ -20,9 +28,9 @@ export function PatientExercises() {
           <div>
             <h1 className="text-[28px] font-semibold tracking-tight text-ink">Prescribed Exercises</h1>
             <p className="mt-1.5 text-[15px] text-ink-muted">
-              {exercises.length === 0
+              {visibleExercises.length === 0
                 ? 'Your physiotherapist hasn\'t published any protocols yet.'
-                : `Your physiotherapist has assigned ${exercises.length} protocol${exercises.length === 1 ? '' : 's'} for this week.`}
+                : `Your physiotherapist has assigned ${visibleExercises.length} protocol${visibleExercises.length === 1 ? '' : 's'} for this week.`}
             </p>
           </div>
           <Badge tone="accent" icon={<Activity className="h-3.5 w-3.5" />}>
@@ -30,7 +38,7 @@ export function PatientExercises() {
           </Badge>
         </div>
 
-        {exercises.length === 0 ? (
+        {visibleExercises.length === 0 ? (
           <Card className="flex flex-col items-center gap-3 p-16 text-center">
             <CalendarClock className="h-8 w-8 text-ink-faint" />
             <p className="text-[15px] font-medium text-ink">No exercises assigned yet</p>
@@ -40,7 +48,7 @@ export function PatientExercises() {
           </Card>
         ) : (
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
-            {exercises.map((ex) => (
+            {visibleExercises.map((ex) => (
               <Card key={ex.id} className="flex flex-col p-7 transition-transform duration-200 hover:-translate-y-0.5">
                 <div className="mb-5 flex items-start justify-between gap-3">
                   <h2 className="text-[17px] font-semibold leading-snug tracking-tight text-ink">{ex.title}</h2>
@@ -60,7 +68,10 @@ export function PatientExercises() {
                 <div className="mb-5 flex items-center gap-4 text-sm text-ink-muted">
                   <div className="flex items-center gap-1.5">
                     <Target className="h-3.5 w-3.5 text-accent" />
-                    {ex.targetRomMin}°–{ex.targetRomMax}° ROM
+                    {ex.angleConfigs.length > 0
+                      ? `${ex.angleConfigs[0].targetMin}°–${ex.angleConfigs[0].targetMax}° ROM`
+                      : 'No ROM set'}
+                    {ex.angleConfigs.length > 1 && ` (+${ex.angleConfigs.length - 1} more)`}
                   </div>
                   <div className="flex items-center gap-1.5">
                     <Clock className="h-3.5 w-3.5 text-accent" />
