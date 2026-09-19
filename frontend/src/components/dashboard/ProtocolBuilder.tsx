@@ -1,11 +1,12 @@
 import { useState } from 'react'
-import { Bold, Italic, List, Pencil, Plus, Save, Trash2, X } from 'lucide-react'
+import { Bold, Check, Italic, List, Pencil, Plus, Save, Trash2, X } from 'lucide-react'
 import { clsx } from 'clsx'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { Slider } from '@/components/ui/Slider'
 import { RangeSlider } from '@/components/ui/RangeSlider'
+import { RadialGauge } from '@/components/charts/RadialGauge'
 import { BodyMap } from '@/components/body/BodyMap'
 import { useAppData, type NewExercise } from '@/lib/data/AppDataContext'
 import { PODS } from '@/lib/mockData'
@@ -72,6 +73,12 @@ export function ProtocolBuilder() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [form, setForm] = useState<FormState>(blankForm())
   const [saved, setSaved] = useState(false)
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
+
+  function confirmDelete(id: string) {
+    deleteExercise(id)
+    setPendingDeleteId(null)
+  }
 
   function startCreate() {
     setEditingId(null)
@@ -169,14 +176,27 @@ export function ProtocolBuilder() {
                     {podLabel(ex.nodeA)} ↔ {podLabel(ex.nodeB)} · {ex.targetRomMin}°–{ex.targetRomMax}° ROM
                   </p>
                 </div>
-                <div className="flex flex-shrink-0 gap-2">
-                  <Button variant="ghost" size="sm" onClick={() => startEdit(ex)}>
-                    <Pencil className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button variant="ghost" size="sm" onClick={() => deleteExercise(ex.id)}>
-                    <Trash2 className="h-3.5 w-3.5 text-crimson" />
-                  </Button>
-                </div>
+                {pendingDeleteId === ex.id ? (
+                  <div className="flex flex-shrink-0 items-center gap-2">
+                    <span className="text-[13px] text-ink-muted">Delete this exercise?</span>
+                    <Button variant="ghost" size="sm" onClick={() => setPendingDeleteId(null)}>
+                      Cancel
+                    </Button>
+                    <Button variant="danger" size="sm" onClick={() => confirmDelete(ex.id)}>
+                      <Trash2 className="h-3.5 w-3.5" />
+                      Delete
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex flex-shrink-0 gap-2">
+                    <Button variant="ghost" size="sm" onClick={() => startEdit(ex)}>
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => setPendingDeleteId(ex.id)}>
+                      <Trash2 className="h-3.5 w-3.5 text-crimson" />
+                    </Button>
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -309,7 +329,18 @@ export function ProtocolBuilder() {
 
         <div className="flex flex-col gap-7 rounded-xl bg-surface-secondary p-6">
           <div>
-            <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-ink-faint">Reference Nodes</p>
+            <div className="mb-1 flex items-center justify-between">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-ink-faint">Reference Nodes</p>
+              <span
+                className={clsx(
+                  'flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium',
+                  nodesValid ? 'bg-emerald/10 text-emerald' : 'bg-surface text-ink-faint',
+                )}
+              >
+                {nodesValid && <Check className="h-3 w-3" />}
+                {nodesValid ? 'Configured' : 'Pending'}
+              </span>
+            </div>
             <p className="mb-4 text-[13px] text-ink-muted">
               Tap the two sensor nodes whose relative angle defines this exercise's range of motion.
             </p>
@@ -330,6 +361,23 @@ export function ProtocolBuilder() {
                 <span className="font-medium text-crimson">Pick two nodes on the same side (both left or both right).</span>
               )}
             </div>
+          </div>
+
+          <div className="h-px bg-border" />
+
+          <div className="flex flex-col items-center gap-1 rounded-lg bg-surface p-4">
+            <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-ink-faint">
+              Angle Customisation Preview
+            </p>
+            <RadialGauge
+              value={(form.targetRomMin + form.targetRomMax) / 2}
+              min={0}
+              max={180}
+              targetMin={form.targetRomMin}
+              targetMax={form.targetRomMax}
+              label={nodesValid ? `${podLabel(form.nodes[0])} ↔ ${podLabel(form.nodes[1])}` : 'Select two nodes to preview'}
+              size={160}
+            />
           </div>
 
           <div className="h-px bg-border" />

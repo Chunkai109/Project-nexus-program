@@ -79,3 +79,26 @@ export interface PatientRecord {
   firstSeenAt: number
   lastSeenAt: number
 }
+
+/** One completed rep, sampled the instant the rep counter ticks over during a live session. */
+export interface RepSample {
+  rep: number
+  angle: number
+  emgLeft: number
+  emgRight: number
+  faultActive: boolean
+}
+
+/** A real completed session, recorded when a patient hits "End Session & Sync Data". */
+export interface SessionRecord {
+  id: string
+  patientId: string
+  patientName: string
+  exerciseId: string
+  exerciseTitle: string
+  completedAt: number
+  durationSec: number
+  targetMin: number
+  targetMax: number
+  reps: RepSample[]
+}

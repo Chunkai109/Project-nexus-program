@@ -14,9 +14,11 @@ import { PoseOverlay } from '@/components/pose/PoseOverlay'
 import { BodyMap } from '@/components/body/BodyMap'
 import { useSensorStream } from '@/lib/useSensorStream'
 import { useAppData } from '@/lib/data/AppDataContext'
+import { useAuth } from '@/lib/AuthContext'
 import { podSide, kneePodForSide } from '@/lib/podUtils'
 import { useBleHub } from '@/lib/ble/BleProvider'
 import { PODS } from '@/lib/mockData'
+import type { RepSample } from '@/types'
 
 const HAPTIC_PULSE_MS = 400
 const HAPTIC_RETRIGGER_COOLDOWN_MS = 1500
@@ -24,7 +26,8 @@ const HAPTIC_RETRIGGER_COOLDOWN_MS = 1500
 export function LiveSession() {
   const { exerciseId } = useParams()
   const navigate = useNavigate()
-  const { exercises } = useAppData()
+  const { user } = useAuth()
+  const { exercises, patients, recordSession } = useAppData()
   const exercise = useMemo(() => exercises.find((e) => e.id === exerciseId) ?? null, [exercises, exerciseId])
   const [ending, setEnding] = useState(false)
   const [vision, setVision] = useState<VisionReading | null>(null)
@@ -75,6 +78,21 @@ export function LiveSession() {
     wasFaultActive.current = faultActive
   }, [faultActive, hubConnected, hub, hapticPod])
 
+  // Rep-by-rep telemetry: sample the effective angle/EMG the instant each
+  // rep completes, so a finished session leaves behind real per-rep data
+  // instead of nothing — this is what Session Analytics reads back later.
+  const [repSamples, setRepSamples] = useState<RepSample[]>([])
+  const prevRepCount = useRef(0)
+  useEffect(() => {
+    if (simulated.repCount > prevRepCount.current) {
+      prevRepCount.current = simulated.repCount
+      setRepSamples((prev) => [
+        ...prev,
+        { rep: simulated.repCount, angle: Math.round(kneeFlexionDeg), emgLeft, emgRight, faultActive },
+      ])
+    }
+  }, [simulated.repCount, kneeFlexionDeg, emgLeft, emgRight, faultActive])
+
   if (!exercise) {
     return (
       <PageShell>
@@ -94,6 +112,21 @@ export function LiveSession() {
 
   function handleEnd() {
     setEnding(true)
+    if (!exercise) return
+    const patient = patients.find((p) => p.email === user?.email)
+    if (patient && repSamples.length > 0) {
+      recordSession({
+        patientId: patient.id,
+        patientName: patient.name,
+        exerciseId: exercise.id,
+        exerciseTitle: exercise.title,
+        completedAt: Date.now(),
+        durationSec: simulated.elapsedSec,
+        targetMin: exercise.targetRomMin,
+        targetMax: exercise.targetRomMax,
+        reps: repSamples,
+      })
+    }
     setTimeout(() => navigate('/patient/exercises'), 900)
   }
 
