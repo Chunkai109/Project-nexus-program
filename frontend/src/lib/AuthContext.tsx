@@ -1,6 +1,11 @@
 import { createContext, useContext, useMemo, useState, type ReactNode } from 'react'
 import type { AuthUser, UserRole } from '@/types'
 
+export function deriveNameFromEmail(email: string, role: UserRole): string {
+  const name = email.split('@')[0].replace(/[._]/g, ' ')
+  return name.length > 0 ? name.replace(/\b\w/g, (c) => c.toUpperCase()) : role === 'patient' ? 'Patient' : 'Physiotherapist'
+}
+
 interface AuthContextValue {
   user: AuthUser | null
   signIn: (input: { role: UserRole; email: string; practiceId: string }) => void
@@ -16,13 +21,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     () => ({
       user,
       signIn: ({ role, email, practiceId }) => {
-        const name = email.split('@')[0].replace(/[._]/g, ' ')
-        setUser({
-          role,
-          email,
-          practiceId,
-          name: name.length > 0 ? name.replace(/\b\w/g, (c) => c.toUpperCase()) : role === 'patient' ? 'Alex Tan' : 'Dr. Physio',
-        })
+        setUser({ role, email, practiceId, name: deriveNameFromEmail(email, role) })
       },
       signOut: () => setUser(null),
     }),

@@ -6,7 +6,8 @@ import { Logo } from '@/components/layout/Logo'
 import { RoleToggle } from '@/components/ui/RoleToggle'
 import { Button } from '@/components/ui/Button'
 import { ThemeToggle } from '@/components/ui/ThemeToggle'
-import { useAuth } from '@/lib/AuthContext'
+import { useAuth, deriveNameFromEmail } from '@/lib/AuthContext'
+import { useAppData } from '@/lib/data/AppDataContext'
 import { PRACTICES } from '@/lib/mockData'
 import type { UserRole } from '@/types'
 
@@ -19,11 +20,15 @@ export function LoginPage() {
   const [password, setPassword] = useState('')
   const [practiceId, setPracticeId] = useState(PRACTICES[0].id)
   const { signIn } = useAuth()
+  const { registerPatientVisit } = useAppData()
   const navigate = useNavigate()
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault()
-    signIn({ role, email: email || (role === 'patient' ? 'alex.tan@patient.io' : 'physio@clinic.com'), practiceId })
+    signIn({ role, email, practiceId })
+    if (role === 'patient') {
+      registerPatientVisit(deriveNameFromEmail(email, role), email)
+    }
     navigate(role === 'patient' ? '/patient/exercises' : '/physio')
   }
 
@@ -51,7 +56,7 @@ export function LoginPage() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder={role === 'patient' ? 'alex.tan@patient.io' : 'you@clinic.com'}
+                placeholder={role === 'patient' ? 'you@example.com' : 'you@clinic.com'}
                 className="w-full bg-transparent text-[15px] text-ink outline-none placeholder:text-ink-faint"
               />
             </div>

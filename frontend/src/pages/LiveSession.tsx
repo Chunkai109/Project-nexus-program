@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { TriangleAlert, Vibrate, Timer, Repeat, ScanEye } from 'lucide-react'
+import { ArrowLeft, TriangleAlert, Vibrate, Timer, Repeat, ScanEye } from 'lucide-react'
 import { PageShell } from '@/components/layout/PageShell'
 import { Logo } from '@/components/layout/Logo'
 import { ThemeToggle } from '@/components/ui/ThemeToggle'
@@ -13,25 +13,32 @@ import { CameraViewport, type VisionReading } from '@/components/pose/CameraView
 import { PoseOverlay } from '@/components/pose/PoseOverlay'
 import { BodyMap } from '@/components/body/BodyMap'
 import { useSensorStream } from '@/lib/useSensorStream'
+import { useAppData } from '@/lib/data/AppDataContext'
+import { useAuth } from '@/lib/AuthContext'
+import { podSide, kneePodForSide } from '@/lib/podUtils'
 import { useBleHub } from '@/lib/ble/BleProvider'
-import type { PodId } from '@/lib/ble/protocol'
-import { EXERCISES, PODS } from '@/lib/mockData'
+import { PODS } from '@/lib/mockData'
+import type { RepSample } from '@/types'
 
-const MONITORED_SIDE = 'right'
-const VALGUS_HAPTIC_POD = 4 as PodId
 const HAPTIC_PULSE_MS = 400
 const HAPTIC_RETRIGGER_COOLDOWN_MS = 1500
 
 export function LiveSession() {
   const { exerciseId } = useParams()
   const navigate = useNavigate()
-  const exercise = useMemo(() => EXERCISES.find((e) => e.id === exerciseId) ?? EXERCISES[0], [exerciseId])
+  const { user } = useAuth()
+  const { exercises, patients, recordSession } = useAppData()
+  const exercise = useMemo(() => exercises.find((e) => e.id === exerciseId) ?? null, [exercises, exerciseId])
   const [ending, setEnding] = useState(false)
   const [vision, setVision] = useState<VisionReading | null>(null)
   const hub = useBleHub()
   const hubConnected = hub.connectionState === 'connected'
 
-  const simulated = useSensorStream(!ending, exercise)
+  const primaryAngle = exercise?.angleConfigs[0] ?? null
+  const monitoredSide = primaryAngle ? podSide(primaryAngle.nodeA) : 'right'
+  const hapticPod = kneePodForSide(monitoredSide)
+
+  const simulated = useSensorStream(!ending, primaryAngle?.targetMin ?? null, primaryAngle?.targetMax ?? null)
   const squatDepth = Math.max(0, Math.min(1, 1 - (simulated.kneeFlexionDeg - 70) / 60))
 
   // Hybrid multimodal decision engine: prefer the camera's real joint-angle
@@ -41,8 +48,10 @@ export function LiveSession() {
   const kneeFlexionDeg = vision?.flexionDeg ?? simulated.kneeFlexionDeg
   const faultActive = vision?.faultActive ?? simulated.faultActive
   const faultDeg = vision ? Math.round(vision.valgusDeg) : simulated.faultDeg
-  const faultLabel = faultActive ? `Knee Valgus Detected (+${faultDeg}° Fault)` : null
-  const activeHapticPod = faultActive ? VALGUS_HAPTIC_POD : null
+  const faultLabel = faultActive
+    ? `${monitoredSide === 'left' ? 'Left' : 'Right'} Knee Valgus Detected (+${faultDeg}° Fault)`
+    : null
+  const activeHapticPod = faultActive ? hapticPod : null
 
   // Real EMG pods (1 = left vastus medialis, 2 = right) when a hub is
   // connected; otherwise the wearable simulator, same as the knee angle above.
@@ -51,9 +60,9 @@ export function LiveSession() {
   const emgRight = usingHubEmg ? Math.round(hub.pods[2]?.emgActivationPct ?? 0) : simulated.emgRight
 
   // Closed-loop correction: when a real hub is connected, tell it to buzz
-  // the right-knee pod the instant a fault starts, rather than only showing
-  // it on screen. Edge-triggered with a cooldown so a sustained fault
-  // doesn't flood the link with GATT writes.
+  // the monitored knee pod the instant a fault starts, rather than only
+  // showing it on screen. Edge-triggered with a cooldown so a sustained
+  // fault doesn't flood the link with GATT writes.
   const lastHapticSentAt = useRef(0)
   const wasFaultActive = useRef(false)
   useEffect(() => {
@@ -65,13 +74,60 @@ export function LiveSession() {
     const cooldownElapsed = performance.now() - lastHapticSentAt.current > HAPTIC_RETRIGGER_COOLDOWN_MS
     if (risingEdge || (faultActive && cooldownElapsed)) {
       lastHapticSentAt.current = performance.now()
-      hub.sendHaptic(VALGUS_HAPTIC_POD, HAPTIC_PULSE_MS).catch(() => {})
+      hub.sendHaptic(hapticPod, HAPTIC_PULSE_MS).catch(() => {})
     }
     wasFaultActive.current = faultActive
-  }, [faultActive, hubConnected, hub])
+  }, [faultActive, hubConnected, hub, hapticPod])
+
+  // Rep-by-rep telemetry: sample the effective angle/EMG the instant each
+  // rep completes, so a finished session leaves behind real per-rep data
+  // instead of nothing — this is what Session Analytics reads back later.
+  const [repSamples, setRepSamples] = useState<RepSample[]>([])
+  const prevRepCount = useRef(0)
+  useEffect(() => {
+    if (simulated.repCount > prevRepCount.current) {
+      prevRepCount.current = simulated.repCount
+      setRepSamples((prev) => [
+        ...prev,
+        { rep: simulated.repCount, angle: Math.round(kneeFlexionDeg), emgLeft, emgRight, faultActive },
+      ])
+    }
+  }, [simulated.repCount, kneeFlexionDeg, emgLeft, emgRight, faultActive])
+
+  if (!exercise) {
+    return (
+      <PageShell>
+        <main className="flex min-h-screen flex-col items-center justify-center gap-4 px-10 text-center">
+          <p className="text-[17px] font-semibold text-ink">Exercise not found</p>
+          <p className="max-w-sm text-[14px] text-ink-faint">
+            This protocol may have been removed by your physiotherapist. Head back to your exercise list to see what's currently assigned.
+          </p>
+          <Button onClick={() => navigate('/patient/exercises')}>
+            <ArrowLeft className="h-4 w-4" />
+            Back to Exercises
+          </Button>
+        </main>
+      </PageShell>
+    )
+  }
 
   function handleEnd() {
     setEnding(true)
+    if (!exercise) return
+    const patient = patients.find((p) => p.email === user?.email)
+    if (patient && repSamples.length > 0) {
+      recordSession({
+        patientId: patient.id,
+        patientName: patient.name,
+        exerciseId: exercise.id,
+        exerciseTitle: exercise.title,
+        completedAt: Date.now(),
+        durationSec: simulated.elapsedSec,
+        targetMin: primaryAngle?.targetMin ?? simulated.targetMin,
+        targetMax: primaryAngle?.targetMax ?? simulated.targetMax,
+        reps: repSamples,
+      })
+    }
     setTimeout(() => navigate('/patient/exercises'), 900)
   }
 
@@ -103,8 +159,8 @@ export function LiveSession() {
         {/* Primary viewport */}
         <div className="flex flex-col gap-4">
           <CameraViewport
-            monitoredSide={MONITORED_SIDE}
-            faultThresholdDeg={exercise.faultThresholdDeg}
+            monitoredSide={monitoredSide}
+            faultThresholdDeg={primaryAngle?.faultThresholdDeg ?? 8}
             onVisionMetrics={setVision}
             fallbackSkeleton={
               <PoseOverlay squatDepth={squatDepth} faultActive={faultActive} faultDeg={faultDeg} />
@@ -179,7 +235,7 @@ export function LiveSession() {
             </div>
             <p className="mt-3 text-center text-[13px] text-ink-muted">
               {activeHapticPod
-                ? 'Vibrotactile Correction Active — realign right knee over ankle'
+                ? `Vibrotactile Correction Active — realign ${monitoredSide} knee over ankle`
                 : 'Form within target corridor — no correction needed'}
             </p>
           </Card>

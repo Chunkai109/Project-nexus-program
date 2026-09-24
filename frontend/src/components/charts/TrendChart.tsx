@@ -10,8 +10,32 @@ import {
 } from 'recharts'
 import type { TelemetryPoint } from '@/types'
 
-export function TrendChart({ data, height = 260 }: { data: TelemetryPoint[]; height?: number }) {
+function niceTicks(min: number, max: number): number[] {
+  const step = (max - min) / 4
+  return Array.from({ length: 5 }, (_, i) => Math.round(min + step * i))
+}
+
+export function TrendChart({
+  data,
+  height = 260,
+  domain,
+}: {
+  data: TelemetryPoint[]
+  height?: number
+  /** [min, max] for the Y axis. Defaults to padding around the data's own target corridor so it fits any exercise's ROM range, not just knee-sized ones. */
+  domain?: [number, number]
+}) {
   const chartData = data.map((d) => ({ ...d, bandHeight: d.targetMax - d.targetMin }))
+
+  const [yMin, yMax] = domain ?? (() => {
+    const angles = data.map((d) => d.angle)
+    const targets = data.flatMap((d) => [d.targetMin, d.targetMax])
+    const all = [...angles, ...targets]
+    const lo = Math.min(...all)
+    const hi = Math.max(...all)
+    const pad = Math.max(5, Math.round((hi - lo) * 0.15))
+    return [Math.max(0, lo - pad), hi + pad]
+  })()
 
   return (
     <ResponsiveContainer width="100%" height={height}>
@@ -22,7 +46,7 @@ export function TrendChart({ data, height = 260 }: { data: TelemetryPoint[]; hei
           tick={{ fill: 'var(--color-ink-faint)', fontSize: 11 }}
           axisLine={{ stroke: 'var(--color-border-strong)' }}
           tickLine={false}
-          interval={4}
+          interval={Math.max(0, Math.ceil(data.length / 10) - 1)}
           label={{ value: 'Rep sequence', position: 'insideBottom', offset: -2, fill: 'var(--color-ink-faint)', fontSize: 11 }}
         />
         <YAxis
@@ -30,8 +54,8 @@ export function TrendChart({ data, height = 260 }: { data: TelemetryPoint[]; hei
           axisLine={{ stroke: 'var(--color-border-strong)' }}
           tickLine={false}
           width={40}
-          domain={[60, 140]}
-          ticks={[60, 80, 100, 120, 140]}
+          domain={[yMin, yMax]}
+          ticks={niceTicks(yMin, yMax)}
         />
         <Tooltip
           contentStyle={{

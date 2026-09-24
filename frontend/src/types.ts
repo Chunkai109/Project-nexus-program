@@ -14,14 +14,25 @@ export interface AuthUser {
 
 export type PodSignal = 'strong' | 'weak' | 'offline'
 export type PodKind = 'EMG+IMU' | 'IMU+Haptics' | 'IMU'
+export type PodId = 1 | 2 | 3 | 4 | 5 | 6
 
 export interface Pod {
-  id: number
+  id: PodId
   label: string
   location: string
   kind: PodKind
   signal: PodSignal
   battery: number
+}
+
+/** One physio-confirmed joint angle target: two sensor nodes, the ROM range, and the fault deviation threshold measured between them. */
+export interface AngleConfig {
+  id: string
+  nodeA: PodId
+  nodeB: PodId
+  targetMin: number
+  targetMax: number
+  faultThresholdDeg: number
 }
 
 export interface Exercise {
@@ -30,13 +41,15 @@ export interface Exercise {
   muscleGroups: string[]
   sets: number
   reps: number
-  targetRomMin: number
-  targetRomMax: number
-  faultThresholdDeg: number
   targetEmgMvc: number
   therapistNote: string
   setupInstructions: string
   estMinutes: number
+  /** Every angle confirmed for this exercise; the first is the primary pair a live session tracks. */
+  angleConfigs: AngleConfig[]
+  /** Patient this exercise is assigned to, or null to assign it to every patient. */
+  assignedPatientId: string | null
+  createdAt: number
 }
 
 export interface SessionMetrics {
@@ -66,11 +79,34 @@ export interface SymmetryPoint {
   right: number
 }
 
-export interface PatientRosterEntry {
+/** A real patient, recorded the first time they sign in — not a fake profile. */
+export interface PatientRecord {
   id: string
   name: string
-  condition: string
-  lastSession: string
-  adherence: number
-  avatarColor: string
+  email: string
+  firstSeenAt: number
+  lastSeenAt: number
+}
+
+/** One completed rep, sampled the instant the rep counter ticks over during a live session. */
+export interface RepSample {
+  rep: number
+  angle: number
+  emgLeft: number
+  emgRight: number
+  faultActive: boolean
+}
+
+/** A real completed session, recorded when a patient hits "End Session & Sync Data". */
+export interface SessionRecord {
+  id: string
+  patientId: string
+  patientName: string
+  exerciseId: string
+  exerciseTitle: string
+  completedAt: number
+  durationSec: number
+  targetMin: number
+  targetMax: number
+  reps: RepSample[]
 }

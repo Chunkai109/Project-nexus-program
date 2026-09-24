@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { AuthProvider, useAuth } from '@/lib/AuthContext'
 import { ThemeProvider } from '@/lib/ThemeContext'
+import { AppDataProvider } from '@/lib/data/AppDataContext'
 import { BleProvider } from '@/lib/ble/BleProvider'
 import { LoginPage } from '@/pages/LoginPage'
 import { PatientExercises } from '@/pages/PatientExercises'
@@ -62,9 +63,11 @@ function App() {
   return (
     <ThemeProvider>
       <AuthProvider>
-        <BleProvider>
-          <AppRoutes />
-        </BleProvider>
+        <AppDataProvider>
+          <BleProvider>
+            <AppRoutes />
+          </BleProvider>
+        </AppDataProvider>
       </AuthProvider>
     </ThemeProvider>
   )
