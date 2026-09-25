@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 
+# Supabase credentials — copy .env.example to .env and fill in your own.
+.env
+
 # Vendored by scripts/copy-mediapipe-wasm.mjs (postinstall) — regenerated
 # from node_modules, not committed (it's ~34MB of prebuilt WASM binaries).
 public/mediapipe/
