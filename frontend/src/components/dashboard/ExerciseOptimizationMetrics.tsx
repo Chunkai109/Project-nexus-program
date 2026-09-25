@@ -344,7 +344,7 @@ export function ExerciseOptimizationMetrics({ exercise }: { exercise: Exercise }
     <div>
       <div className="mb-5">
         <h2 className="text-[15px] font-semibold text-ink">Exercise Optimization Analytics</h2>
-        <p className="text-[13px] text-ink-faint">Aggregate biomechanical performance to refine protocol thresholds.</p>
+        <p className="text-[13px] text-ink-faint">Aggregate average biomechanical performance among patients to refine protocol thresholds.</p>
       </div>
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-6">
         <FormFailureTile failureRate={metrics.failureRate} />

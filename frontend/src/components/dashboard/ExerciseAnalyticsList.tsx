@@ -19,7 +19,7 @@ export function ExerciseAnalyticsList({ onSelectExercise }: { onSelectExercise: 
         <p className="text-[13px] text-ink-faint">
           {exercises.length === 0
             ? 'Create a protocol above to start reviewing its optimization metrics here.'
-            : 'Aggregate biomechanical performance to refine protocol thresholds. Select an exercise to view its analytics.'}
+            : 'Aggregate average biomechanical performance among patients to refine protocol thresholds. Select an exercise to view its analytics.'}
         </p>
       </div>
 
