@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { CheckCircle2, Timer, Repeat, Target, TriangleAlert, ArrowLeft, Crosshair, Gauge, Scale } from 'lucide-react'
+import { CheckCircle2, Timer, Repeat, Target, TriangleAlert, ArrowLeft, Crosshair, Gauge } from 'lucide-react'
 import { PageShell } from '@/components/layout/PageShell'
 import { Logo } from '@/components/layout/Logo'
 import { ThemeToggle } from '@/components/ui/ThemeToggle'
@@ -85,8 +85,6 @@ export function SessionSummary() {
   const romAdherencePct = romAdherencePctOf(session)
   const faultRatePct = totalReps === 0 ? 0 : Math.round((faultCount / totalReps) * 100)
   const cadence = session.durationSec > 0 ? Math.round((totalReps / session.durationSec) * 60) : 0
-  const maxAvgEmg = Math.max(avgEmgLeft, avgEmgRight)
-  const symmetryIndexPct = maxAvgEmg === 0 ? 0 : Math.round((Math.abs(avgEmgLeft - avgEmgRight) / maxAvgEmg) * 100)
 
   const priorRomAdherencePct = priorSession ? romAdherencePctOf(priorSession) : null
   const romAdherenceDelta = priorRomAdherencePct !== null ? romAdherencePct - priorRomAdherencePct : null
@@ -155,11 +153,6 @@ export function SessionSummary() {
               <Gauge className="mx-auto mb-1.5 h-4 w-4 text-accent" />
               <p className="text-[19px] font-semibold text-ink">{cadence}</p>
               <p className="text-[11px] text-ink-faint">Reps / Min</p>
-            </div>
-            <div className="rounded-xl bg-surface-secondary p-4 text-center">
-              <Scale className={`mx-auto mb-1.5 h-4 w-4 ${toneClass(symmetryIndexPct, 'low')}`} />
-              <p className={`text-[19px] font-semibold ${toneClass(symmetryIndexPct, 'low')}`}>{symmetryIndexPct}%</p>
-              <p className="text-[11px] text-ink-faint">EMG Imbalance</p>
             </div>
           </div>
         </Card>
