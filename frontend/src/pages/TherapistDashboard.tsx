@@ -3,20 +3,30 @@ import { PageShell } from '@/components/layout/PageShell'
 import { PhysioSidebar } from '@/components/layout/PhysioSidebar'
 import { ProtocolBuilder } from '@/components/dashboard/ProtocolBuilder'
 import { TelemetrySection } from '@/components/dashboard/TelemetrySection'
-import { ExerciseOptimizationMetrics } from '@/components/dashboard/ExerciseOptimizationMetrics'
+import { ExerciseDetail } from '@/components/dashboard/ExerciseDetail'
 import { PatientRosterGrid } from '@/components/dashboard/PatientRosterGrid'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
+import { useAppData } from '@/lib/data/AppDataContext'
 import { ArrowLeft, Settings } from 'lucide-react'
 
 export function TherapistDashboard() {
+  const { exercises } = useAppData()
   const [tab, setTab] = useState('creator')
   const [selectedPatientId, setSelectedPatientId] = useState<string | undefined>()
+  const [selectedExerciseId, setSelectedExerciseId] = useState<string | undefined>()
 
   function openPatientAnalytics(patientId: string) {
     setSelectedPatientId(patientId)
     setTab('analytics')
   }
+
+  function openExerciseDetail(exerciseId: string) {
+    setSelectedExerciseId(exerciseId)
+    setTab('exercise-detail')
+  }
+
+  const selectedExercise = exercises.find((e) => e.id === selectedExerciseId)
 
   return (
     <PageShell className="flex">
@@ -43,10 +53,21 @@ export function TherapistDashboard() {
                 Build a rehabilitation protocol and review how patients are tracking against it.
               </p>
             </div>
-            <div className="flex flex-col gap-6">
-              <ProtocolBuilder />
-              <ExerciseOptimizationMetrics />
+            <ProtocolBuilder onOpenExercise={openExerciseDetail} />
+          </>
+        )}
+
+        {tab === 'exercise-detail' && selectedExerciseId && (
+          <>
+            <Button variant="ghost" size="sm" className="mb-6" onClick={() => setTab('creator')}>
+              <ArrowLeft className="h-3.5 w-3.5" />
+              Back to Exercise Creator
+            </Button>
+            <div className="mb-10">
+              <h1 className="text-[28px] font-semibold tracking-tight text-ink">{selectedExercise?.title ?? 'Exercise'}</h1>
+              <p className="mt-1.5 text-[15px] text-ink-muted">Fine-tune thresholds and review this exercise's performance.</p>
             </div>
+            <ExerciseDetail key={selectedExerciseId} exerciseId={selectedExerciseId} />
           </>
         )}
 
