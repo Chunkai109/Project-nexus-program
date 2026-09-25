@@ -3,6 +3,7 @@ import { PageShell } from '@/components/layout/PageShell'
 import { PhysioSidebar } from '@/components/layout/PhysioSidebar'
 import { ProtocolBuilder } from '@/components/dashboard/ProtocolBuilder'
 import { TelemetrySection } from '@/components/dashboard/TelemetrySection'
+import { ExerciseOptimizationMetrics } from '@/components/dashboard/ExerciseOptimizationMetrics'
 import { PatientRosterGrid } from '@/components/dashboard/PatientRosterGrid'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
@@ -44,7 +45,7 @@ export function TherapistDashboard() {
             </div>
             <div className="flex flex-col gap-6">
               <ProtocolBuilder />
-              <TelemetrySection />
+              <ExerciseOptimizationMetrics />
             </div>
           </>
         )}
