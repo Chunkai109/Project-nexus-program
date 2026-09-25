@@ -255,9 +255,9 @@ export function SensorSetup() {
                   <Vibrate className="h-4 w-4" />
                   {vibrating ? 'Pulsing…' : 'Test Pod Vibration'}
                 </Button>
-                <Button onClick={() => navigate(`/patient/session/${exercise.id}`)}>
+                <Button onClick={() => navigate(`/patient/calibrate/${exercise.id}`)}>
                   <Zap className="h-4 w-4" />
-                  Proceed to Camera Check
+                  Proceed to Calibration
                 </Button>
               </div>
             </div>

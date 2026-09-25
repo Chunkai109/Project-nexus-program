@@ -6,6 +6,7 @@ import { BleProvider } from '@/lib/ble/BleProvider'
 import { LoginPage } from '@/pages/LoginPage'
 import { PatientExercises } from '@/pages/PatientExercises'
 import { SensorSetup } from '@/pages/SensorSetup'
+import { CalibrationPage } from '@/pages/CalibrationPage'
 import { LiveSession } from '@/pages/LiveSession'
 import { TherapistDashboard } from '@/pages/TherapistDashboard'
 import type { UserRole } from '@/types'
@@ -35,6 +36,14 @@ function AppRoutes() {
         element={
           <RequireRole role="patient">
             <SensorSetup />
+          </RequireRole>
+        }
+      />
+      <Route
+        path="/patient/calibrate/:exerciseId"
+        element={
+          <RequireRole role="patient">
+            <CalibrationPage />
           </RequireRole>
         }
       />

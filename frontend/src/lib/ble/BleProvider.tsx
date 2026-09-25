@@ -8,7 +8,14 @@ export interface PodLiveData {
   pitchDeg?: number
   rollDeg?: number
   yawDeg?: number
+  /** Raw normalized ADC amplitude (0-1) straight off the EMG_DATA characteristic, before baseline/MVC calibration is applied. */
+  vrmsRaw?: number
   emgActivationPct?: number
+}
+
+export interface EmgCalibration {
+  baseline: number
+  mvc: number
 }
 
 interface BleHubValue {
@@ -17,9 +24,12 @@ interface BleHubValue {
   errorMessage: string | null
   deviceName: string | null
   pods: Partial<Record<PodId, PodLiveData>>
+  calibration: Partial<Record<PodId, EmgCalibration>>
   connect: () => Promise<void>
   disconnect: () => void
   sendHaptic: (podId: PodId, durationMs: number) => Promise<void>
+  /** Sets the per-pod EMG baseline/MVC captured by the calibration routine; subsequent EMG_DATA packets for that pod are normalized against it. */
+  setCalibration: (podId: PodId, calibration: EmgCalibration) => void
 }
 
 const BleContext = createContext<BleHubValue | null>(null)
@@ -29,7 +39,12 @@ export function BleProvider({ children }: { children: ReactNode }) {
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [deviceName, setDeviceName] = useState<string | null>(null)
   const [pods, setPods] = useState<Partial<Record<PodId, PodLiveData>>>({})
+  const [calibration, setCalibrationState] = useState<Partial<Record<PodId, EmgCalibration>>>({})
   const clientRef = useRef<SmartPhysioBleClient | null>(null)
+  // The onEmg callback below is created once inside getClient, so it reads
+  // calibration through this ref rather than the state closure to always see
+  // the latest per-pod baseline/MVC without having to recreate the client.
+  const calibrationRef = useRef<Partial<Record<PodId, EmgCalibration>>>({})
 
   const getClient = useCallback(() => {
     if (!clientRef.current) {
@@ -54,7 +69,11 @@ export function BleProvider({ children }: { children: ReactNode }) {
         onEmg: (packet) => {
           setPods((prev) => ({
             ...prev,
-            [packet.podId]: { ...prev[packet.podId], emgActivationPct: emgActivationPercent(packet.vrmsNormalized) },
+            [packet.podId]: {
+              ...prev[packet.podId],
+              vrmsRaw: packet.vrmsNormalized,
+              emgActivationPct: emgActivationPercent(packet.vrmsNormalized, calibrationRef.current[packet.podId]),
+            },
           }))
         },
         onPodStatus: (packet) => {
@@ -83,6 +102,11 @@ export function BleProvider({ children }: { children: ReactNode }) {
     [getClient],
   )
 
+  const setCalibration = useCallback((podId: PodId, calib: EmgCalibration) => {
+    calibrationRef.current = { ...calibrationRef.current, [podId]: calib }
+    setCalibrationState((prev) => ({ ...prev, [podId]: calib }))
+  }, [])
+
   const value = useMemo<BleHubValue>(
     () => ({
       supported: isWebBluetoothSupported(),
@@ -90,11 +114,13 @@ export function BleProvider({ children }: { children: ReactNode }) {
       errorMessage,
       deviceName,
       pods,
+      calibration,
       connect,
       disconnect,
       sendHaptic,
+      setCalibration,
     }),
-    [connectionState, errorMessage, deviceName, pods, connect, disconnect, sendHaptic],
+    [connectionState, errorMessage, deviceName, pods, calibration, connect, disconnect, sendHaptic, setCalibration],
   )
 
   return <BleContext.Provider value={value}>{children}</BleContext.Provider>
