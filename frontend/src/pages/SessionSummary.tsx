@@ -1,17 +1,6 @@
 import { useMemo } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import {
-  CheckCircle2,
-  Timer,
-  Repeat,
-  Target,
-  TriangleAlert,
-  ArrowLeft,
-  Crosshair,
-  Gauge,
-  Scale,
-  TrendingUp,
-} from 'lucide-react'
+import { CheckCircle2, Timer, Repeat, Target, TriangleAlert, ArrowLeft, Crosshair, Gauge, Scale } from 'lucide-react'
 import { PageShell } from '@/components/layout/PageShell'
 import { Logo } from '@/components/layout/Logo'
 import { ThemeToggle } from '@/components/ui/ThemeToggle'
@@ -98,8 +87,6 @@ export function SessionSummary() {
   const cadence = session.durationSec > 0 ? Math.round((totalReps / session.durationSec) * 60) : 0
   const maxAvgEmg = Math.max(avgEmgLeft, avgEmgRight)
   const symmetryIndexPct = maxAvgEmg === 0 ? 0 : Math.round((Math.abs(avgEmgLeft - avgEmgRight) / maxAvgEmg) * 100)
-  const bestRep = session.reps.reduce((best, r) => (r.angle > best.angle ? r : best), session.reps[0])
-  const weakestRep = session.reps.reduce((worst, r) => (r.angle < worst.angle ? r : worst), session.reps[0])
 
   const priorRomAdherencePct = priorSession ? romAdherencePctOf(priorSession) : null
   const romAdherenceDelta = priorRomAdherencePct !== null ? romAdherencePct - priorRomAdherencePct : null
@@ -128,7 +115,7 @@ export function SessionSummary() {
           {romAdherenceDelta !== null ? (
             <p className="mt-1.5 text-[13px]">
               <span className={romAdherenceDelta >= 0 ? 'font-medium text-emerald' : 'font-medium text-crimson'}>
-                {romAdherenceDelta >= 0 ? '▲' : '▼'} {Math.abs(romAdherenceDelta)}% ROM Adherence
+                {romAdherenceDelta >= 0 ? '▲' : '▼'} {Math.abs(romAdherenceDelta)}% Form Adherence
               </span>{' '}
               <span className="text-ink-faint">vs last session ({formatRelativeTime(priorSession!.completedAt)})</span>
             </p>
@@ -157,7 +144,7 @@ export function SessionSummary() {
             <div className="rounded-xl bg-surface-secondary p-4 text-center">
               <Crosshair className={`mx-auto mb-1.5 h-4 w-4 ${toneClass(romAdherencePct, 'high')}`} />
               <p className={`text-[19px] font-semibold ${toneClass(romAdherencePct, 'high')}`}>{romAdherencePct}%</p>
-              <p className="text-[11px] text-ink-faint">ROM Adherence</p>
+              <p className="text-[11px] text-ink-faint">Form Adherence</p>
             </div>
             <div className="rounded-xl bg-surface-secondary p-4 text-center">
               <TriangleAlert className={`mx-auto mb-1.5 h-4 w-4 ${toneClass(faultRatePct, 'low')}`} />
@@ -173,13 +160,6 @@ export function SessionSummary() {
               <Scale className={`mx-auto mb-1.5 h-4 w-4 ${toneClass(symmetryIndexPct, 'low')}`} />
               <p className={`text-[19px] font-semibold ${toneClass(symmetryIndexPct, 'low')}`}>{symmetryIndexPct}%</p>
               <p className="text-[11px] text-ink-faint">EMG Imbalance</p>
-            </div>
-            <div className="rounded-xl bg-surface-secondary p-4 text-center">
-              <TrendingUp className="mx-auto mb-1.5 h-4 w-4 text-accent" />
-              <p className="text-[19px] font-semibold text-ink">
-                {bestRep?.angle ?? 0}° / {weakestRep?.angle ?? 0}°
-              </p>
-              <p className="text-[11px] text-ink-faint">Best / Weakest Rep</p>
             </div>
           </div>
         </Card>
