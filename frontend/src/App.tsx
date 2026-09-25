@@ -5,6 +5,7 @@ import { AppDataProvider } from '@/lib/data/AppDataContext'
 import { BleProvider } from '@/lib/ble/BleProvider'
 import { LoginPage } from '@/pages/LoginPage'
 import { PatientExercises } from '@/pages/PatientExercises'
+import { PastSessions } from '@/pages/PastSessions'
 import { SensorSetup } from '@/pages/SensorSetup'
 import { CalibrationPage } from '@/pages/CalibrationPage'
 import { LiveSession } from '@/pages/LiveSession'
@@ -29,6 +30,14 @@ function AppRoutes() {
         element={
           <RequireRole role="patient">
             <PatientExercises />
+          </RequireRole>
+        }
+      />
+      <Route
+        path="/patient/history"
+        element={
+          <RequireRole role="patient">
+            <PastSessions />
           </RequireRole>
         }
       />
