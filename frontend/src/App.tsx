@@ -8,6 +8,7 @@ import { PatientExercises } from '@/pages/PatientExercises'
 import { SensorSetup } from '@/pages/SensorSetup'
 import { CalibrationPage } from '@/pages/CalibrationPage'
 import { LiveSession } from '@/pages/LiveSession'
+import { SessionSummary } from '@/pages/SessionSummary'
 import { TherapistDashboard } from '@/pages/TherapistDashboard'
 import type { UserRole } from '@/types'
 import type { ReactNode } from 'react'
@@ -52,6 +53,14 @@ function AppRoutes() {
         element={
           <RequireRole role="patient">
             <LiveSession />
+          </RequireRole>
+        }
+      />
+      <Route
+        path="/patient/session-summary/:sessionId"
+        element={
+          <RequireRole role="patient">
+            <SessionSummary />
           </RequireRole>
         }
       />
