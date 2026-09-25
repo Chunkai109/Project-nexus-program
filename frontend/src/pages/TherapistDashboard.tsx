@@ -4,11 +4,18 @@ import { PhysioSidebar } from '@/components/layout/PhysioSidebar'
 import { ProtocolBuilder } from '@/components/dashboard/ProtocolBuilder'
 import { TelemetrySection } from '@/components/dashboard/TelemetrySection'
 import { PatientRosterGrid } from '@/components/dashboard/PatientRosterGrid'
+import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
-import { Settings } from 'lucide-react'
+import { ArrowLeft, Settings } from 'lucide-react'
 
 export function TherapistDashboard() {
   const [tab, setTab] = useState('creator')
+  const [selectedPatientId, setSelectedPatientId] = useState<string | undefined>()
+
+  function openPatientAnalytics(patientId: string) {
+    setSelectedPatientId(patientId)
+    setTab('analytics')
+  }
 
   return (
     <PageShell className="flex">
@@ -19,9 +26,11 @@ export function TherapistDashboard() {
           <>
             <div className="mb-10">
               <h1 className="text-[28px] font-semibold tracking-tight text-ink">Patient Roster</h1>
-              <p className="mt-1.5 text-[15px] text-ink-muted">Patients who have signed in to SmartPhysio.</p>
+              <p className="mt-1.5 text-[15px] text-ink-muted">
+                Patients who have signed in to SmartPhysio. Select one to review their session history.
+              </p>
             </div>
-            <PatientRosterGrid />
+            <PatientRosterGrid onSelectPatient={openPatientAnalytics} />
           </>
         )}
 
@@ -42,11 +51,15 @@ export function TherapistDashboard() {
 
         {tab === 'analytics' && (
           <>
+            <Button variant="ghost" size="sm" className="mb-6" onClick={() => setTab('roster')}>
+              <ArrowLeft className="h-3.5 w-3.5" />
+              Back to Patient Roster
+            </Button>
             <div className="mb-10">
               <h1 className="text-[28px] font-semibold tracking-tight text-ink">Session Analytics</h1>
               <p className="mt-1.5 text-[15px] text-ink-muted">Deep-dive into a single patient's telemetry history.</p>
             </div>
-            <TelemetrySection />
+            <TelemetrySection key={selectedPatientId} initialPatientId={selectedPatientId} />
           </>
         )}
 

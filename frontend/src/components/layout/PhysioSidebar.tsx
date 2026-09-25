@@ -1,4 +1,4 @@
-import { Users, Dumbbell, LineChart, Settings, LogOut } from 'lucide-react'
+import { Users, Dumbbell, Settings, LogOut } from 'lucide-react'
 import { Logo } from './Logo'
 import { ThemeToggle } from '@/components/ui/ThemeToggle'
 import { useAuth } from '@/lib/AuthContext'
@@ -9,7 +9,6 @@ import { useState } from 'react'
 const NAV_ITEMS = [
   { key: 'roster', label: 'Patient Roster', icon: Users },
   { key: 'creator', label: 'Exercise Creator', icon: Dumbbell },
-  { key: 'analytics', label: 'Session Analytics', icon: LineChart },
   { key: 'settings', label: 'Settings', icon: Settings },
 ] as const
 
