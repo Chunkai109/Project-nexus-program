@@ -2,13 +2,15 @@ import { useState } from 'react'
 import { PageShell } from '@/components/layout/PageShell'
 import { PhysioSidebar } from '@/components/layout/PhysioSidebar'
 import { ProtocolBuilder } from '@/components/dashboard/ProtocolBuilder'
+import { ExerciseAnalyticsList } from '@/components/dashboard/ExerciseAnalyticsList'
+import { ExerciseOptimizationMetrics } from '@/components/dashboard/ExerciseOptimizationMetrics'
+import { ExerciseFineTune } from '@/components/dashboard/ExerciseFineTune'
 import { TelemetrySection } from '@/components/dashboard/TelemetrySection'
-import { ExerciseDetail } from '@/components/dashboard/ExerciseDetail'
 import { PatientRosterGrid } from '@/components/dashboard/PatientRosterGrid'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { useAppData } from '@/lib/data/AppDataContext'
-import { ArrowLeft, Settings } from 'lucide-react'
+import { ArrowLeft, Settings, SlidersHorizontal } from 'lucide-react'
 
 export function TherapistDashboard() {
   const { exercises } = useAppData()
@@ -21,9 +23,14 @@ export function TherapistDashboard() {
     setTab('analytics')
   }
 
-  function openExerciseDetail(exerciseId: string) {
+  function openExerciseAnalytics(exerciseId: string) {
     setSelectedExerciseId(exerciseId)
-    setTab('exercise-detail')
+    setTab('exercise-analytics')
+  }
+
+  function openExerciseFineTune(exerciseId: string) {
+    setSelectedExerciseId(exerciseId)
+    setTab('exercise-finetune')
   }
 
   const selectedExercise = exercises.find((e) => e.id === selectedExerciseId)
@@ -53,21 +60,50 @@ export function TherapistDashboard() {
                 Build a rehabilitation protocol and review how patients are tracking against it.
               </p>
             </div>
-            <ProtocolBuilder onOpenExercise={openExerciseDetail} />
+            <div className="flex flex-col gap-6">
+              <ProtocolBuilder />
+              <ExerciseAnalyticsList onSelectExercise={openExerciseAnalytics} />
+            </div>
           </>
         )}
 
-        {tab === 'exercise-detail' && selectedExerciseId && (
+        {tab === 'exercise-analytics' && selectedExerciseId && (
           <>
             <Button variant="ghost" size="sm" className="mb-6" onClick={() => setTab('creator')}>
               <ArrowLeft className="h-3.5 w-3.5" />
               Back to Exercise Creator
             </Button>
+            <div className="mb-10 flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <h1 className="text-[28px] font-semibold tracking-tight text-ink">{selectedExercise?.title ?? 'Exercise'}</h1>
+                <p className="mt-1.5 text-[15px] text-ink-muted">Optimization analytics for this exercise.</p>
+              </div>
+              <Button size="sm" onClick={() => openExerciseFineTune(selectedExerciseId)}>
+                <SlidersHorizontal className="h-3.5 w-3.5" />
+                Fine-tune Exercise
+              </Button>
+            </div>
+            {selectedExercise ? (
+              <ExerciseOptimizationMetrics key={selectedExerciseId} exercise={selectedExercise} />
+            ) : (
+              <Card className="p-7 text-center">
+                <p className="text-[14px] text-ink-muted">This exercise no longer exists — it may have just been deleted.</p>
+              </Card>
+            )}
+          </>
+        )}
+
+        {tab === 'exercise-finetune' && selectedExerciseId && (
+          <>
+            <Button variant="ghost" size="sm" className="mb-6" onClick={() => setTab('exercise-analytics')}>
+              <ArrowLeft className="h-3.5 w-3.5" />
+              Back to Analytics
+            </Button>
             <div className="mb-10">
               <h1 className="text-[28px] font-semibold tracking-tight text-ink">{selectedExercise?.title ?? 'Exercise'}</h1>
-              <p className="mt-1.5 text-[15px] text-ink-muted">Fine-tune thresholds and review this exercise's performance.</p>
+              <p className="mt-1.5 text-[15px] text-ink-muted">Fine-tune thresholds prescribed for this exercise.</p>
             </div>
-            <ExerciseDetail key={selectedExerciseId} exerciseId={selectedExerciseId} />
+            <ExerciseFineTune key={selectedExerciseId} exerciseId={selectedExerciseId} />
           </>
         )}
 

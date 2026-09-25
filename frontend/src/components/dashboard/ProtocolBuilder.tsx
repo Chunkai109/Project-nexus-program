@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Plus, Save, Trash2, X } from 'lucide-react'
+import { Pencil, Plus, Save, Trash2, X } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
@@ -7,17 +7,18 @@ import { ExerciseFormFields } from './ExerciseFormFields'
 import { useAppData } from '@/lib/data/AppDataContext'
 import { useExerciseForm } from '@/lib/useExerciseForm'
 import { podLabel } from '@/lib/podUtils'
-import type { AngleConfig } from '@/types'
+import type { AngleConfig, Exercise } from '@/types'
 
-function describeAngleConfigs(configs: AngleConfig[]): string {
+export function describeAngleConfigs(configs: AngleConfig[]): string {
   if (configs.length === 0) return 'No angles configured'
   const first = `${podLabel(configs[0].nodeA)} ↔ ${podLabel(configs[0].nodeB)} (${configs[0].targetMin}°–${configs[0].targetMax}°)`
   return configs.length === 1 ? first : `${first} +${configs.length - 1} more`
 }
 
-export function ProtocolBuilder({ onOpenExercise }: { onOpenExercise: (exerciseId: string) => void }) {
-  const { exercises, patients, addExercise, deleteExercise } = useAppData()
-  const [mode, setMode] = useState<'list' | 'create'>('list')
+export function ProtocolBuilder() {
+  const { exercises, patients, addExercise, updateExercise, deleteExercise } = useAppData()
+  const [mode, setMode] = useState<'list' | 'form'>('list')
+  const [editingId, setEditingId] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
   const {
@@ -41,24 +42,35 @@ export function ProtocolBuilder({ onOpenExercise }: { onOpenExercise: (exerciseI
   }
 
   function startCreate() {
+    setEditingId(null)
     resetForm()
-    setMode('create')
+    setMode('form')
+  }
+
+  function startEdit(ex: Exercise) {
+    setEditingId(ex.id)
+    resetForm(ex)
+    setMode('form')
   }
 
   function handleSave() {
     if (!canSave) return
-    addExercise(buildPayload())
+    if (editingId) {
+      updateExercise(editingId, buildPayload())
+    } else {
+      addExercise(buildPayload())
+    }
     setSaved(true)
     setTimeout(() => setSaved(false), 1500)
     setMode('list')
   }
 
-  if (mode === 'create') {
+  if (mode === 'form') {
     return (
       <Card className="p-7">
         <div className="mb-6 flex items-center justify-between">
           <div>
-            <h2 className="text-[15px] font-semibold text-ink">New Exercise</h2>
+            <h2 className="text-[15px] font-semibold text-ink">{editingId ? 'Edit Exercise' : 'New Exercise'}</h2>
             <p className="text-[13px] text-ink-faint">Define biomechanical thresholds prescribed for this exercise</p>
           </div>
           <div className="flex gap-2">
@@ -96,7 +108,7 @@ export function ProtocolBuilder({ onOpenExercise }: { onOpenExercise: (exerciseI
           <p className="text-[13px] text-ink-faint">
             {exercises.length === 0
               ? 'Nothing created yet — patients see exactly what you publish here.'
-              : `${exercises.length} protocol${exercises.length === 1 ? '' : 's'} visible to patients right now. Click one to fine-tune it.`}
+              : `${exercises.length} protocol${exercises.length === 1 ? '' : 's'} visible to patients right now.`}
           </p>
         </div>
         <Button size="sm" onClick={startCreate}>
@@ -118,12 +130,7 @@ export function ProtocolBuilder({ onOpenExercise }: { onOpenExercise: (exerciseI
             const assignedPatient = patients.find((p) => p.id === ex.assignedPatientId)
             return (
               <div key={ex.id} className="flex items-center justify-between gap-4 rounded-xl bg-surface-secondary p-4">
-                <button
-                  type="button"
-                  onClick={() => onOpenExercise(ex.id)}
-                  className="min-w-0 flex-1 text-left"
-                  title="Fine-tune this exercise and view its optimization metrics"
-                >
+                <div className="min-w-0">
                   <div className="flex items-center gap-2">
                     <p className="truncate text-[14px] font-semibold text-ink">{ex.title}</p>
                     <Badge tone="accent">{ex.sets}×{ex.reps}</Badge>
@@ -134,7 +141,7 @@ export function ProtocolBuilder({ onOpenExercise }: { onOpenExercise: (exerciseI
                     )}
                   </div>
                   <p className="mt-0.5 truncate text-[13px] text-ink-faint">{describeAngleConfigs(ex.angleConfigs)}</p>
-                </button>
+                </div>
                 {pendingDeleteId === ex.id ? (
                   <div className="flex flex-shrink-0 items-center gap-2">
                     <span className="text-[13px] text-ink-muted">Delete this exercise?</span>
@@ -147,9 +154,14 @@ export function ProtocolBuilder({ onOpenExercise }: { onOpenExercise: (exerciseI
                     </Button>
                   </div>
                 ) : (
-                  <Button variant="ghost" size="sm" onClick={() => setPendingDeleteId(ex.id)}>
-                    <Trash2 className="h-3.5 w-3.5 text-crimson" />
-                  </Button>
+                  <div className="flex flex-shrink-0 gap-2">
+                    <Button variant="ghost" size="sm" onClick={() => startEdit(ex)}>
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => setPendingDeleteId(ex.id)}>
+                      <Trash2 className="h-3.5 w-3.5 text-crimson" />
+                    </Button>
+                  </div>
                 )}
               </div>
             )
