@@ -1,8 +1,9 @@
 import type { PodId } from '@/types'
 import { PODS } from '@/lib/mockData'
+import { virtualNodeLabel } from '@/lib/joints'
 import type { Side } from '@/lib/pose/poseMetrics'
 
-/** Pods 1/3/5 are wired to the left limb, 2/4/6 to the right, per the hardware layout in mockData. */
+/** Odd node ids are wired to the left limb, even to the right — holds for the 6-pod hardware kit and the virtual joint nodes in lib/joints.ts alike. */
 export function podSide(id: PodId): Side {
   return id % 2 === 1 ? 'left' : 'right'
 }
@@ -13,5 +14,5 @@ export function kneePodForSide(side: Side): PodId {
 }
 
 export function podLabel(id: PodId): string {
-  return PODS.find((p) => p.id === id)?.location ?? `Pod ${id}`
+  return PODS.find((p) => p.id === id)?.location ?? virtualNodeLabel(id) ?? `Pod ${id}`
 }

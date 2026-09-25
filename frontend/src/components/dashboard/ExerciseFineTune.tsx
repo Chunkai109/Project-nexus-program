@@ -18,13 +18,16 @@ export function ExerciseFineTune({ exerciseId }: { exerciseId: string }) {
     form,
     setForm,
     toggleTag,
-    toggleDraftNode,
+    selectDraftJoint,
     draftValid,
-    draftSideMismatch,
     canSave,
     confirmAngle,
     removeAngleConfig,
     loadAngleIntoDraft,
+    selectDraftMuscle,
+    setDraftMuscleEmgPct,
+    confirmMuscleEmgTarget,
+    removeMuscleEmgTarget,
     buildPayload,
   } = useExerciseForm(exercise)
   const [saved, setSaved] = useState(false)
@@ -64,12 +67,15 @@ export function ExerciseFineTune({ exerciseId }: { exerciseId: string }) {
         setForm={setForm}
         patients={patients}
         toggleTag={toggleTag}
-        toggleDraftNode={toggleDraftNode}
+        selectDraftJoint={selectDraftJoint}
         draftValid={draftValid}
-        draftSideMismatch={draftSideMismatch}
         confirmAngle={confirmAngle}
         removeAngleConfig={removeAngleConfig}
         loadAngleIntoDraft={loadAngleIntoDraft}
+        selectDraftMuscle={selectDraftMuscle}
+        setDraftMuscleEmgPct={setDraftMuscleEmgPct}
+        confirmMuscleEmgTarget={confirmMuscleEmgTarget}
+        removeMuscleEmgTarget={removeMuscleEmgTarget}
       />
     </Card>
   )

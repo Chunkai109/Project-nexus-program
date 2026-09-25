@@ -26,13 +26,16 @@ export function ProtocolBuilder() {
     setForm,
     resetForm,
     toggleTag,
-    toggleDraftNode,
+    selectDraftJoint,
     draftValid,
-    draftSideMismatch,
     canSave,
     confirmAngle,
     removeAngleConfig,
     loadAngleIntoDraft,
+    selectDraftMuscle,
+    setDraftMuscleEmgPct,
+    confirmMuscleEmgTarget,
+    removeMuscleEmgTarget,
     buildPayload,
   } = useExerciseForm()
 
@@ -89,12 +92,15 @@ export function ProtocolBuilder() {
           setForm={setForm}
           patients={patients}
           toggleTag={toggleTag}
-          toggleDraftNode={toggleDraftNode}
+          selectDraftJoint={selectDraftJoint}
           draftValid={draftValid}
-          draftSideMismatch={draftSideMismatch}
           confirmAngle={confirmAngle}
           removeAngleConfig={removeAngleConfig}
           loadAngleIntoDraft={loadAngleIntoDraft}
+          selectDraftMuscle={selectDraftMuscle}
+          setDraftMuscleEmgPct={setDraftMuscleEmgPct}
+          confirmMuscleEmgTarget={confirmMuscleEmgTarget}
+          removeMuscleEmgTarget={removeMuscleEmgTarget}
         />
       </Card>
     )

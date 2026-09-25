@@ -90,7 +90,10 @@ function buildMockMetrics(exercise: Exercise): ExerciseMetrics {
   const romTargetMid = (romTargetMin + romTargetMax) / 2
   const romAvg = Math.round(romTargetMid - (4 + rand() * 14))
 
-  const emgTarget = exercise.targetEmgMvc || 65
+  const emgTarget =
+    exercise.muscleEmgTargets.length > 0
+      ? Math.round(exercise.muscleEmgTargets.reduce((sum, t) => sum + t.targetMvc, 0) / exercise.muscleEmgTargets.length)
+      : 65
   const emgLeft = Math.round(emgTarget * (0.85 + rand() * 0.25))
   const emgRight = Math.round(emgTarget * (0.75 + rand() * 0.25))
   const emgAvg = Math.round((emgLeft + emgRight) / 2)

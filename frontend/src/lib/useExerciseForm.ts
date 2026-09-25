@@ -1,24 +1,27 @@
 import { useState } from 'react'
-import { podSide } from '@/lib/podUtils'
+import { JOINT_PRESETS, jointPresetForPair } from '@/lib/joints'
 import type { NewExercise } from '@/lib/data/AppDataContext'
-import type { AngleConfig, Exercise, PodId } from '@/types'
+import type { AngleConfig, Exercise, MuscleEmgTarget, PodId } from '@/types'
 
 export interface ExerciseFormState {
   title: string
   muscleGroups: string[]
   sets: number
   reps: number
-  targetEmgMvc: number
+  muscleEmgTargets: MuscleEmgTarget[]
   therapistNote: string
   setupInstructions: string
   estMinutes: number
   angleConfigs: AngleConfig[]
   assignedPatientId: string | null
-  /** The angle currently being defined, before it's confirmed into angleConfigs. */
-  draftNodes: PodId[]
+  /** The joint currently being defined, before it's confirmed into angleConfigs. */
+  draftJointId: string | null
   draftMin: number
   draftMax: number
   draftFaultThresholdDeg: number
+  /** The muscle currently being defined, before it's confirmed into muscleEmgTargets. */
+  draftMuscleId: PodId | null
+  draftMuscleEmgPct: number
 }
 
 function blankForm(): ExerciseFormState {
@@ -27,16 +30,18 @@ function blankForm(): ExerciseFormState {
     muscleGroups: [],
     sets: 3,
     reps: 12,
-    targetEmgMvc: 65,
+    muscleEmgTargets: [],
     therapistNote: '',
     setupInstructions: '',
     estMinutes: 10,
     angleConfigs: [],
     assignedPatientId: null,
-    draftNodes: [],
+    draftJointId: null,
     draftMin: 90,
     draftMax: 110,
     draftFaultThresholdDeg: 8,
+    draftMuscleId: null,
+    draftMuscleEmgPct: 65,
   }
 }
 
@@ -46,16 +51,18 @@ function formFromExercise(ex: Exercise): ExerciseFormState {
     muscleGroups: ex.muscleGroups,
     sets: ex.sets,
     reps: ex.reps,
-    targetEmgMvc: ex.targetEmgMvc,
+    muscleEmgTargets: ex.muscleEmgTargets,
     therapistNote: ex.therapistNote,
     setupInstructions: ex.setupInstructions,
     estMinutes: ex.estMinutes,
     angleConfigs: ex.angleConfigs,
     assignedPatientId: ex.assignedPatientId,
-    draftNodes: [],
+    draftJointId: null,
     draftMin: 90,
     draftMax: 110,
     draftFaultThresholdDeg: 8,
+    draftMuscleId: null,
+    draftMuscleEmgPct: 65,
   }
 }
 
@@ -66,9 +73,9 @@ function sameNodePair(a: AngleConfig, nodeA: PodId, nodeB: PodId): boolean {
 
 /**
  * All the state and mutation logic behind the exercise create/edit form,
- * shared by ProtocolBuilder's "New Exercise" flow and ExerciseDetail's
- * "fine-tune this exercise" flow so both render the identical field set
- * from a single source of truth.
+ * shared by ProtocolBuilder's "New Exercise" flow and ExerciseFineTune's
+ * edit flow so both render the identical field set from a single source of
+ * truth.
  */
 export function useExerciseForm(initial?: Exercise) {
   const [form, setForm] = useState<ExerciseFormState>(() => (initial ? formFromExercise(initial) : blankForm()))
@@ -84,27 +91,31 @@ export function useExerciseForm(initial?: Exercise) {
     }))
   }
 
-  function toggleDraftNode(id: PodId) {
-    setForm((f) => {
-      if (f.draftNodes.includes(id)) return { ...f, draftNodes: f.draftNodes.filter((n) => n !== id) }
-      if (f.draftNodes.length < 2) return { ...f, draftNodes: [...f.draftNodes, id] }
-      return { ...f, draftNodes: [id] }
-    })
+  /** Selecting a joint stands in for the old two-tap flow — both underlying sensor nodes come along with it. */
+  function selectDraftJoint(jointId: string) {
+    const preset = JOINT_PRESETS.find((p) => p.id === jointId)
+    if (!preset) return
+    setForm((f) => ({
+      ...f,
+      draftJointId: jointId,
+      draftMin: preset.defaultTargetMin,
+      draftMax: preset.defaultTargetMax,
+      draftFaultThresholdDeg: 8,
+    }))
   }
 
-  const draftValid = form.draftNodes.length === 2 && podSide(form.draftNodes[0]) === podSide(form.draftNodes[1])
-  const draftSideMismatch = form.draftNodes.length === 2 && !draftValid
+  const draftValid = form.draftJointId != null
   const canSave = form.title.trim().length > 0 && form.angleConfigs.length > 0
 
   function confirmAngle() {
     setForm((f) => {
-      if (f.draftNodes.length !== 2 || podSide(f.draftNodes[0]) !== podSide(f.draftNodes[1])) return f
-      const [nodeA, nodeB] = f.draftNodes
-      const existingIndex = f.angleConfigs.findIndex((c) => sameNodePair(c, nodeA, nodeB))
+      const preset = JOINT_PRESETS.find((p) => p.id === f.draftJointId)
+      if (!preset) return f
+      const existingIndex = f.angleConfigs.findIndex((c) => sameNodePair(c, preset.nodeA, preset.nodeB))
       const newConfig: AngleConfig = {
         id: existingIndex >= 0 ? f.angleConfigs[existingIndex].id : crypto.randomUUID(),
-        nodeA,
-        nodeB,
+        nodeA: preset.nodeA,
+        nodeB: preset.nodeB,
         targetMin: f.draftMin,
         targetMax: f.draftMax,
         faultThresholdDeg: f.draftFaultThresholdDeg,
@@ -113,7 +124,7 @@ export function useExerciseForm(initial?: Exercise) {
         existingIndex >= 0
           ? f.angleConfigs.map((c, i) => (i === existingIndex ? newConfig : c))
           : [...f.angleConfigs, newConfig]
-      return { ...f, angleConfigs, draftNodes: [], draftMin: 90, draftMax: 110, draftFaultThresholdDeg: 8 }
+      return { ...f, angleConfigs, draftJointId: null, draftMin: 90, draftMax: 110, draftFaultThresholdDeg: 8 }
     })
   }
 
@@ -122,13 +133,43 @@ export function useExerciseForm(initial?: Exercise) {
   }
 
   function loadAngleIntoDraft(c: AngleConfig) {
+    const preset = jointPresetForPair(c.nodeA, c.nodeB)
     setForm((f) => ({
       ...f,
-      draftNodes: [c.nodeA, c.nodeB],
+      draftJointId: preset?.id ?? null,
       draftMin: c.targetMin,
       draftMax: c.targetMax,
       draftFaultThresholdDeg: c.faultThresholdDeg,
     }))
+  }
+
+  function selectDraftMuscle(podId: PodId) {
+    setForm((f) => {
+      const existing = f.muscleEmgTargets.find((t) => t.podId === podId)
+      return { ...f, draftMuscleId: podId, draftMuscleEmgPct: existing?.targetMvc ?? 65 }
+    })
+  }
+
+  function setDraftMuscleEmgPct(pct: number) {
+    setForm((f) => ({ ...f, draftMuscleEmgPct: pct }))
+  }
+
+  /** Setting a target for a muscle that already has one replaces it — never a second entry for the same muscle. */
+  function confirmMuscleEmgTarget() {
+    setForm((f) => {
+      if (f.draftMuscleId == null) return f
+      const newTarget: MuscleEmgTarget = { podId: f.draftMuscleId, targetMvc: f.draftMuscleEmgPct }
+      const existingIndex = f.muscleEmgTargets.findIndex((t) => t.podId === f.draftMuscleId)
+      const muscleEmgTargets =
+        existingIndex >= 0
+          ? f.muscleEmgTargets.map((t, i) => (i === existingIndex ? newTarget : t))
+          : [...f.muscleEmgTargets, newTarget]
+      return { ...f, muscleEmgTargets, draftMuscleId: null, draftMuscleEmgPct: 65 }
+    })
+  }
+
+  function removeMuscleEmgTarget(podId: PodId) {
+    setForm((f) => ({ ...f, muscleEmgTargets: f.muscleEmgTargets.filter((t) => t.podId !== podId) }))
   }
 
   function buildPayload(): NewExercise {
@@ -137,7 +178,7 @@ export function useExerciseForm(initial?: Exercise) {
       muscleGroups: form.muscleGroups,
       sets: form.sets,
       reps: form.reps,
-      targetEmgMvc: form.targetEmgMvc,
+      muscleEmgTargets: form.muscleEmgTargets,
       therapistNote: form.therapistNote,
       setupInstructions: form.setupInstructions,
       estMinutes: form.estMinutes,
@@ -151,13 +192,16 @@ export function useExerciseForm(initial?: Exercise) {
     setForm,
     resetForm,
     toggleTag,
-    toggleDraftNode,
+    selectDraftJoint,
     draftValid,
-    draftSideMismatch,
     canSave,
     confirmAngle,
     removeAngleConfig,
     loadAngleIntoDraft,
+    selectDraftMuscle,
+    setDraftMuscleEmgPct,
+    confirmMuscleEmgTarget,
+    removeMuscleEmgTarget,
     buildPayload,
   }
 }

@@ -33,6 +33,9 @@ create table if not exists patients (
 -- exercises — protocols a physio has created.
 -- angle_configs mirrors the app's AngleConfig[] shape directly:
 --   [{ "id": "...", "nodeA": 1, "nodeB": 3, "targetMin": 90, "targetMax": 110, "faultThresholdDeg": 8 }, ...]
+-- muscle_emg_targets mirrors the app's MuscleEmgTarget[] shape — one target
+-- %MVC per muscle node, replacing the old single global target_emg_mvc:
+--   [{ "podId": 1, "targetMvc": 65 }, ...]
 -- ---------------------------------------------------------------
 create table if not exists exercises (
   id uuid primary key default gen_random_uuid(),
@@ -40,7 +43,7 @@ create table if not exists exercises (
   muscle_groups text[] not null default '{}',
   sets integer not null,
   reps integer not null,
-  target_emg_mvc numeric not null,
+  muscle_emg_targets jsonb not null default '[]',
   therapist_note text not null default '',
   setup_instructions text not null default '',
   est_minutes integer not null,
@@ -48,6 +51,11 @@ create table if not exists exercises (
   assigned_patient_id uuid references patients(id) on delete set null,
   created_at timestamptz not null default now()
 );
+
+-- If you ran this script before muscle_emg_targets existed, apply this once
+-- in the SQL Editor to migrate an existing exercises table in place:
+--   alter table exercises add column if not exists muscle_emg_targets jsonb not null default '[]';
+--   alter table exercises drop column if exists target_emg_mvc;
 
 -- ---------------------------------------------------------------
 -- sessions — a completed live session, recorded once per patient run.

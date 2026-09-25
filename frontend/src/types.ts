@@ -14,7 +14,7 @@ export interface AuthUser {
 
 export type PodSignal = 'strong' | 'weak' | 'offline'
 export type PodKind = 'EMG+IMU' | 'IMU+Haptics' | 'IMU'
-export type PodId = 1 | 2 | 3 | 4 | 5 | 6
+export type PodId = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14
 
 export interface Pod {
   id: PodId
@@ -35,13 +35,20 @@ export interface AngleConfig {
   faultThresholdDeg: number
 }
 
+/** A physio-set target %MVC for one specific muscle. Setting a new value for a muscle that already has one replaces it. */
+export interface MuscleEmgTarget {
+  podId: PodId
+  targetMvc: number
+}
+
 export interface Exercise {
   id: string
   title: string
   muscleGroups: string[]
   sets: number
   reps: number
-  targetEmgMvc: number
+  /** Per-muscle target EMG activation, keyed by which muscle node it was set on (see MUSCLE_OPTIONS in lib/joints.ts). */
+  muscleEmgTargets: MuscleEmgTarget[]
   therapistNote: string
   setupInstructions: string
   estMinutes: number

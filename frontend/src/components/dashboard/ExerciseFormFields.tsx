@@ -5,9 +5,10 @@ import { Button } from '@/components/ui/Button'
 import { Slider } from '@/components/ui/Slider'
 import { RangeSlider } from '@/components/ui/RangeSlider'
 import { RadialGauge } from '@/components/charts/RadialGauge'
-import { BodyMap } from '@/components/body/BodyMap'
-import { PODS } from '@/lib/mockData'
-import { podLabel, podSide } from '@/lib/podUtils'
+import { JointPicker } from '@/components/body/JointPicker'
+import { MuscleEmgPicker } from '@/components/body/MuscleEmgPicker'
+import { JOINT_PRESETS, MUSCLE_OPTIONS } from '@/lib/joints'
+import { podLabel } from '@/lib/podUtils'
 import type { ExerciseFormState } from '@/lib/useExerciseForm'
 import type { AngleConfig, PatientRecord, PodId } from '@/types'
 
@@ -18,33 +19,43 @@ const fieldClass =
 
 /**
  * The full set of fields behind creating or fine-tuning an exercise —
- * title, assignment, muscle tags, sets/reps, notes, and the sensor-node
- * angle configuration. Shared by ProtocolBuilder's "New Exercise" flow and
- * ExerciseDetail's edit flow so a physio sees the identical form either way.
+ * title, assignment, muscle tags, sets/reps, notes, the joint angle
+ * configuration, and per-muscle EMG targets. Shared by ProtocolBuilder's
+ * "New Exercise" flow and ExerciseFineTune's edit flow so a physio sees the
+ * identical form either way.
  */
 export function ExerciseFormFields({
   form,
   setForm,
   patients,
   toggleTag,
-  toggleDraftNode,
+  selectDraftJoint,
   draftValid,
-  draftSideMismatch,
   confirmAngle,
   removeAngleConfig,
   loadAngleIntoDraft,
+  selectDraftMuscle,
+  setDraftMuscleEmgPct,
+  confirmMuscleEmgTarget,
+  removeMuscleEmgTarget,
 }: {
   form: ExerciseFormState
   setForm: Dispatch<SetStateAction<ExerciseFormState>>
   patients: PatientRecord[]
   toggleTag: (tag: string) => void
-  toggleDraftNode: (id: PodId) => void
+  selectDraftJoint: (jointId: string) => void
   draftValid: boolean
-  draftSideMismatch: boolean
   confirmAngle: () => void
   removeAngleConfig: (id: string) => void
   loadAngleIntoDraft: (c: AngleConfig) => void
+  selectDraftMuscle: (podId: PodId) => void
+  setDraftMuscleEmgPct: (pct: number) => void
+  confirmMuscleEmgTarget: () => void
+  removeMuscleEmgTarget: (podId: PodId) => void
 }) {
+  const draftJoint = JOINT_PRESETS.find((p) => p.id === form.draftJointId)
+  const draftMuscle = MUSCLE_OPTIONS.find((m) => m.id === form.draftMuscleId)
+
   return (
     <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
       <div className="flex flex-col gap-6">
@@ -187,22 +198,12 @@ export function ExerciseFormFields({
             </span>
           </div>
           <p className="mb-4 text-[13px] text-ink-muted">
-            Tap two sensor nodes, dial in the ROM range below, then confirm to save it as a tracked angle for this exercise.
+            Tap a joint below, dial in the ROM range, then confirm to save it as a tracked angle for this exercise.
           </p>
-          <BodyMap pods={PODS} selectedPods={form.draftNodes} onSelect={(id) => toggleDraftNode(id as PodId)} height={220} />
+          <JointPicker selectedJointId={form.draftJointId} onSelect={selectDraftJoint} height={220} />
           <div className="mt-4 text-center text-[13px]">
-            {form.draftNodes.length === 0 && <span className="text-ink-faint">No nodes selected yet</span>}
-            {form.draftNodes.length === 1 && (
-              <span className="text-ink-muted">{podLabel(form.draftNodes[0])} selected — pick one more node</span>
-            )}
-            {form.draftNodes.length === 2 && draftValid && (
-              <span className="font-medium text-accent">
-                {podLabel(form.draftNodes[0])} ↔ {podLabel(form.draftNodes[1])} · Monitoring {podSide(form.draftNodes[0])} side
-              </span>
-            )}
-            {draftSideMismatch && (
-              <span className="font-medium text-crimson">Pick two nodes on the same side (both left or both right).</span>
-            )}
+            {!draftJoint && <span className="text-ink-faint">No joint selected yet</span>}
+            {draftJoint && <span className="font-medium text-accent">{draftJoint.label} selected</span>}
           </div>
         </div>
 
@@ -216,7 +217,7 @@ export function ExerciseFormFields({
             max={180}
             targetMin={form.draftMin}
             targetMax={form.draftMax}
-            label={draftValid ? `${podLabel(form.draftNodes[0])} ↔ ${podLabel(form.draftNodes[1])}` : 'Select two nodes to preview'}
+            label={draftJoint ? draftJoint.label : 'Select a joint to preview'}
             size={160}
           />
           <div className="w-full">
@@ -289,19 +290,82 @@ export function ExerciseFormFields({
 
         <div className="h-px bg-border" />
 
-        <Slider
-          label="Target EMG %MVC"
-          value={form.targetEmgMvc}
-          min={0}
-          max={100}
-          unit="%"
-          onChange={(v) => setForm((f) => ({ ...f, targetEmgMvc: v }))}
-        />
+        <div>
+          <div className="mb-1 flex items-center justify-between">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-ink-faint">Target Muscle EMG</p>
+            <span
+              className={clsx(
+                'flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium',
+                form.muscleEmgTargets.length > 0 ? 'bg-emerald/10 text-emerald' : 'bg-surface text-ink-faint',
+              )}
+            >
+              {form.muscleEmgTargets.length > 0 && <Check className="h-3 w-3" />}
+              {form.muscleEmgTargets.length > 0 ? `${form.muscleEmgTargets.length} Set` : 'None set'}
+            </span>
+          </div>
+          <p className="mb-4 text-[13px] text-ink-muted">
+            Tap a muscle, dial in its target activation, then confirm — setting a new value for the same muscle replaces the old one.
+          </p>
+          <MuscleEmgPicker
+            targets={form.muscleEmgTargets}
+            selectedMuscleId={form.draftMuscleId}
+            onSelect={selectDraftMuscle}
+            height={220}
+          />
+          <div className="mt-4 text-center text-[13px]">
+            {!draftMuscle && <span className="text-ink-faint">No muscle selected yet</span>}
+            {draftMuscle && <span className="font-medium text-accent">{draftMuscle.label} selected</span>}
+          </div>
+          {draftMuscle && (
+            <div className="mt-4 flex flex-col items-center gap-2 rounded-lg bg-surface p-4">
+              <div className="w-full">
+                <Slider
+                  label="Target EMG %MVC"
+                  value={form.draftMuscleEmgPct}
+                  min={0}
+                  max={100}
+                  unit="%"
+                  onChange={setDraftMuscleEmgPct}
+                />
+              </div>
+              <Button size="sm" className="mt-2 w-full" onClick={confirmMuscleEmgTarget}>
+                <Check className="h-3.5 w-3.5" />
+                Confirm This Muscle Target
+              </Button>
+            </div>
+          )}
+          {form.muscleEmgTargets.length > 0 && (
+            <div className="mt-4 flex flex-col gap-2">
+              {form.muscleEmgTargets.map((t) => (
+                <div key={t.podId} className="flex items-center justify-between gap-3 rounded-lg bg-surface px-3.5 py-2.5">
+                  <button
+                    type="button"
+                    onClick={() => selectDraftMuscle(t.podId)}
+                    className="flex min-w-0 items-center gap-1.5 text-left text-[13px] text-ink"
+                    title="Load into the editor above — confirming again will override this target"
+                  >
+                    <Check className="h-3.5 w-3.5 flex-shrink-0 text-emerald" />
+                    <span className="truncate">{podLabel(t.podId)}</span>
+                    <span className="flex-shrink-0 font-medium text-accent">· {t.targetMvc}% MVC</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => removeMuscleEmgTarget(t.podId)}
+                    className="flex-shrink-0 rounded p-1 text-ink-faint transition-colors duration-200 hover:bg-surface-hover hover:text-crimson"
+                    aria-label={`Remove ${podLabel(t.podId)} EMG target`}
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
 
         <div className="mt-auto rounded-lg bg-surface p-3.5 text-[13px] leading-relaxed text-ink-faint">
           A live skeleton segment turns <span className="font-medium text-crimson">red</span> when deviation exceeds each
-          confirmed angle's own fault threshold, and EMG bars flag{' '}
-          <span className="font-medium text-ink">below {Math.round(form.targetEmgMvc * 0.55)}%</span> activation as weak.
+          confirmed angle's own fault threshold, and each muscle's EMG bar flags below{' '}
+          <span className="font-medium text-ink">55% of its own target</span> activation as weak.
         </div>
       </div>
     </div>

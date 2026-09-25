@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { RealtimePostgresChangesPayload } from '@supabase/supabase-js'
-import type { AngleConfig, Exercise, PatientRecord, PodId, SessionRecord } from '@/types'
+import type { AngleConfig, Exercise, MuscleEmgTarget, PatientRecord, PodId, SessionRecord } from '@/types'
 import { supabase } from '@/lib/supabase/client'
 import {
   exerciseFromRow,
@@ -51,10 +51,12 @@ function writeJson<T>(key: string, value: T) {
 
 /**
  * Exercises saved before angleConfigs/assignedPatientId existed are stored as
- * a flat nodeA/nodeB/targetRomMin/targetRomMax(/faultThresholdDeg) shape, and
+ * a flat nodeA/nodeB/targetRomMin/targetRomMax(/faultThresholdDeg) shape,
  * exercises saved after that but before per-angle fault thresholds existed
- * have angleConfigs entries missing faultThresholdDeg. Migrate both in place
- * on read so browsers with older SmartPhysio localStorage data don't crash.
+ * have angleConfigs entries missing faultThresholdDeg, and exercises saved
+ * before per-muscle EMG targets existed have a single flat targetEmgMvc
+ * instead of muscleEmgTargets. Migrate all three in place on read so browsers
+ * with older SmartPhysio localStorage data don't crash.
  */
 type LegacyExerciseFields = Partial<{
   nodeA: PodId
@@ -62,10 +64,11 @@ type LegacyExerciseFields = Partial<{
   targetRomMin: number
   targetRomMax: number
   faultThresholdDeg: number
+  targetEmgMvc: number
 }>
 
 function normalizeExercise(raw: Exercise & LegacyExerciseFields): Exercise {
-  const { nodeA, nodeB, targetRomMin, targetRomMax, faultThresholdDeg: legacyFaultThresholdDeg, ...rest } = raw
+  const { nodeA, nodeB, targetRomMin, targetRomMax, faultThresholdDeg: legacyFaultThresholdDeg, targetEmgMvc, ...rest } = raw
   const angleConfigs: AngleConfig[] = raw.angleConfigs
     ? raw.angleConfigs.map((c) => ({ ...c, faultThresholdDeg: c.faultThresholdDeg ?? legacyFaultThresholdDeg ?? 8 }))
     : nodeA && nodeB
@@ -80,7 +83,15 @@ function normalizeExercise(raw: Exercise & LegacyExerciseFields): Exercise {
           },
         ]
       : []
-  return { ...rest, angleConfigs, assignedPatientId: raw.assignedPatientId ?? null }
+  const muscleEmgTargets: MuscleEmgTarget[] = raw.muscleEmgTargets
+    ? raw.muscleEmgTargets
+    : targetEmgMvc != null
+      ? [
+          { podId: 1, targetMvc: targetEmgMvc },
+          { podId: 2, targetMvc: targetEmgMvc },
+        ]
+      : []
+  return { ...rest, angleConfigs, muscleEmgTargets, assignedPatientId: raw.assignedPatientId ?? null }
 }
 
 function loadExercisesFromLocalStorage(): Exercise[] {

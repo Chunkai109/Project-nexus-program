@@ -16,6 +16,7 @@ import { useSensorStream } from '@/lib/useSensorStream'
 import { useAppData } from '@/lib/data/AppDataContext'
 import { useAuth } from '@/lib/AuthContext'
 import { podSide, kneePodForSide } from '@/lib/podUtils'
+import { muscleEmgTarget } from '@/lib/joints'
 import { useBleHub } from '@/lib/ble/BleProvider'
 import { PODS } from '@/lib/mockData'
 import type { RepSample } from '@/types'
@@ -217,8 +218,8 @@ export function LiveSession() {
                 {usingHubEmg ? 'Source: Live Hub' : 'Source: Wearable Simulation'}
               </span>
             </div>
-            <EmgActivationBar label="Left Quad" value={emgLeft} target={exercise.targetEmgMvc} />
-            <EmgActivationBar label="Right Quad" value={emgRight} target={exercise.targetEmgMvc} />
+            <EmgActivationBar label="Left Quad" value={emgLeft} target={muscleEmgTarget(exercise.muscleEmgTargets, 1)} />
+            <EmgActivationBar label="Right Quad" value={emgRight} target={muscleEmgTarget(exercise.muscleEmgTargets, 2)} />
           </Card>
 
           <Card className="p-6">

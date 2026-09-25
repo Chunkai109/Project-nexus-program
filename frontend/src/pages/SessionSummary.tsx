@@ -10,6 +10,7 @@ import { TrendChart } from '@/components/charts/TrendChart'
 import { EmgActivationBar } from '@/components/charts/EmgActivationBar'
 import { useAppData } from '@/lib/data/AppDataContext'
 import { formatRelativeTime } from '@/lib/formatRelativeTime'
+import { muscleEmgTarget } from '@/lib/joints'
 import type { SessionRecord, TelemetryPoint } from '@/types'
 
 function average(values: number[]): number {
@@ -37,7 +38,8 @@ export function SessionSummary() {
   const { sessions, exercises } = useAppData()
   const session = useMemo(() => sessions.find((s) => s.id === sessionId) ?? null, [sessions, sessionId])
   const exercise = useMemo(() => exercises.find((e) => e.id === session?.exerciseId) ?? null, [exercises, session])
-  const targetEmgMvc = exercise?.targetEmgMvc ?? 70
+  const targetEmgLeft = muscleEmgTarget(exercise?.muscleEmgTargets ?? [], 1)
+  const targetEmgRight = muscleEmgTarget(exercise?.muscleEmgTargets ?? [], 2)
 
   const priorSession = useMemo(() => {
     if (!session) return null
@@ -165,8 +167,8 @@ export function SessionSummary() {
         <Card className="p-7">
           <p className="mb-4 text-[13px] font-medium text-ink-muted">Average Muscle Activation</p>
           <div className="flex flex-col gap-5">
-            <EmgActivationBar label="Left Quad" value={avgEmgLeft} target={targetEmgMvc} />
-            <EmgActivationBar label="Right Quad" value={avgEmgRight} target={targetEmgMvc} />
+            <EmgActivationBar label="Left Quad" value={avgEmgLeft} target={targetEmgLeft} />
+            <EmgActivationBar label="Right Quad" value={avgEmgRight} target={targetEmgRight} />
           </div>
         </Card>
 
