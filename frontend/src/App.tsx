@@ -5,8 +5,11 @@ import { AppDataProvider } from '@/lib/data/AppDataContext'
 import { BleProvider } from '@/lib/ble/BleProvider'
 import { LoginPage } from '@/pages/LoginPage'
 import { PatientExercises } from '@/pages/PatientExercises'
+import { PastSessions } from '@/pages/PastSessions'
 import { SensorSetup } from '@/pages/SensorSetup'
+import { CalibrationPage } from '@/pages/CalibrationPage'
 import { LiveSession } from '@/pages/LiveSession'
+import { SessionSummary } from '@/pages/SessionSummary'
 import { TherapistDashboard } from '@/pages/TherapistDashboard'
 import type { UserRole } from '@/types'
 import type { ReactNode } from 'react'
@@ -31,6 +34,14 @@ function AppRoutes() {
         }
       />
       <Route
+        path="/patient/history"
+        element={
+          <RequireRole role="patient">
+            <PastSessions />
+          </RequireRole>
+        }
+      />
+      <Route
         path="/patient/setup/:exerciseId"
         element={
           <RequireRole role="patient">
@@ -39,10 +50,26 @@ function AppRoutes() {
         }
       />
       <Route
+        path="/patient/calibrate/:exerciseId"
+        element={
+          <RequireRole role="patient">
+            <CalibrationPage />
+          </RequireRole>
+        }
+      />
+      <Route
         path="/patient/session/:exerciseId"
         element={
           <RequireRole role="patient">
             <LiveSession />
+          </RequireRole>
+        }
+      />
+      <Route
+        path="/patient/session-summary/:sessionId"
+        element={
+          <RequireRole role="patient">
+            <SessionSummary />
           </RequireRole>
         }
       />

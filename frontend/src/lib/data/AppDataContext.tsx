@@ -1,17 +1,30 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import type { RealtimePostgresChangesPayload } from '@supabase/supabase-js'
 import type { AngleConfig, Exercise, PatientRecord, PodId, SessionRecord } from '@/types'
+import { supabase } from '@/lib/supabase/client'
+import {
+  exerciseFromRow,
+  exercisePatchToRow,
+  exerciseToRow,
+  patientFromRow,
+  sessionFromRow,
+  sessionToRow,
+  type ExerciseRow,
+  type NewExercise,
+  type NewSessionRecord,
+  type PatientRow,
+  type SessionRow,
+} from '@/lib/supabase/rows'
 
 /**
  * Shared app data (exercises physios create, real patients who've signed in,
- * completed session recordings), persisted to localStorage and synced live
- * across browser tabs via the `storage` event. This makes "physio creates an
- * exercise -> patient sees it -> patient completes it -> physio sees real
- * telemetry" genuinely work today without standing up a backend: open the
- * physio dashboard and the patient view in two tabs of the same browser and
- * changes propagate immediately. It does NOT sync across two different
- * browsers or devices — that needs a real backend + database, which this
- * intentionally stops short of since it means provisioning external
- * infrastructure.
+ * completed session recordings). When Supabase is configured (see
+ * src/lib/supabase/client.ts), this reads/writes a shared Postgres database
+ * and syncs across tabs, browsers and devices in real time via Supabase
+ * Realtime — that's what makes "patient completes a session on their phone,
+ * physio sees it on their laptop" work. Without Supabase configured, it falls
+ * back to localStorage + the `storage` event, which only syncs across tabs of
+ * the same browser, so local/offline development still works unmodified.
  */
 
 const EXERCISES_KEY = 'smartphysio:exercises'
@@ -41,7 +54,7 @@ function writeJson<T>(key: string, value: T) {
  * a flat nodeA/nodeB/targetRomMin/targetRomMax(/faultThresholdDeg) shape, and
  * exercises saved after that but before per-angle fault thresholds existed
  * have angleConfigs entries missing faultThresholdDeg. Migrate both in place
- * on read so browsers with older SmartPhysio data don't crash on the new schema.
+ * on read so browsers with older SmartPhysio localStorage data don't crash.
  */
 type LegacyExerciseFields = Partial<{
   nodeA: PodId
@@ -70,17 +83,18 @@ function normalizeExercise(raw: Exercise & LegacyExerciseFields): Exercise {
   return { ...rest, angleConfigs, assignedPatientId: raw.assignedPatientId ?? null }
 }
 
-function loadExercises(): Exercise[] {
+function loadExercisesFromLocalStorage(): Exercise[] {
   return readJson<Exercise[]>(EXERCISES_KEY, []).map(normalizeExercise)
 }
 
-export type NewExercise = Omit<Exercise, 'id' | 'createdAt'>
-export type NewSessionRecord = Omit<SessionRecord, 'id'>
+export type { NewExercise, NewSessionRecord }
 
 interface AppDataValue {
   exercises: Exercise[]
   patients: PatientRecord[]
   sessions: SessionRecord[]
+  /** True until the initial Supabase fetch resolves. Always false when Supabase isn't configured. */
+  loading: boolean
   addExercise: (input: NewExercise) => Exercise
   updateExercise: (id: string, patch: NewExercise) => void
   deleteExercise: (id: string) => void
@@ -90,14 +104,86 @@ interface AppDataValue {
 
 const AppDataContext = createContext<AppDataValue | null>(null)
 
+/** Upserts (INSERT/UPDATE) or removes (DELETE) one row's mapped item into local state by id, so a client's own optimistic write and the realtime echo of it converge instead of duplicating. */
+function applyRealtimeChange<TRow extends { id: string }, T extends { id: string }>(
+  setState: (updater: (prev: T[]) => T[]) => void,
+  payload: RealtimePostgresChangesPayload<TRow>,
+  fromRow: (row: TRow) => T,
+) {
+  if (payload.eventType === 'DELETE') {
+    const oldId = (payload.old as Partial<TRow>).id
+    if (!oldId) return
+    setState((prev) => prev.filter((item) => item.id !== oldId))
+    return
+  }
+  const item = fromRow(payload.new as TRow)
+  setState((prev) => {
+    const idx = prev.findIndex((existing) => existing.id === item.id)
+    if (idx === -1) return [...prev, item]
+    const next = [...prev]
+    next[idx] = item
+    return next
+  })
+}
+
 export function AppDataProvider({ children }: { children: ReactNode }) {
-  const [exercises, setExercises] = useState<Exercise[]>(() => loadExercises())
-  const [patients, setPatients] = useState<PatientRecord[]>(() => readJson(PATIENTS_KEY, []))
-  const [sessions, setSessions] = useState<SessionRecord[]>(() => readJson(SESSIONS_KEY, []))
+  const [exercises, setExercises] = useState<Exercise[]>(() => (supabase ? [] : loadExercisesFromLocalStorage()))
+  const [patients, setPatients] = useState<PatientRecord[]>(() => (supabase ? [] : readJson(PATIENTS_KEY, [])))
+  const [sessions, setSessions] = useState<SessionRecord[]>(() => (supabase ? [] : readJson(SESSIONS_KEY, [])))
+  const [loading, setLoading] = useState(() => Boolean(supabase))
+  const patientsRef = useRef<PatientRecord[]>(patients)
+  useEffect(() => {
+    patientsRef.current = patients
+  }, [patients])
+
+  // --- Supabase mode: initial fetch + realtime subscriptions ---
+  useEffect(() => {
+    if (!supabase) return
+    let cancelled = false
+    Promise.all([
+      supabase.from('exercises').select('*').order('created_at', { ascending: true }),
+      supabase.from('patients').select('*').order('first_seen_at', { ascending: true }),
+      supabase.from('sessions').select('*').order('completed_at', { ascending: true }),
+    ]).then(([exercisesRes, patientsRes, sessionsRes]) => {
+      if (cancelled) return
+      if (exercisesRes.error) console.error('Failed to load exercises from Supabase', exercisesRes.error)
+      else setExercises((exercisesRes.data as ExerciseRow[]).map(exerciseFromRow))
+      if (patientsRes.error) console.error('Failed to load patients from Supabase', patientsRes.error)
+      else setPatients((patientsRes.data as PatientRow[]).map(patientFromRow))
+      if (sessionsRes.error) console.error('Failed to load sessions from Supabase', sessionsRes.error)
+      else setSessions((sessionsRes.data as SessionRow[]).map(sessionFromRow))
+      setLoading(false)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   useEffect(() => {
+    const client = supabase
+    if (!client) return
+    const channel = client
+      .channel('smartphysio-sync')
+      .on<ExerciseRow>('postgres_changes', { event: '*', schema: 'public', table: 'exercises' }, (payload) =>
+        applyRealtimeChange(setExercises, payload, exerciseFromRow),
+      )
+      .on<PatientRow>('postgres_changes', { event: '*', schema: 'public', table: 'patients' }, (payload) =>
+        applyRealtimeChange(setPatients, payload, patientFromRow),
+      )
+      .on<SessionRow>('postgres_changes', { event: '*', schema: 'public', table: 'sessions' }, (payload) =>
+        applyRealtimeChange(setSessions, payload, sessionFromRow),
+      )
+      .subscribe()
+    return () => {
+      client.removeChannel(channel)
+    }
+  }, [])
+
+  // --- localStorage mode: cross-tab sync only (used when Supabase isn't configured) ---
+  useEffect(() => {
+    if (supabase) return
     function onStorage(e: StorageEvent) {
-      if (e.key === EXERCISES_KEY) setExercises(loadExercises())
+      if (e.key === EXERCISES_KEY) setExercises(loadExercisesFromLocalStorage())
       if (e.key === PATIENTS_KEY) setPatients(readJson(PATIENTS_KEY, []))
       if (e.key === SESSIONS_KEY) setSessions(readJson(SESSIONS_KEY, []))
     }
@@ -105,43 +191,118 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener('storage', onStorage)
   }, [])
 
-  // Persisting is split into its own effect per collection, keyed off the
-  // committed state, rather than called inline inside each setState updater.
-  // Updater functions must stay pure — React (in StrictMode dev) invokes them
-  // twice to check for that, and a side effect (or a fresh crypto.randomUUID())
-  // inside one would fire twice with two different results, letting
-  // localStorage and the real in-memory state drift apart.
-  useEffect(() => writeJson(EXERCISES_KEY, exercises), [exercises])
-  useEffect(() => writeJson(PATIENTS_KEY, patients), [patients])
-  useEffect(() => writeJson(SESSIONS_KEY, sessions), [sessions])
+  // Persisting to localStorage is split into its own effect per collection,
+  // keyed off committed state, rather than called inline inside each setState
+  // updater. Updater functions must stay pure — React (in StrictMode dev)
+  // invokes them twice to check for that, and a side effect inside one would
+  // fire twice with two different results, letting localStorage and the real
+  // in-memory state drift apart. Skipped entirely once Supabase is configured.
+  useEffect(() => {
+    if (!supabase) writeJson(EXERCISES_KEY, exercises)
+  }, [exercises])
+  useEffect(() => {
+    if (!supabase) writeJson(PATIENTS_KEY, patients)
+  }, [patients])
+  useEffect(() => {
+    if (!supabase) writeJson(SESSIONS_KEY, sessions)
+  }, [sessions])
 
   const addExercise = useCallback((input: NewExercise) => {
     const exercise: Exercise = { ...input, id: crypto.randomUUID(), createdAt: Date.now() }
     setExercises((prev) => [...prev, exercise])
+    if (supabase) {
+      supabase
+        .from('exercises')
+        .insert(exerciseToRow(exercise))
+        .then(({ error }) => {
+          if (error) console.error('Failed to save exercise to Supabase', error)
+        })
+    }
     return exercise
   }, [])
 
   const updateExercise = useCallback((id: string, patch: NewExercise) => {
     setExercises((prev) => prev.map((e) => (e.id === id ? { ...e, ...patch } : e)))
+    if (supabase) {
+      supabase
+        .from('exercises')
+        .update(exercisePatchToRow(patch))
+        .eq('id', id)
+        .then(({ error }) => {
+          if (error) console.error('Failed to update exercise in Supabase', error)
+        })
+    }
   }, [])
 
   const deleteExercise = useCallback((id: string) => {
     setExercises((prev) => prev.filter((e) => e.id !== id))
+    if (supabase) {
+      supabase
+        .from('exercises')
+        .delete()
+        .eq('id', id)
+        .then(({ error }) => {
+          if (error) console.error('Failed to delete exercise in Supabase', error)
+        })
+    }
   }, [])
 
   const registerPatientVisit = useCallback((name: string, email: string) => {
+    const now = Date.now()
+    const existing = patientsRef.current.find((p) => p.email === email)
+    const optimistic: PatientRecord = existing
+      ? { ...existing, name, lastSeenAt: now }
+      : { id: crypto.randomUUID(), name, email, firstSeenAt: now, lastSeenAt: now }
     setPatients((prev) => {
-      const now = Date.now()
-      const existing = prev.find((p) => p.email === email)
-      return existing
-        ? prev.map((p) => (p.email === email ? { ...p, name, lastSeenAt: now } : p))
-        : [...prev, { id: crypto.randomUUID(), name, email, firstSeenAt: now, lastSeenAt: now }]
+      const idx = prev.findIndex((p) => p.email === email)
+      if (idx === -1) return [...prev, optimistic]
+      const next = [...prev]
+      next[idx] = optimistic
+      return next
     })
+    if (!supabase) return
+    // Upsert on email (not id): two devices registering the same new patient
+    // for the first time at once should converge on one row, not collide.
+    supabase
+      .from('patients')
+      .upsert(
+        {
+          name,
+          email,
+          first_seen_at: new Date(optimistic.firstSeenAt).toISOString(),
+          last_seen_at: new Date(now).toISOString(),
+        },
+        { onConflict: 'email' },
+      )
+      .select()
+      .single()
+      .then(({ data, error }) => {
+        if (error) {
+          console.error('Failed to sync patient to Supabase', error)
+          return
+        }
+        const canonical = patientFromRow(data as PatientRow)
+        setPatients((prev) => {
+          const idx = prev.findIndex((p) => p.email === email)
+          if (idx === -1) return [...prev, canonical]
+          const next = [...prev]
+          next[idx] = canonical
+          return next
+        })
+      })
   }, [])
 
   const recordSession = useCallback((input: NewSessionRecord) => {
     const session: SessionRecord = { ...input, id: crypto.randomUUID() }
     setSessions((prev) => [...prev, session])
+    if (supabase) {
+      supabase
+        .from('sessions')
+        .insert(sessionToRow(session))
+        .then(({ error }) => {
+          if (error) console.error('Failed to save session to Supabase', error)
+        })
+    }
     return session
   }, [])
 
@@ -150,13 +311,14 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       exercises,
       patients,
       sessions,
+      loading,
       addExercise,
       updateExercise,
       deleteExercise,
       registerPatientVisit,
       recordSession,
     }),
-    [exercises, patients, sessions, addExercise, updateExercise, deleteExercise, registerPatientVisit, recordSession],
+    [exercises, patients, sessions, loading, addExercise, updateExercise, deleteExercise, registerPatientVisit, recordSession],
   )
 
   return <AppDataContext.Provider value={value}>{children}</AppDataContext.Provider>

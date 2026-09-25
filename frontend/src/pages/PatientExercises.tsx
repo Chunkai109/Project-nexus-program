@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Activity, CalendarClock, Clock, Dumbbell, MessageSquareQuote, Target } from 'lucide-react'
 import { PageShell } from '@/components/layout/PageShell'
 import { PatientTopNav } from '@/components/layout/PatientTopNav'
+import { PatientNavTabs } from '@/components/layout/PatientNavTabs'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
@@ -24,6 +25,8 @@ export function PatientExercises() {
       <PatientTopNav weeklyDone={3} weeklyTotal={4} battery={92} bleConnected />
 
       <main className="px-10 py-12">
+        <PatientNavTabs />
+
         <div className="mb-10 flex items-end justify-between">
           <div>
             <h1 className="text-[28px] font-semibold tracking-tight text-ink">Prescribed Exercises</h1>

@@ -115,20 +115,21 @@ export function LiveSession() {
     setEnding(true)
     if (!exercise) return
     const patient = patients.find((p) => p.email === user?.email)
-    if (patient && repSamples.length > 0) {
-      recordSession({
-        patientId: patient.id,
-        patientName: patient.name,
-        exerciseId: exercise.id,
-        exerciseTitle: exercise.title,
-        completedAt: Date.now(),
-        durationSec: simulated.elapsedSec,
-        targetMin: primaryAngle?.targetMin ?? simulated.targetMin,
-        targetMax: primaryAngle?.targetMax ?? simulated.targetMax,
-        reps: repSamples,
-      })
-    }
-    setTimeout(() => navigate('/patient/exercises'), 900)
+    const session =
+      patient && repSamples.length > 0
+        ? recordSession({
+            patientId: patient.id,
+            patientName: patient.name,
+            exerciseId: exercise.id,
+            exerciseTitle: exercise.title,
+            completedAt: Date.now(),
+            durationSec: simulated.elapsedSec,
+            targetMin: primaryAngle?.targetMin ?? simulated.targetMin,
+            targetMax: primaryAngle?.targetMax ?? simulated.targetMax,
+            reps: repSamples,
+          })
+        : null
+    setTimeout(() => navigate(session ? `/patient/session-summary/${session.id}` : '/patient/exercises'), 900)
   }
 
   const mm = String(Math.floor(simulated.elapsedSec / 60)).padStart(2, '0')
