@@ -10,7 +10,7 @@ Usage with a live MediaPipe Pose stream:
             predictor.add_frame(results.pose_world_landmarks)   # the default pose_landmarks
     result = predictor.end_session()
     # -> {"exercise": "bicep_curl", "prediction": "Perfect", "confidence": 0.91,
-    #     "class_probabilities": {...}}
+    #     "good_form_score": 0.91, "class_probabilities": {...}}
 
 This is a whole-repetition classifier (the training labels are per-video,
 not per-frame), so it is used in "session" style: start a session at the
@@ -158,11 +158,20 @@ class BicepCurlPredictor:
         agg = agg_full[self._feature_idx].reshape(1, -1)
         proba = self.model.predict_proba(agg)[0]
         pred_idx = int(np.argmax(proba))
+        perfect_idx = CLASS_NAMES.index("Perfect")
 
         return {
             "exercise": "bicep_curl",
             "prediction": CLASS_NAMES[pred_idx],
             "confidence": float(proba[pred_idx]),
+            # good_form_score = P(Perfect), i.e. the 6-way distribution
+            # collapsed into "looks correct" vs "looks like some kind of
+            # error" for one intuitive per-rep number. This is NOT the same
+            # thing as the model's own tested accuracy (see
+            # training_config.json's "headline_generalization_metric",
+            # ~88.5% CV macro-F1) -- that describes how reliable the model is
+            # in general; this describes how good THIS ONE rep looked.
+            "good_form_score": float(proba[perfect_idx]),
             "class_probabilities": {c: float(p) for c, p in zip(CLASS_NAMES, proba)},
             "num_frames": n_frames,
         }

@@ -129,9 +129,12 @@ def main():
                 print(f"[end_session error] {exc}")
                 last_result_text = f"error: {exc}"
                 result_dict = {}
-            if result_dict.get("confidence") is not None:
-                last_result_text = (f"{result_dict['prediction']} "
-                                     f"({result_dict['confidence']:.0%} confidence)")
+            if result_dict.get("good_form_score") is not None:
+                score = result_dict["good_form_score"]
+                if result_dict["prediction"] == "Perfect":
+                    last_result_text = f"{score:.0%} good form"
+                else:
+                    last_result_text = f"{score:.0%} good form (likely issue: {result_dict['prediction']})"
                 print(result_dict)
             elif result_dict.get("prediction") == "no_exercise_detected":
                 last_result_text = "No exercise detected (not enough arm movement)"
