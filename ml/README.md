@@ -98,6 +98,61 @@ already-recorded frames (`scripts/predict.py`, `predict_full_sequence()`),
 where the raw frame count is already correct and wall-clock replay time is
 meaningless (frames are replayed instantly, not paced in real time).
 
+## Duration-independent live inference (best-window search)
+
+Live field testing after the FPS fix above still showed `sequence_length`
+as the single most abnormal feature almost every session -- by a wide
+margin (z-scores of +3 to +20 across dozens of live reps) -- because the
+predictor classified the **entire** buffered session (everything between
+pressing `s` and `e`) as one repetition. Training's `sequence_length` only
+ranges [11, 86] frames (~0.46-3.6s at the assumed 24fps reference); any
+live session where the user took noticeably longer -- which happened
+almost every time in practice -- made this, the classifier's #1-importance
+feature, wildly out-of-distribution and dragged the whole prediction toward
+"Swing"/rejected regardless of how the movement itself actually looked.
+
+**Fixed differently this time**: rather than asking users to time their
+reps precisely (tried, and unreliable in practice), `BicepCurlPredictor`
+now searches sub-windows of the buffered live capture and reports whichever
+one looks most like a good repetition
+(`_end_session_with_window_search()` in `predictor.py`). Candidate window
+durations span a grid a bit wider than training's own `sequence_length`
+range (0.4s-4.0s in 0.25s steps), converted to frame counts via the
+session's own estimated live fps (`frames_buffered / wallclock_duration`),
+slid across every plausible start offset. All candidates are scored in one
+batched call to the rest gate, novelty detector, and classifier (not
+one-by-one -- ~1000 candidate windows over a 470-frame buffer took ~0.3s in
+testing, see `scripts/verify_best_window_search.py`), and the passing
+window with the highest `good_form_score` is returned, along with
+`best_window_start_seconds`/`best_window_end_seconds`/
+`num_windows_evaluated` so the caller can show which part of the capture
+was judged. If no window passes the rest gate or novelty detector, the
+result falls back to the whole-session gate outcome (`no_exercise_detected`
+/ `unrecognized_movement`), unchanged from before.
+
+**This only applies to live sessions** (`use_wallclock_duration=True`).
+Recorded-sequence replay (`scripts/predict.py`, `predict_full_sequence()`)
+keeps the exact original single-shot behavior -- verified as unchanged
+(same `num_frames`, no best-window fields) by
+`scripts/verify_best_window_search.py`'s regression check -- so the
+project's headline CV metric and test-set evaluation protocol are
+untouched by this change.
+
+**Honest tradeoff, not hidden**: searching many overlapping windows and
+keeping the best is a real multiple-comparisons effect -- some optimism
+bias is expected and is intentional (report the user's best rep-like
+segment within the capture, not an average diluted by extra buffer time,
+which is what was actually asked for), not a claim that live accuracy
+improved by this amount in general. A session with genuinely poor form
+throughout still has no good window to find, so this doesn't inflate
+scores for uniformly bad reps -- it only rescues good reps that were
+previously diluted by an overlong capture. In one concrete test
+(`verify_best_window_search.py`, a real TEST-split "Perfect" recording
+padded with 300 idle frames to simulate a 12-second "took too long"
+session): the unpadded single-shot baseline scored `good_form_score=0.72`;
+the padded session scored `0.87` with the same correct "Perfect"
+prediction, from a 2.4s window the search located inside the 12s capture.
+
 ## No-exercise / non-curl rejection (two gates)
 
 The classifier's classes are all bicep-curl-specific -- there was no way for

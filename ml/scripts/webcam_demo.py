@@ -13,14 +13,19 @@ Then, from the repo root:
   python -m ml.scripts.webcam_demo --model pose_landmarker_lite.task
 
 Controls (focus the video window first):
-  s   - start a rep: begin buffering frames for one curl repetition
-  e   - end the rep: run the trained model on everything buffered since 's'
-        and show the predicted class + confidence on screen
+  s   - start a rep: begin buffering frames
+  e   - end the rep: search everything buffered since 's' for the best-
+        looking repetition-length segment and show its predicted class +
+        confidence on screen
   q   - quit
 
-Do one full, deliberate bicep curl repetition between pressing 's' and 'e'
--- the model was trained on whole repetitions (~2-3 seconds each in the
-training data), not on isolated frames or partial reps.
+How long you take between 's' and 'e' doesn't matter -- do one or more
+curl attempts, take as long as you want, and press 'e' when done. Instead
+of scoring the whole buffered capture as a single repetition (which used to
+make total capture duration itself a dominant, misleading signal), the
+predictor searches sub-windows of the capture spanning the training data's
+own repetition-length range and reports whichever one looks most like a
+good repetition (see BicepCurlPredictor._end_session_with_window_search()).
 
 This uses MediaPipe's newer Tasks API (PoseLandmarker), verified to work
 in this project's dev environment; it reads `pose_world_landmarks` (NOT the
@@ -71,6 +76,14 @@ def print_diagnostics(result_dict):
     problem (see feature_reference_stats.json, built from the training
     dev pool, and novelty_detector.joblib).
     """
+    total_capture = result_dict.get("total_capture_seconds")
+    window_start = result_dict.get("best_window_start_seconds")
+    window_end = result_dict.get("best_window_end_seconds")
+    if total_capture is not None and window_start is not None and window_end is not None:
+        print(f"  [diagnostic] best segment: {window_start:.1f}s-{window_end:.1f}s "
+              f"of your {total_capture:.1f}s capture "
+              f"({result_dict.get('num_windows_evaluated', '?')} windows evaluated)")
+
     novelty_score = result_dict.get("novelty_score")
     novelty_threshold = result_dict.get("novelty_threshold")
     if novelty_score is not None:
