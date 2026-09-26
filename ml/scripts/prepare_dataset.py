@@ -42,10 +42,10 @@ from ml.src.features.engineer import (
     FeatureExtractor, FEATURE_NAMES, RAW_JOINTS, RAW_DIM,
     raw_landmark_vector, aggregate_sequence_features, AGGREGATE_FEATURE_NAMES,
 )
+from ml.src.models.labels import CLASS_NAMES
 
 PROCESSED_DIR = ML_ROOT / "data" / "processed"
 SEED = 42
-CLASS_NAMES = ["Perfect", "Drag", "Swing", "Half", "Heave"]
 
 
 def normalize_and_featurize(raw_keypoints: np.ndarray):
@@ -85,26 +85,38 @@ def main():
 
     engineered_by_vid, raw_by_vid = {}, {}
     agg_rows = []
-    base_id_labels = {}
+    # A base_id's PRIMARY label -- used only to stratify the split. Most
+    # base_ids have exactly one class. But 17 of the 49 are also truncated
+    # into a derived "Incomplete" sequence (see dataset_io.py's module
+    # docstring: incomplete_vid_00NN_* is a byte-identical prefix of
+    # vid_00NN_*, not an independent recording) -- for those, `class_label`
+    # would otherwise flip depending on iteration order. We stratify by the
+    # non-truncated ("primary") label so the split balances the 5 real
+    # performance classes; because splitting is by base_id, wherever a
+    # recording lands, its Incomplete truncations go with it automatically,
+    # so this never risks separating a recording from its own truncation.
+    base_id_primary_label = {}
 
     for seq in sequences:
         eng, raw, active_side = normalize_and_featurize(seq.keypoints)
         engineered_by_vid[seq.video_id] = eng
         raw_by_vid[seq.video_id] = raw
-        base_id_labels[seq.base_id] = seq.class_label
+        if not seq.is_truncated:
+            base_id_primary_label[seq.base_id] = seq.class_label
 
         agg = aggregate_sequence_features(eng)
         row = {"video_id": seq.video_id, "base_id": seq.base_id,
-               "is_original": seq.is_original, "class_label": seq.class_label,
+               "is_original": seq.is_original, "is_truncated": seq.is_truncated,
+               "class_label": seq.class_label,
                "num_frames": seq.num_frames, "active_side_detected": active_side}
         row.update(dict(zip(AGGREGATE_FEATURE_NAMES, agg)))
         agg_rows.append(row)
 
-    print("Splitting by independent source recording (base_id), stratified by class...")
-    split = split_base_ids(base_id_labels)
+    print("Splitting by independent source recording (base_id), stratified by primary class...")
+    split = split_base_ids(base_id_primary_label)
     for part, ids in split.items():
-        counts = pd.Series([base_id_labels[i] for i in ids]).value_counts().to_dict()
-        print(f"  {part}: {len(ids)} source recordings -> {counts}")
+        counts = pd.Series([base_id_primary_label[i] for i in ids]).value_counts().to_dict()
+        print(f"  {part}: {len(ids)} source recordings (primary label) -> {counts}")
 
     # --- Save per-frame sequence arrays (object arrays; variable length) ---
     video_ids = [s.video_id for s in sequences]
@@ -114,6 +126,7 @@ def main():
         base_ids=np.array([s.base_id for s in sequences], dtype=object),
         labels=np.array([s.class_label for s in sequences], dtype=object),
         is_original=np.array([s.is_original for s in sequences], dtype=bool),
+        is_truncated=np.array([s.is_truncated for s in sequences], dtype=bool),
         engineered=np.array([engineered_by_vid[v] for v in video_ids], dtype=object),
         raw=np.array([raw_by_vid[v] for v in video_ids], dtype=object),
         allow_pickle=True,
@@ -138,15 +151,27 @@ def main():
     # --- Dataset report (spec item 1) ---
     frames_per_video = {s.video_id: s.num_frames for s in sequences}
     orig_sequences = [s for s in sequences if s.is_original]
+    truncated_base_ids = sorted(set(s.base_id for s in sequences if s.is_truncated))
     report = {
         "num_video_ids_total": len(sequences),
-        "num_independent_source_recordings": len(base_id_labels),
+        "num_independent_source_recordings": len(base_id_primary_label),
         "note_on_augmentation": (
             "Each of the 49 independent source recordings appears 11 times in "
-            "the CSV (1 '_orig' + 10 pre-generated '_aug_*' copies, 539 rows "
-            "total video_ids). All splitting is done on the 49 base_ids so "
-            "augmented copies of a training recording never appear in val/test."
+            "the CSV (1 '_orig' + 10 pre-generated '_aug_*' copies). All splitting "
+            "is done on the 49 base_ids so augmented copies of a training recording "
+            "never appear in val/test."
         ),
+        "note_on_incomplete_class": (
+            f"{len(truncated_base_ids)} of the 49 recordings (all with primary label "
+            "'Perfect') are ALSO truncated to a randomized fraction of their length "
+            "(observed ~19%-83%) and relabeled 'Incomplete', as 'incomplete_vid_00NN_*' "
+            "rows. These are byte-identical prefixes of the untruncated recording, not "
+            "independent performances -- stratification uses each base_id's primary "
+            "(non-Incomplete) label, and because splitting is by base_id, a recording's "
+            "Incomplete truncations always land in the same split as the recording "
+            "itself, never separated across train/val/test."
+        ),
+        "truncated_base_ids": truncated_base_ids,
         "num_total_frames": int(sum(frames_per_video.values())),
         "sequence_length_frames": {
             "min": int(min(frames_per_video.values())),
@@ -155,7 +180,7 @@ def main():
         },
         "num_classes": len(CLASS_NAMES),
         "class_names": CLASS_NAMES,
-        "class_counts_source_recordings": pd.Series(list(base_id_labels.values())).value_counts().to_dict(),
+        "class_counts_source_recordings_by_primary_label": pd.Series(list(base_id_primary_label.values())).value_counts().to_dict(),
         "class_counts_all_video_ids_incl_augmented": pd.Series([s.class_label for s in sequences]).value_counts().to_dict(),
         "class_counts_orig_only": pd.Series([s.class_label for s in orig_sequences]).value_counts().to_dict(),
         "landmarks_used_engineered": FEATURE_NAMES,
@@ -174,7 +199,10 @@ def main():
         ),
         "split": {part: {
             "num_source_recordings": len(ids),
-            "class_counts": pd.Series([base_id_labels[i] for i in ids]).value_counts().to_dict(),
+            "primary_label_counts": pd.Series([base_id_primary_label[i] for i in ids]).value_counts().to_dict(),
+            "all_sequence_class_counts": pd.Series(
+                [s.class_label for s in sequences if s.base_id in set(ids)]
+            ).value_counts().to_dict(),
         } for part, ids in split.items()},
     }
     with open(PROCESSED_DIR / "dataset_report.json", "w") as f:

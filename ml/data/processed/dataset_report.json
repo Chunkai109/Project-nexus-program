@@ -1,22 +1,43 @@
 {
-  "num_video_ids_total": 539,
+  "num_video_ids_total": 726,
   "num_independent_source_recordings": 49,
-  "note_on_augmentation": "Each of the 49 independent source recordings appears 11 times in the CSV (1 '_orig' + 10 pre-generated '_aug_*' copies, 539 rows total video_ids). All splitting is done on the 49 base_ids so augmented copies of a training recording never appear in val/test.",
-  "num_total_frames": 37439,
+  "note_on_augmentation": "Each of the 49 independent source recordings appears 11 times in the CSV (1 '_orig' + 10 pre-generated '_aug_*' copies). All splitting is done on the 49 base_ids so augmented copies of a training recording never appear in val/test.",
+  "note_on_incomplete_class": "17 of the 49 recordings (all with primary label 'Perfect') are ALSO truncated to a randomized fraction of their length (observed ~19%-83%) and relabeled 'Incomplete', as 'incomplete_vid_00NN_*' rows. These are byte-identical prefixes of the untruncated recording, not independent performances -- stratification uses each base_id's primary (non-Incomplete) label, and because splitting is by base_id, a recording's Incomplete truncations always land in the same split as the recording itself, never separated across train/val/test.",
+  "truncated_base_ids": [
+    "vid_0025",
+    "vid_0026",
+    "vid_0027",
+    "vid_0028",
+    "vid_0029",
+    "vid_0030",
+    "vid_0031",
+    "vid_0032",
+    "vid_0033",
+    "vid_0034",
+    "vid_0035",
+    "vid_0036",
+    "vid_0037",
+    "vid_0038",
+    "vid_0039",
+    "vid_0040",
+    "vid_0041"
+  ],
+  "num_total_frames": 43674,
   "sequence_length_frames": {
-    "min": 16,
+    "min": 11,
     "max": 86,
-    "mean": 69.46011131725417
+    "mean": 60.15702479338843
   },
-  "num_classes": 5,
+  "num_classes": 6,
   "class_names": [
     "Perfect",
     "Drag",
     "Swing",
     "Half",
-    "Heave"
+    "Heave",
+    "Incomplete"
   ],
-  "class_counts_source_recordings": {
+  "class_counts_source_recordings_by_primary_label": {
     "Perfect": 17,
     "Drag": 8,
     "Half": 8,
@@ -24,6 +45,7 @@
     "Swing": 8
   },
   "class_counts_all_video_ids_incl_augmented": {
+    "Incomplete": 187,
     "Perfect": 187,
     "Drag": 88,
     "Half": 88,
@@ -31,6 +53,7 @@
     "Swing": 88
   },
   "class_counts_orig_only": {
+    "Incomplete": 17,
     "Perfect": 17,
     "Drag": 8,
     "Half": 8,
@@ -64,32 +87,56 @@
   "split": {
     "train": {
       "num_source_recordings": 34,
-      "class_counts": {
+      "primary_label_counts": {
         "Perfect": 12,
         "Half": 6,
         "Swing": 6,
         "Drag": 5,
         "Heave": 5
+      },
+      "all_sequence_class_counts": {
+        "Incomplete": 132,
+        "Perfect": 132,
+        "Half": 66,
+        "Swing": 66,
+        "Drag": 55,
+        "Heave": 55
       }
     },
     "val": {
       "num_source_recordings": 7,
-      "class_counts": {
+      "primary_label_counts": {
         "Drag": 2,
         "Perfect": 2,
         "Half": 1,
         "Heave": 1,
         "Swing": 1
+      },
+      "all_sequence_class_counts": {
+        "Incomplete": 22,
+        "Drag": 22,
+        "Perfect": 22,
+        "Half": 11,
+        "Heave": 11,
+        "Swing": 11
       }
     },
     "test": {
       "num_source_recordings": 8,
-      "class_counts": {
+      "primary_label_counts": {
         "Perfect": 3,
         "Heave": 2,
         "Drag": 1,
         "Half": 1,
         "Swing": 1
+      },
+      "all_sequence_class_counts": {
+        "Incomplete": 33,
+        "Perfect": 33,
+        "Heave": 22,
+        "Drag": 11,
+        "Half": 11,
+        "Swing": 11
       }
     }
   }

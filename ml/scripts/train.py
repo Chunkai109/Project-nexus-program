@@ -453,16 +453,25 @@ def main():
         json.dump(training_config, f, indent=2)
 
     # === 5. Rest/no-exercise gate ===
-    # The model has 5 classes, all bicep-curl-specific -- there is no
-    # "resting" class, so any input (including standing still) is currently
-    # forced through the 5-way classifier. This computes a simple,
-    # data-grounded floor: the weakest real curl repetition on record (across
-    # ALL 49 source recordings, not just train -- this is a physical
+    # The classifier's classes are all bicep-curl-specific -- there is no
+    # "resting" class, so any input (including standing still) would
+    # otherwise be forced through the classifier. This computes a simple,
+    # data-grounded floor: the weakest COMPLETE curl repetition on record
+    # (across ALL 49 source recordings, not just train -- this is a physical
     # motion-magnitude floor, not a fitted classifier parameter, so using the
     # full dataset here does not leak test-set label information into the
     # model) sets the threshold below which a session is rejected as
     # "no_exercise_detected" before the classifier is ever called.
-    build_rest_gate_config(seq_df)
+    #
+    # "Incomplete" rows are deliberately excluded from this floor: they are
+    # randomized truncations of real reps (see dataset_io.py), including
+    # some cut off after only ~19% of the motion, i.e. barely any movement
+    # at all. If those set the floor, the gate threshold would collapse
+    # toward zero and stop catching genuine non-exercise input. The
+    # classifier itself is now responsible for recognizing a genuine but
+    # very-short attempt as "Incomplete"; the gate's job is narrower --
+    # catching sessions with no curling motion at all.
+    build_rest_gate_config(seq_df[seq_df["class_label"] != "Incomplete"])
 
     print(f"\nSaved final model ({model_type_saved}) and artifacts to {MODEL_DIR}")
     print("Run scripts/evaluate.py next to evaluate on the held-out TEST base_ids.")

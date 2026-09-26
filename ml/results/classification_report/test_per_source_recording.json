@@ -20,19 +20,19 @@
     "true_class": "Heave"
   },
   "vid_0030": {
-    "num_sequences": 11,
-    "accuracy": 1.0,
-    "true_class": "Perfect"
+    "num_sequences": 22,
+    "accuracy": 0.9545454545454546,
+    "true_class": "Incomplete"
   },
   "vid_0036": {
-    "num_sequences": 11,
+    "num_sequences": 22,
     "accuracy": 1.0,
-    "true_class": "Perfect"
+    "true_class": "Incomplete"
   },
   "vid_0037": {
-    "num_sequences": 11,
-    "accuracy": 1.0,
-    "true_class": "Perfect"
+    "num_sequences": 22,
+    "accuracy": 0.9545454545454546,
+    "true_class": "Incomplete"
   },
   "vid_0048": {
     "num_sequences": 11,

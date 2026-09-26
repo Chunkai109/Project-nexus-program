@@ -8,13 +8,13 @@
       "precision": 1.0,
       "recall": 1.0,
       "f1-score": 1.0,
-      "support": 2.0
+      "support": 3.0
     },
     "Drag": {
       "precision": 1.0,
       "recall": 1.0,
       "f1-score": 1.0,
-      "support": 2.0
+      "support": 1.0
     },
     "Swing": {
       "precision": 1.0,
@@ -32,25 +32,40 @@
       "precision": 1.0,
       "recall": 1.0,
       "f1-score": 1.0,
-      "support": 1.0
+      "support": 2.0
+    },
+    "Incomplete": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 3.0
     },
     "accuracy": 1.0,
     "macro avg": {
       "precision": 1.0,
       "recall": 1.0,
       "f1-score": 1.0,
-      "support": 7.0
+      "support": 11.0
     },
     "weighted avg": {
       "precision": 1.0,
       "recall": 1.0,
       "f1-score": 1.0,
-      "support": 7.0
+      "support": 11.0
     }
   },
   "confusion_matrix": [
     [
-      2,
+      3,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      1,
       0,
       0,
       0,
@@ -58,12 +73,14 @@
     ],
     [
       0,
-      2,
+      0,
+      1,
       0,
       0,
       0
     ],
     [
+      0,
       0,
       0,
       1,
@@ -74,7 +91,8 @@
       0,
       0,
       0,
-      1,
+      0,
+      2,
       0
     ],
     [
@@ -82,7 +100,8 @@
       0,
       0,
       0,
-      1
+      0,
+      3
     ]
   ],
   "class_order": [
@@ -90,6 +109,7 @@
     "Drag",
     "Swing",
     "Half",
-    "Heave"
+    "Heave",
+    "Incomplete"
   ]
 }
