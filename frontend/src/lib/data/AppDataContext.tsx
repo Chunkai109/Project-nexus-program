@@ -93,6 +93,30 @@ function loadExercisesFromLocalStorage(): Exercise[] {
   return readJson<Exercise[]>(EXERCISES_KEY, []).map(normalizeExercise)
 }
 
+/**
+ * Seeded automatically whenever there are no exercises at all, so a fresh
+ * install (or an emptied exercise list) always has something to test the
+ * ESP32 hub against instead of starting on an empty "no exercises yet"
+ * screen. Angle config targets pods 1/2 — the two pods the rest of the app
+ * treats as EMG-capable (see EMG_PODS in CalibrationPage.tsx) — matching
+ * the flexion range the bicep curl firmware itself curls against
+ * (START_CURL_LIMIT/CONTRACTION_LIMIT in smartphysio_hub.ino).
+ */
+function buildDefaultBicepCurlExercise(): NewExercise {
+  return {
+    title: 'Bicep Curl',
+    muscleGroups: ['Arm'],
+    sets: 3,
+    reps: 10,
+    muscleEmgTargets: [],
+    therapistNote: '',
+    setupInstructions: '',
+    estMinutes: 5,
+    angleConfigs: [{ id: crypto.randomUUID(), nodeA: 1, nodeB: 2, targetMin: 30, targetMax: 80, faultThresholdDeg: 15 }],
+    assignedPatientId: null,
+  }
+}
+
 export type { NewExercise, NewSessionRecord }
 
 interface AppDataValue {
@@ -226,6 +250,19 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     }
     return exercise
   }, [])
+
+  // Seed the default Bicep Curl exercise the moment the exercise list is
+  // confirmed empty — after the initial Supabase fetch resolves (or
+  // immediately in localStorage mode, which never has a loading phase).
+  // Guarded by a ref rather than relying on exercises.length alone so a
+  // slow network response landing after this already fired can't cause a
+  // duplicate.
+  const seededDefaultRef = useRef(false)
+  useEffect(() => {
+    if (seededDefaultRef.current || loading || exercises.length > 0) return
+    seededDefaultRef.current = true
+    addExercise(buildDefaultBicepCurlExercise())
+  }, [loading, exercises.length, addExercise])
 
   const updateExercise = useCallback((id: string, patch: NewExercise) => {
     setExercises((prev) => prev.map((e) => (e.id === id ? { ...e, ...patch } : e)))
