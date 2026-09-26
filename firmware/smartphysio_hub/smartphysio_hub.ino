@@ -19,6 +19,26 @@
 #define ACCEL_XOUT_H 0x3B
 
 // ---------------------------------------------------------------------------
+// Shared types — defined before every function in this file. Arduino's
+// auto-generated function prototypes are hoisted above all of them, so any
+// type used in a function signature (MPUData, GyroOffsets, RepState below)
+// must already be declared by this point or the auto-prototype won't
+// compile ("'MPUData' has not been declared").
+// ---------------------------------------------------------------------------
+struct MPUData {
+  int16_t ax, ay, az;
+  int16_t tempRaw;
+  int16_t gx, gy, gz;
+};
+
+struct GyroOffsets {
+  float gx = 0.0;
+  float gy = 0.0;
+};
+
+enum RepState { STATE_DOWN, STATE_CURLING, STATE_TOP };
+
+// ---------------------------------------------------------------------------
 // SmartPhysio dashboard link — this board hosts its own WiFi access point
 // and a WebSocket server, so the web app connects to it directly with no
 // router involved. Message shapes below match what the app expects, per
@@ -87,17 +107,6 @@ void onWebSocketEvent(uint8_t clientNum, WStype_t type, uint8_t *payload, size_t
   }
 }
 
-struct MPUData {
-  int16_t ax, ay, az;
-  int16_t tempRaw;
-  int16_t gx, gy, gz;
-};
-
-struct GyroOffsets {
-  float gx = 0.0;
-  float gy = 0.0;
-};
-
 GyroOffsets calib1, calib2;
 
 // Filtered Orientation Angles
@@ -124,7 +133,6 @@ const int   EMG_THRESHOLD     = 500;  // EMG activation threshold
 // to flexion alone and no "emg"/pod-1-"status" WebSocket messages are sent.
 constexpr bool EMG_ENABLED = false;
 
-enum RepState { STATE_DOWN, STATE_CURLING, STATE_TOP };
 RepState repState = STATE_DOWN;
 int repCount = 0;
 bool formCheatDetected = false;
