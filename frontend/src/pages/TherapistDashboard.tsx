@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { PageShell } from '@/components/layout/PageShell'
 import { PhysioSidebar } from '@/components/layout/PhysioSidebar'
 import { ProtocolBuilder } from '@/components/dashboard/ProtocolBuilder'
-import { ExerciseAnalyticsList } from '@/components/dashboard/ExerciseAnalyticsList'
 import { ExerciseOptimizationMetrics } from '@/components/dashboard/ExerciseOptimizationMetrics'
 import { ExerciseFineTune } from '@/components/dashboard/ExerciseFineTune'
 import { TelemetrySection } from '@/components/dashboard/TelemetrySection'
@@ -10,13 +9,14 @@ import { PatientRosterGrid } from '@/components/dashboard/PatientRosterGrid'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { useAppData } from '@/lib/data/AppDataContext'
-import { ArrowLeft, Settings, SlidersHorizontal } from 'lucide-react'
+import { ArrowLeft, Pencil, Settings, Trash2 } from 'lucide-react'
 
 export function TherapistDashboard() {
-  const { exercises } = useAppData()
+  const { exercises, deleteExercise } = useAppData()
   const [tab, setTab] = useState('creator')
   const [selectedPatientId, setSelectedPatientId] = useState<string | undefined>()
   const [selectedExerciseId, setSelectedExerciseId] = useState<string | undefined>()
+  const [pendingDeleteExercise, setPendingDeleteExercise] = useState(false)
 
   function openPatientAnalytics(patientId: string) {
     setSelectedPatientId(patientId)
@@ -25,12 +25,20 @@ export function TherapistDashboard() {
 
   function openExerciseAnalytics(exerciseId: string) {
     setSelectedExerciseId(exerciseId)
+    setPendingDeleteExercise(false)
     setTab('exercise-analytics')
   }
 
   function openExerciseFineTune(exerciseId: string) {
     setSelectedExerciseId(exerciseId)
     setTab('exercise-finetune')
+  }
+
+  function confirmDeleteExercise() {
+    if (!selectedExerciseId) return
+    deleteExercise(selectedExerciseId)
+    setPendingDeleteExercise(false)
+    setTab('creator')
   }
 
   const selectedExercise = exercises.find((e) => e.id === selectedExerciseId)
@@ -60,10 +68,7 @@ export function TherapistDashboard() {
                 Build a rehabilitation protocol and review how patients are tracking against it.
               </p>
             </div>
-            <div className="flex flex-col gap-6">
-              <ProtocolBuilder />
-              <ExerciseAnalyticsList onSelectExercise={openExerciseAnalytics} />
-            </div>
+            <ProtocolBuilder onSelectExercise={openExerciseAnalytics} />
           </>
         )}
 
@@ -79,12 +84,33 @@ export function TherapistDashboard() {
                 <p className="mt-1.5 text-[15px] text-ink-muted">Optimization analytics for this exercise.</p>
               </div>
               <Button size="sm" onClick={() => openExerciseFineTune(selectedExerciseId)}>
-                <SlidersHorizontal className="h-3.5 w-3.5" />
-                Fine-tune Exercise
+                <Pencil className="h-3.5 w-3.5" />
+                Edit Exercise
               </Button>
             </div>
             {selectedExercise ? (
-              <ExerciseOptimizationMetrics key={selectedExerciseId} exercise={selectedExercise} />
+              <>
+                <ExerciseOptimizationMetrics key={selectedExerciseId} exercise={selectedExercise} />
+                <div className="mt-8 flex justify-center">
+                  {pendingDeleteExercise ? (
+                    <div className="flex items-center gap-3">
+                      <span className="text-[13px] text-ink-muted">Delete this exercise?</span>
+                      <Button variant="ghost" size="sm" onClick={() => setPendingDeleteExercise(false)}>
+                        Cancel
+                      </Button>
+                      <Button variant="danger" size="sm" onClick={confirmDeleteExercise}>
+                        <Trash2 className="h-3.5 w-3.5" />
+                        Delete
+                      </Button>
+                    </div>
+                  ) : (
+                    <Button variant="danger" size="sm" onClick={() => setPendingDeleteExercise(true)}>
+                      <Trash2 className="h-3.5 w-3.5" />
+                      Delete Exercise
+                    </Button>
+                  )}
+                </div>
+              </>
             ) : (
               <Card className="p-7 text-center">
                 <p className="text-[14px] text-ink-muted">This exercise no longer exists — it may have just been deleted.</p>

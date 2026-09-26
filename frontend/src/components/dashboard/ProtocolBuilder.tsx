@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Pencil, Plus, Trash2 } from 'lucide-react'
+import { ChevronRight, Plus } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
@@ -7,7 +7,7 @@ import { ExerciseFormFields } from './ExerciseFormFields'
 import { useAppData } from '@/lib/data/AppDataContext'
 import { useExerciseForm } from '@/lib/useExerciseForm'
 import { podLabel } from '@/lib/podUtils'
-import type { AngleConfig, Exercise } from '@/types'
+import type { AngleConfig } from '@/types'
 
 export function describeAngleConfigs(configs: AngleConfig[]): string {
   if (configs.length === 0) return 'No angles configured'
@@ -15,12 +15,16 @@ export function describeAngleConfigs(configs: AngleConfig[]): string {
   return configs.length === 1 ? first : `${first} +${configs.length - 1} more`
 }
 
-export function ProtocolBuilder() {
-  const { exercises, patients, addExercise, updateExercise, deleteExercise } = useAppData()
+/**
+ * Creates new exercises and lists existing ones; tapping a row opens that
+ * exercise's Optimization Analytics page (editing and deleting now live
+ * there instead of inline icons here, to avoid duplicating the same actions
+ * in two places).
+ */
+export function ProtocolBuilder({ onSelectExercise }: { onSelectExercise: (exerciseId: string) => void }) {
+  const { exercises, patients, addExercise } = useAppData()
   const [mode, setMode] = useState<'list' | 'form'>('list')
-  const [editingId, setEditingId] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
-  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
   const {
     form,
     setForm,
@@ -40,30 +44,14 @@ export function ProtocolBuilder() {
     buildPayload,
   } = useExerciseForm()
 
-  function confirmDelete(id: string) {
-    deleteExercise(id)
-    setPendingDeleteId(null)
-  }
-
   function startCreate() {
-    setEditingId(null)
     resetForm()
-    setMode('form')
-  }
-
-  function startEdit(ex: Exercise) {
-    setEditingId(ex.id)
-    resetForm(ex)
     setMode('form')
   }
 
   function handleSave() {
     if (!canSave) return
-    if (editingId) {
-      updateExercise(editingId, buildPayload())
-    } else {
-      addExercise(buildPayload())
-    }
+    addExercise(buildPayload())
     setSaved(true)
     setTimeout(() => setSaved(false), 1500)
     setMode('list')
@@ -73,7 +61,7 @@ export function ProtocolBuilder() {
     return (
       <Card className="p-7">
         <div className="mb-6">
-          <h2 className="text-[15px] font-semibold text-ink">{editingId ? 'Edit Exercise' : 'New Exercise'}</h2>
+          <h2 className="text-[15px] font-semibold text-ink">New Exercise</h2>
           <p className="text-[13px] text-ink-faint">Define biomechanical thresholds prescribed for this exercise</p>
         </div>
         <ExerciseFormFields
@@ -94,7 +82,7 @@ export function ProtocolBuilder() {
           canSave={canSave}
           onSave={handleSave}
           onCancel={() => setMode('list')}
-          saveLabel={editingId ? 'Save Changes' : 'Save Protocol'}
+          saveLabel="Save Protocol"
         />
       </Card>
     )
@@ -129,7 +117,12 @@ export function ProtocolBuilder() {
           {exercises.map((ex) => {
             const assignedPatient = patients.find((p) => p.id === ex.assignedPatientId)
             return (
-              <div key={ex.id} className="flex flex-wrap items-start justify-between gap-3 rounded-xl bg-surface-secondary p-4">
+              <button
+                key={ex.id}
+                type="button"
+                onClick={() => onSelectExercise(ex.id)}
+                className="flex w-full flex-wrap items-start justify-between gap-3 rounded-xl bg-surface-secondary p-4 text-left transition-colors duration-200 hover:bg-surface-hover"
+              >
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-[14px] font-semibold text-ink">{ex.title}</p>
                   <div className="mt-1 flex flex-wrap items-center gap-2">
@@ -142,28 +135,8 @@ export function ProtocolBuilder() {
                   </div>
                   <p className="mt-1 truncate text-[13px] text-ink-faint">{describeAngleConfigs(ex.angleConfigs)}</p>
                 </div>
-                {pendingDeleteId === ex.id ? (
-                  <div className="flex flex-shrink-0 items-center gap-2">
-                    <span className="text-[13px] text-ink-muted">Delete this exercise?</span>
-                    <Button variant="ghost" size="sm" onClick={() => setPendingDeleteId(null)}>
-                      Cancel
-                    </Button>
-                    <Button variant="danger" size="sm" onClick={() => confirmDelete(ex.id)}>
-                      <Trash2 className="h-3.5 w-3.5" />
-                      Delete
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="flex flex-shrink-0 gap-2">
-                    <Button variant="ghost" size="sm" onClick={() => startEdit(ex)}>
-                      <Pencil className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button variant="ghost" size="sm" onClick={() => setPendingDeleteId(ex.id)}>
-                      <Trash2 className="h-3.5 w-3.5 text-crimson" />
-                    </Button>
-                  </div>
-                )}
-              </div>
+                <ChevronRight className="h-4 w-4 flex-shrink-0 text-ink-faint" />
+              </button>
             )
           })}
         </div>
