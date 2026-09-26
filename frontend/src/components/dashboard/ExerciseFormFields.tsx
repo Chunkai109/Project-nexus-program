@@ -225,10 +225,7 @@ export function ExerciseFormFields({
                   {form.angleConfigs.length > 0 ? `${form.angleConfigs.length} Confirmed` : 'Pending'}
                 </span>
               </div>
-              <p className="mb-4 text-[13px] text-ink-muted">
-                Tap a joint below, dial in the ROM range, then confirm to save it as a tracked angle for this exercise.
-              </p>
-              <JointPicker selectedJointId={form.draftJointId} onSelect={selectDraftJoint} height={220} />
+              <JointPicker selectedJointId={form.draftJointId} onSelect={selectDraftJoint} height={280} />
               <div className="mt-4 text-center text-[13px]">
                 {!draftJoint && <span className="text-ink-faint">No joint selected yet</span>}
                 {draftJoint && <span className="font-medium text-accent">{draftJoint.label} selected</span>}
