@@ -5,25 +5,37 @@ web app over WebSockets. The board hosts its own WiFi network and a
 WebSocket server — your phone or laptop connects straight to it, no router
 or internet required.
 
+This sketch implements a bicep curl feedback rig: two MPU6050 IMUs (forearm
+flexion + upper-arm drift, for cheat-rep detection), an EMG sensor, an
+on-device rep counter, and a vibration motor that fires both automatically
+(on strong contraction) and on command from the dashboard.
+
 ## What you need
 
 - An ESP32 dev board (written against an ESP32-WROOM-32D)
-- An MPU6050 IMU breakout, wired over I2C
-- (Optional) a vibration motor for haptic feedback, driven through a transistor
+- Two MPU6050 IMU breakouts, wired over the same I2C bus at different
+  addresses (via the AD0 pin)
+- An EMG sensor module with an analog envelope output
+- A vibration motor for haptic feedback, driven through a transistor
 
 ## Wiring
 
-| MPU6050 pin | ESP32 pin      |
-|-------------|----------------|
-| VCC         | 3V3            |
-| GND         | GND            |
-| SDA         | GPIO 21        |
-| SCL         | GPIO 22        |
+| Component            | Pin(s)          | ESP32 pin |
+|-----------------------|-----------------|-----------|
+| MPU6050 #1 (forearm)  | VCC / GND       | 3V3 / GND |
+|                        | SDA / SCL       | GPIO 21 / GPIO 22 |
+|                        | AD0             | GND (address `0x68`) |
+| MPU6050 #2 (upper arm)| VCC / GND       | 3V3 / GND |
+|                        | SDA / SCL       | GPIO 21 / GPIO 22 (shared bus) |
+|                        | AD0             | 3.3V (address `0x69`) |
+| EMG sensor            | Signal / envelope out | GPIO 35 (ADC1) |
+| Vibration motor       | Control         | GPIO 25, through an NPN transistor |
 
-If you have a vibration motor, wire it through an NPN transistor (or a motor
-driver) switched by **GPIO 4**, not directly to the pin — a GPIO can't
-supply the current a motor needs. If you don't have one wired yet, the
-firmware still runs fine; haptic commands just have no physical effect.
+Both MPU6050s share the same I2C bus (SDA/SCL) — tying one's `AD0` pin to
+GND and the other's to 3.3V gives them different addresses (`0x68`/`0x69`)
+so the ESP32 can read them independently. Wire the vibration motor through
+a transistor or motor driver, not directly to the GPIO — it can't supply
+the current a motor needs.
 
 ## Arduino IDE setup
 
@@ -36,14 +48,16 @@ firmware still runs fine; haptic commands just have no physical effect.
    Module") and pick the correct *Port*.
 3. Install these libraries via *Sketch > Include Library > Manage Libraries*:
    - **WebSockets** by Markus Sattler (Links2004)
-   - **MPU6050_light** by rfetick
    - **ArduinoJson** by Benoit Blanchon — version 7.x
+
+   (No IMU library is needed — this sketch talks to the MPU6050s directly
+   over I2C registers.)
 4. Open `smartphysio_hub/smartphysio_hub.ino` and click Upload.
-5. Open the Serial Monitor at **115200 baud**. On boot it calibrates the
-   MPU6050 (keep the pod still for a second) and then prints the WebSocket
+5. Open the Serial Monitor at **115200 baud**. On boot it calibrates both
+   gyros (keep the arm still for a second) and then prints the WebSocket
    address to connect to, e.g.:
    ```
-   Access point "SmartPhysio-Hub" started. Connect the app to ws://192.168.4.1:81
+   Access point "SmartPhysio-Hub" started. Connect the dashboard to ws://192.168.4.1:81
    ```
 
 ## Connecting from the app
@@ -57,11 +71,29 @@ Because the ESP32 *is* the WiFi network, joining it disconnects your device
 from any other WiFi (and its internet access) for as long as you're paired —
 that's expected.
 
-## Changing which pod this board reports as
+## Pod ID mapping
 
-The app's placement guide treats pods 3–4 as the knee IMU/haptic pair. If
-you're strapping the sensor somewhere else, change `POD_ID` near the top of
-the sketch to match.
+| Pod ID | Sensor                          |
+|--------|----------------------------------|
+| 1      | EMG envelope (bicep)             |
+| 2      | MPU6050 #1 — forearm flexion     |
+| 3      | MPU6050 #2 — upper-arm drift     |
+
+Change the `POD_EMG` / `POD_FOREARM` / `POD_UPPERARM` constants near the top
+of the sketch if you want the dashboard to see these under different pod
+slots.
+
+## Vibration motor behavior
+
+The motor fires under two independent conditions, either of which turns it
+on:
+
+- **Automatic**: EMG activation crosses `EMG_THRESHOLD` while flexion is
+  past `CONTRACTION_LIMIT` — the original on-device form feedback.
+- **Commanded**: the dashboard sends a `{"type":"haptic", ...}` message
+  (e.g. the Sensor Setup screen's "Test Pod Vibration" button). This board
+  only has one motor, so a haptic command pulses it regardless of which
+  podId the app addressed.
 
 ## Protocol
 
@@ -69,17 +101,13 @@ The exact JSON message shapes this firmware sends and accepts are documented
 in [`frontend/src/lib/hub/protocol.ts`](../frontend/src/lib/hub/protocol.ts).
 In short:
 
-- Hub → app: `{"type":"imu","podId":3,"pitch":12.3,"roll":-4.1,"yaw":0.8}`
-  roughly 20 times a second, plus a `{"type":"status", ...}` battery/signal
-  message every 2 seconds.
-- App → hub: `{"type":"haptic","podId":3,"durationMs":400}` to pulse the
+- Hub → app, roughly 50 times a second: `{"type":"imu","podId":2,"pitch":12.3,"roll":-4.1,"yaw":0.8}`
+  and `{"type":"emg","podId":1,"vrms":0.34}`, plus `{"type":"status", ...}`
+  battery/signal messages every 2 seconds.
+- App → hub: `{"type":"haptic","podId":2,"durationMs":400}` to pulse the
   vibration motor.
 
-## Adding EMG later
-
-The web app's calibration flow and protocol already support an `"emg"`
-message type (normalized 0–1 muscle activation per pod), but this sketch
-doesn't send one yet since no EMG hardware is wired up. To add it: read an
-EMG sensor's rectified/filtered output on an ADC pin, normalize it to 0–1,
-and broadcast `{"type":"emg","podId":<id>,"vrms":<0..1>}` on the same timer
-as the IMU packets above.
+Rep counting, the cheat-rep drift check, and the automatic vibration trigger
+all run entirely on the ESP32 — the WebSocket link is for the dashboard to
+observe live sensor data and to trigger the motor manually, not something
+the rep logic depends on.
