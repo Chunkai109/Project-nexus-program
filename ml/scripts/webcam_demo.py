@@ -62,6 +62,31 @@ def draw_skeleton(frame, pose_landmarks, w, h):
         cv2.circle(frame, (x, y), 3, (0, 0, 255), -1)
 
 
+def print_diagnostics(result_dict):
+    """Prints whether this session's features actually resemble training
+    data. If confidence/good_form_score looks wrong, this is the first
+    thing to check -- and the first thing to paste back for further
+    diagnosis: a low/negative novelty_score or large |z| values here point
+    to a live-capture/training data mismatch, not a model/architecture
+    problem (see feature_reference_stats.json, built from the training
+    dev pool, and novelty_detector.joblib).
+    """
+    novelty_score = result_dict.get("novelty_score")
+    novelty_threshold = result_dict.get("novelty_threshold")
+    if novelty_score is not None:
+        margin = novelty_score - novelty_threshold
+        flag = "" if margin > 0.03 else " <-- CLOSE TO or PAST the reject threshold"
+        print(f"  [diagnostic] novelty_score={novelty_score:.4f} "
+              f"(reject threshold={novelty_threshold:.4f}, margin={margin:.4f}){flag}")
+    diagnostics = result_dict.get("feature_diagnostics") or []
+    if diagnostics:
+        print("  [diagnostic] most unusual features vs training data (|z-score| > 2 is notable):")
+        for row in diagnostics:
+            flag = " <-- FAR from training data" if abs(row["z_score"]) > 2 else ""
+            print(f"    {row['feature']:30s} value={row['value']:.3f}  "
+                  f"training_mean={row['training_mean']:.3f}  z={row['z_score']:+.2f}{flag}")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", required=True, help="path to pose_landmarker_lite.task")
@@ -136,12 +161,14 @@ def main():
                 else:
                     last_result_text = f"{score:.0%} good form (likely issue: {result_dict['prediction']})"
                 print(result_dict)
+                print_diagnostics(result_dict)
             elif result_dict.get("prediction") == "no_exercise_detected":
                 last_result_text = "No exercise detected (not enough arm movement)"
                 print(result_dict)
             elif result_dict.get("prediction") == "unrecognized_movement":
                 last_result_text = "Movement detected, but doesn't look like a bicep curl"
                 print(result_dict)
+                print_diagnostics(result_dict)
             elif result_dict:
                 last_result_text = result_dict.get("error", "no prediction")
                 print(last_result_text)

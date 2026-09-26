@@ -99,6 +99,12 @@ class BicepCurlPredictor:
             with open(novelty_config_path) as f:
                 self.novelty_threshold = json.load(f)["threshold"]
 
+        reference_path = model_dir / "feature_reference_stats.json"
+        self.feature_reference = None
+        if reference_path.exists():
+            with open(reference_path) as f:
+                self.feature_reference = json.load(f)
+
         self._normalizer: SequenceNormalizer | None = None
         self._extractor: FeatureExtractor | None = None
         self._per_frame_features: list[np.ndarray] = []
@@ -119,17 +125,28 @@ class BicepCurlPredictor:
         thresholds = self.rest_gate["rejection_thresholds"]
         return all(agg_by_name[feat] < thresh for feat, thresh in thresholds.items())
 
-    def _check_novelty(self, agg_full: np.ndarray) -> bool:
-        """Return True if this session's full feature profile doesn't
-        statistically resemble any real curl (see train.py's
-        build_novelty_detector()) -- catches non-curl movement that has real
-        motion (so the rest gate wouldn't catch it), e.g. a different
-        exercise or arbitrary arm movement.
+    def _feature_diagnostics(self, agg_by_name: dict, top_n: int = 6) -> list[dict]:
+        """Z-score every engineered feature against the training (dev-pool)
+        distribution and return the top_n most anomalous ones. This is what
+        distinguishes "the model is unsure between two plausible classes"
+        (all z-scores modest) from "this input doesn't resemble training
+        data at all" (several large |z|) -- the actual diagnostic for a
+        confidence problem, rather than guessing at architecture/data
+        causes with no evidence from the live session itself.
         """
-        if self.novelty_detector is None:
-            return False
-        score = self.novelty_detector.decision_function(agg_full.reshape(1, -1))[0]
-        return score < self.novelty_threshold
+        if self.feature_reference is None:
+            return []
+        rows = []
+        for feat, value in agg_by_name.items():
+            ref = self.feature_reference.get(feat)
+            if ref is None or ref["std"] == 0:
+                continue
+            z = (value - ref["mean"]) / ref["std"]
+            rows.append({"feature": feat, "value": float(value), "z_score": float(z),
+                         "training_mean": ref["mean"], "training_range": [ref["min"], ref["max"]]})
+        rows.sort(key=lambda r: abs(r["z_score"]), reverse=True)
+        return rows[:top_n]
+
 
     def start_session(self, active_side: str | None = None, use_wallclock_duration: bool = True):
         """Begin buffering a new repetition/set.
@@ -219,7 +236,11 @@ class BicepCurlPredictor:
                 "num_frames": n_frames,
             }
 
-        if self._check_novelty(agg_full):
+        novelty_score = None
+        if self.novelty_detector is not None:
+            novelty_score = float(self.novelty_detector.decision_function(agg_full.reshape(1, -1))[0])
+
+        if novelty_score is not None and novelty_score < self.novelty_threshold:
             return {
                 "exercise": "bicep_curl",
                 "prediction": "unrecognized_movement",
@@ -230,6 +251,9 @@ class BicepCurlPredictor:
                     "quality) -- this looks like a different exercise or unrelated "
                     "movement, so no quality class was guessed."
                 ),
+                "novelty_score": novelty_score,
+                "novelty_threshold": self.novelty_threshold,
+                "feature_diagnostics": self._feature_diagnostics(agg_by_name),
                 "num_frames": n_frames,
             }
 
@@ -272,6 +296,16 @@ class BicepCurlPredictor:
             "class_probabilities": {c: float(p) for c, p in zip(CLASS_NAMES, proba)},
             "num_frames": n_frames,
             "duration_seconds": duration_seconds,
+            # Diagnostic fields -- if confidence/good_form_score looks wrong,
+            # check these first: a low novelty_score close to (or past)
+            # novelty_threshold, or large |z_score| values in
+            # feature_diagnostics, means the live input's engineered
+            # features don't resemble training data at all, which explains
+            # near-chance-level confidence far better than "wrong model
+            # architecture" would.
+            "novelty_score": novelty_score,
+            "novelty_threshold": self.novelty_threshold,
+            "feature_diagnostics": self._feature_diagnostics(agg_by_name),
         }
 
     def predict_full_sequence(self, frames: np.ndarray, active_side: str | None = None) -> dict:

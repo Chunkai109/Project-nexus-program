@@ -487,6 +487,16 @@ def main():
     # anything statistically unlike all of that as an outlier.
     build_novelty_detector(dev_df)
 
+    # === 7. Feature reference stats (for live diagnostics) ===
+    # Saves per-feature mean/std/min/max over the dev pool so predictor.py
+    # can report, for any live session, which specific engineered features
+    # look statistically unlike training data (a z-score per feature) --
+    # this is what actually distinguishes "the model is unsure between two
+    # plausible classes" from "the live input doesn't resemble training data
+    # at all" (e.g. camera framing, real MediaPipe noise vs. the clean
+    # synthetic-style training clips) rather than guessing at the cause.
+    build_feature_reference_stats(dev_df)
+
     print(f"\nSaved final model ({model_type_saved}) and artifacts to {MODEL_DIR}")
     print("Run scripts/evaluate.py next to evaluate on the held-out TEST base_ids.")
 
@@ -581,6 +591,18 @@ def build_novelty_detector(dev_df: pd.DataFrame, false_reject_rate: float = 0.02
     print(f"\nNovelty detector: threshold={threshold:.4f} "
           f"(dev-pool scores range {scores.min():.4f} to {scores.max():.4f})")
     return detector, config
+
+
+def build_feature_reference_stats(dev_df: pd.DataFrame):
+    stats = {}
+    for f in AGGREGATE_FEATURE_NAMES:
+        vals = dev_df[f].values
+        stats[f] = {"mean": float(vals.mean()), "std": float(vals.std()),
+                    "min": float(vals.min()), "max": float(vals.max())}
+    with open(MODEL_DIR / "feature_reference_stats.json", "w") as f:
+        json.dump(stats, f, indent=2)
+    print(f"\nSaved feature reference stats (dev pool mean/std/min/max) for live diagnostics")
+    return stats
 
 
 def build_rest_gate_config(seq_df: pd.DataFrame, safety_factor: float = 0.5):
