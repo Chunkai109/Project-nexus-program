@@ -144,6 +144,80 @@ complementary gates run before the classifier ever sees the input:
    `false_reject_rate` parameter is the knob if broader coverage is wanted
    at the cost of more false rejects on genuine attempts.
 
+## Synthetic augmentation of the training split (tried, did not help)
+
+The training set is only 34 independent recordings, and no more real data is
+available. The dataset's pre-generated `_aug_0`..`_aug_9` copies already vary
+playback speed (±20%), body scale (±10%), and per-coordinate noise
+(std ≈0.013–0.02m), but never camera angle or non-uniform tempo. Two new
+transform types were built to fill that gap, in `synthetic_augment.py`:
+
+- **Rotation**: rigid rotation about the vertical axis through the hip
+  center, uniform `[-15°, +15°]` per copy. A rigid transform, so
+  `torso_scale` and every joint-angle feature (`elbow_angle_active`,
+  `elbow_angle_other`, `torso_lean_angle`) are exactly preserved
+  mathematically -- verified with a regression test
+  (`scripts/verify_synthetic_augmentation.py`) showing <3e-14 deviation on
+  those features for a rotated copy, while `elbow_forward_drift_active` (a
+  raw x-axis projection, not rotation-invariant) changes as expected.
+- **Segment time-warp**: split into up to 3 roughly-equal segments and
+  resample each independently at its own speed factor (uniform
+  `[0.80, 1.25]`), simulating asymmetric tempo (e.g. a slower controlled
+  negative) that the existing uniform-speed augmentation can't express.
+
+5 extra copies per training-split source recording (`--n-synthetic-extra`),
+generated **only from `_orig` sequences already assigned to `train`** --
+the base_id split is computed first, from the 49 real recordings alone,
+*before* any synthetic copy exists, so synthetic copies can never leak into
+val/test. Verified two ways: an in-code assertion
+(`synthetic sequences leaked outside the train split`) that would fail
+loudly, and a regression check confirming `base_id_split.json` and the
+val/test row counts in `sequence_features.csv` are byte-identical with
+`--n-synthetic-extra 0` vs `5`.
+
+**Result: none of the three configurations beat the committed baseline.**
+Each was trained as an isolated `--tag`ged experiment (own
+`data/processed_<tag>/`, `models/best_model_<tag>/`, gitignored) so the
+comparison never touched the committed model, and promotion required the
+new run's CV macro-F1 lower ±1-std bound to clear the baseline's upper
+±1-std bound -- not just a nominally higher number:
+
+| configuration | dev-pool CV macro-F1 | train-vs-CV gap | clears promotion bar? |
+|---|---|---|---|
+| **baseline (committed, no synthetic extras)** | **0.8850 ± 0.0487** | 0.101 | -- |
+| rotation only (`synth_rotation`) | 0.8726 ± 0.1036 | 0.119 | no |
+| time-warp only (`synth_warp`) | 0.8438 ± 0.1023 | 0.149 | no |
+| both combined (`synth_both`) | 0.8712 ± 0.0980 | 0.120 | no |
+
+All three came in at or below the baseline's point estimate *and* roughly
+doubled its CV fold-to-fold variance (std ≈0.10 vs. 0.049) -- consistent
+with adding more redundant copies of the same 34 underlying performances
+diluting each GroupKFold fold's effective diversity rather than adding real
+new information. `sequence_length` stayed the #1 feature by importance and
+`reduced`/`random_forest` stayed the winning classical setting in every
+tagged run, so there's no structural drift to explain away -- the
+augmentation itself simply didn't generalize better. Per-joint noise and an
+N=3/N=8 sensitivity sweep (planned as follow-ups only if rotation/warp
+showed a real effect) were not run, since none did. **The committed
+baseline (`data/processed/`, `models/best_model/`, `results/`) is
+unchanged** -- this was a genuine search with a negative result, reported
+the same way the earlier regularization search was.
+
+**This was always going to be a mitigation, not a fix, even in the best
+case.** Rotating and time-warping already-reconstructed 3D landmarks is not
+the same as re-filming from a different angle and re-running MediaPipe's
+own angle-dependent pose estimator on new pixels -- it cannot introduce the
+real angle-dependent noise, occlusion, or estimation error a genuinely new
+camera position would produce, and because no additional real data exists
+at all (not even a small hand-labeled validation set), any such improvement
+could only ever be checked against synthetic variants of the same 34
+recordings, never confirmed under real camera or lighting conditions. That
+ceiling turned out to bind immediately: the negative result above is
+consistent with "more synthetic copies of the same 34 performances" simply
+not being a substitute for independent real data, not with a bug in the
+transforms (which passed their own correctness checks independently, see
+`verify_synthetic_augmentation.py`).
+
 ## Reproducing
 
 ```bash
@@ -153,6 +227,16 @@ python -m ml.scripts.evaluate
 python -m ml.scripts.predict --csv /path/to/bicep_with_incomplete.csv
 ```
 
+To reproduce (or re-run) the synthetic augmentation experiment above without
+touching the committed baseline:
+
+```bash
+python -m ml.scripts.prepare_dataset --csv /path/to/bicep_with_incomplete.csv \
+    --tag synth_both --n-synthetic-extra 5 --synthetic-mode both
+python -m ml.scripts.train --tag synth_both
+python -m ml.scripts.verify_synthetic_augmentation --csv /path/to/bicep_with_incomplete.csv
+```
+
 ## Structure
 
 ```
@@ -160,6 +244,8 @@ data/raw/            # place reduced.csv here (git-ignored, not committed)
 data/processed/      # prepare_dataset.py outputs (features, splits, reports)
 models/best_model/   # trained model + training_config.json + candidates/
 results/             # confusion matrices, classification reports, curves
+*_<tag>/              # --tag-scoped experiment output (e.g. best_model_synth_both/);
+                      # gitignored and disposable, never the committed baseline
 src/preprocessing/    # landmark schema + causal normalization (shared train/inference)
 src/features/         # causal feature engineering (shared train/inference)
 src/models/           # LSTM model/dataset + fixed label mapping
