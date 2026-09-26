@@ -54,11 +54,16 @@ export function LiveSession() {
     : null
   const activeHapticPod = faultActive ? hapticPod : null
 
-  // Real EMG pods (1 = left vastus medialis, 2 = right) when a hub is
-  // connected; otherwise the wearable simulator, same as the knee angle above.
-  const usingHubEmg = hubConnected
-  const emgLeft = usingHubEmg ? Math.round(hub.pods[1]?.emgActivationPct ?? 0) : simulated.emgLeft
-  const emgRight = usingHubEmg ? Math.round(hub.pods[2]?.emgActivationPct ?? 0) : simulated.emgRight
+  // Real EMG pods (1 = left vastus medialis, 2 = right) once that specific
+  // pod has actually reported an EMG reading; otherwise the wearable
+  // simulator, same as the knee angle above. This is independent of
+  // hubConnected since a real hub (e.g. IMU-only hardware) may not have EMG
+  // wired up at all yet.
+  const emgLeftLive = hub.pods[1]?.emgActivationPct
+  const emgRightLive = hub.pods[2]?.emgActivationPct
+  const usingHubEmg = emgLeftLive !== undefined || emgRightLive !== undefined
+  const emgLeft = emgLeftLive !== undefined ? Math.round(emgLeftLive) : simulated.emgLeft
+  const emgRight = emgRightLive !== undefined ? Math.round(emgRightLive) : simulated.emgRight
 
   // Closed-loop correction: when a real hub is connected, tell it to buzz
   // the monitored knee pod the instant a fault starts, rather than only
