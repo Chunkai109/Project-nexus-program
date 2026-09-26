@@ -336,9 +336,10 @@ export function ExerciseFormFields({
                 </span>
               </div>
               <p className="mb-4 text-[13px] text-ink-muted">
-                Tap a node below to reveal its muscle group, then pick the specific muscle within it from the dropdown.
+                Drag to rotate the figure, then tap a node to reveal its muscle group — Chest and Back sit on opposite
+                sides, so rotate to reach the back. Pick the specific muscle from the dropdown below.
               </p>
-              <MuscleGroupPicker selectedGroupId={form.draftMuscleGroupId} onSelect={selectDraftMuscleGroup} height={220} />
+              <MuscleGroupPicker selectedGroupId={form.draftMuscleGroupId} onSelect={selectDraftMuscleGroup} height={280} />
               <div className="my-4 text-center text-[13px]">
                 {!draftGroup && <span className="text-ink-faint">No muscle group selected yet</span>}
                 {draftGroup && <span className="font-medium text-accent">{draftGroup.label} selected</span>}
