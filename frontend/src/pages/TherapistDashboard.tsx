@@ -83,34 +83,32 @@ export function TherapistDashboard() {
                 <h1 className="text-[28px] font-semibold tracking-tight text-ink">{selectedExercise?.title ?? 'Exercise'}</h1>
                 <p className="mt-1.5 text-[15px] text-ink-muted">Optimization analytics for this exercise.</p>
               </div>
-              <Button size="sm" onClick={() => openExerciseFineTune(selectedExerciseId)}>
-                <Pencil className="h-3.5 w-3.5" />
-                Edit Exercise
-              </Button>
+              {pendingDeleteExercise ? (
+                <div className="flex items-center gap-2">
+                  <span className="text-[13px] text-ink-muted">Delete this exercise?</span>
+                  <Button variant="ghost" size="sm" onClick={() => setPendingDeleteExercise(false)}>
+                    Cancel
+                  </Button>
+                  <Button variant="danger" size="sm" onClick={confirmDeleteExercise}>
+                    <Trash2 className="h-3.5 w-3.5" />
+                    Delete
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <Button size="sm" onClick={() => openExerciseFineTune(selectedExerciseId)}>
+                    <Pencil className="h-3.5 w-3.5" />
+                    Edit Exercise
+                  </Button>
+                  <Button variant="danger" size="sm" onClick={() => setPendingDeleteExercise(true)}>
+                    <Trash2 className="h-3.5 w-3.5" />
+                    Delete Exercise
+                  </Button>
+                </div>
+              )}
             </div>
             {selectedExercise ? (
-              <>
-                <ExerciseOptimizationMetrics key={selectedExerciseId} exercise={selectedExercise} />
-                <div className="mt-8 flex justify-center">
-                  {pendingDeleteExercise ? (
-                    <div className="flex items-center gap-3">
-                      <span className="text-[13px] text-ink-muted">Delete this exercise?</span>
-                      <Button variant="ghost" size="sm" onClick={() => setPendingDeleteExercise(false)}>
-                        Cancel
-                      </Button>
-                      <Button variant="danger" size="sm" onClick={confirmDeleteExercise}>
-                        <Trash2 className="h-3.5 w-3.5" />
-                        Delete
-                      </Button>
-                    </div>
-                  ) : (
-                    <Button variant="danger" size="sm" onClick={() => setPendingDeleteExercise(true)}>
-                      <Trash2 className="h-3.5 w-3.5" />
-                      Delete Exercise
-                    </Button>
-                  )}
-                </div>
-              </>
+              <ExerciseOptimizationMetrics key={selectedExerciseId} exercise={selectedExercise} />
             ) : (
               <Card className="p-7 text-center">
                 <p className="text-[14px] text-ink-muted">This exercise no longer exists — it may have just been deleted.</p>
