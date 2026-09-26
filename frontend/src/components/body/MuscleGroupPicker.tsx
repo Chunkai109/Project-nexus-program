@@ -1,83 +1,47 @@
-import { useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { Canvas, useThree } from '@react-three/fiber'
+import { Suspense, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { Canvas, useLoader, useThree } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
+import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js'
 import * as THREE from 'three'
 import { useTheme } from '@/lib/ThemeContext'
 
-/** Bilateral regions get two markers (both select the same group); Chest/Back/Core get one each, split front vs. rear so rotating the figure is what reveals Back. */
+/** The scanned human mesh is ~20.7 units tall in its own coordinate space; this brings it down to the ~1.8-unit scene scale the camera/OrbitControls are tuned for. */
+const MODEL_SCALE = 0.087
+
+/**
+ * Marker positions are authored in the model's own (pre-scale) coordinate
+ * space, then converted once below — much easier to eyeball against the raw
+ * mesh than working in the tiny post-scale numbers. Each is pushed outward
+ * past the body's actual surface at that point (verified empirically) so the
+ * opaque mesh in front of it never blocks the raycast; bilateral regions get
+ * two markers that both select the same group.
+ */
+const RAW_MARKERS: { id: string; groupId: string; position: [number, number, number] }[] = [
+  { id: 'chest', groupId: 'chest', position: [0, 15.3, 2.2] },
+  { id: 'back', groupId: 'back', position: [0, 15.3, -2.5] },
+  { id: 'core', groupId: 'core', position: [0, 11.3, 2.0] },
+  { id: 'left-shoulder', groupId: 'shoulder', position: [-2.0, 17.0, 0.6] },
+  { id: 'right-shoulder', groupId: 'shoulder', position: [2.0, 17.0, 0.6] },
+  { id: 'left-arm', groupId: 'arm', position: [-3.4, 13.6, 0.3] },
+  { id: 'right-arm', groupId: 'arm', position: [3.4, 13.6, 0.3] },
+  { id: 'left-forearm', groupId: 'forearm', position: [-5.2, 10.6, 0.2] },
+  { id: 'right-forearm', groupId: 'forearm', position: [5.2, 10.6, 0.2] },
+  { id: 'left-upper-leg', groupId: 'upper-leg', position: [-1.6, 8.0, 1.6] },
+  { id: 'right-upper-leg', groupId: 'upper-leg', position: [1.6, 8.0, 1.6] },
+  { id: 'left-lower-leg', groupId: 'lower-leg', position: [-1.3, 3.3, 1.3] },
+  { id: 'right-lower-leg', groupId: 'lower-leg', position: [1.3, 3.3, 1.3] },
+]
+
 interface GroupMarker {
   id: string
   groupId: string
   position: [number, number, number]
 }
 
-const MARKERS: GroupMarker[] = [
-  { id: 'chest', groupId: 'chest', position: [0, 1.28, 0.2] },
-  { id: 'back', groupId: 'back', position: [0, 1.28, -0.2] },
-  { id: 'core', groupId: 'core', position: [0, 1.02, 0.2] },
-  { id: 'left-shoulder', groupId: 'shoulder', position: [-0.22, 1.48, 0] },
-  { id: 'right-shoulder', groupId: 'shoulder', position: [0.22, 1.48, 0] },
-  { id: 'left-arm', groupId: 'arm', position: [-0.26, 1.32, 0] },
-  { id: 'right-arm', groupId: 'arm', position: [0.26, 1.32, 0] },
-  { id: 'left-forearm', groupId: 'forearm', position: [-0.31, 1.0, 0] },
-  { id: 'right-forearm', groupId: 'forearm', position: [0.31, 1.0, 0] },
-  { id: 'left-upper-leg', groupId: 'upper-leg', position: [-0.12, 0.75, 0] },
-  { id: 'right-upper-leg', groupId: 'upper-leg', position: [0.12, 0.75, 0] },
-  { id: 'left-lower-leg', groupId: 'lower-leg', position: [-0.12, 0.35, 0] },
-  { id: 'right-lower-leg', groupId: 'lower-leg', position: [0.12, 0.35, 0] },
-]
-
-/** Skeleton "bones" — thin cylinders between two joints, purely visual context for the markers. */
-const BONES: [[number, number, number], [number, number, number]][] = [
-  [[0, 1.5, 0], [0, 0.95, 0]], // spine
-  [[0, 1.62, 0], [0, 1.5, 0]], // neck
-  [[0, 1.5, 0], [-0.22, 1.48, 0]], // left clavicle
-  [[0, 1.5, 0], [0.22, 1.48, 0]], // right clavicle
-  [[-0.22, 1.48, 0], [-0.3, 1.15, 0]], // left upper arm
-  [[0.22, 1.48, 0], [0.3, 1.15, 0]], // right upper arm
-  [[-0.3, 1.15, 0], [-0.32, 0.85, 0]], // left forearm
-  [[0.3, 1.15, 0], [0.32, 0.85, 0]], // right forearm
-  [[0, 0.95, 0], [-0.12, 0.95, 0]], // left hip link
-  [[0, 0.95, 0], [0.12, 0.95, 0]], // right hip link
-  [[-0.12, 0.95, 0], [-0.12, 0.55, 0]], // left thigh
-  [[0.12, 0.95, 0], [0.12, 0.55, 0]], // right thigh
-  [[-0.12, 0.55, 0], [-0.12, 0.15, 0]], // left shin
-  [[0.12, 0.55, 0], [0.12, 0.15, 0]], // right shin
-]
-
-const JOINTS: [number, number, number][] = [
-  [-0.22, 1.48, 0],
-  [0.22, 1.48, 0],
-  [-0.3, 1.15, 0],
-  [0.3, 1.15, 0],
-  [-0.32, 0.85, 0],
-  [0.32, 0.85, 0],
-  [-0.12, 0.95, 0],
-  [0.12, 0.95, 0],
-  [-0.12, 0.55, 0],
-  [0.12, 0.55, 0],
-  [-0.12, 0.15, 0],
-  [0.12, 0.15, 0],
-]
-
-function Bone({ from, to, color }: { from: [number, number, number]; to: [number, number, number]; color: string }) {
-  const { position, quaternion, length } = useMemo(() => {
-    const start = new THREE.Vector3(...from)
-    const end = new THREE.Vector3(...to)
-    const dir = end.clone().sub(start)
-    const len = dir.length()
-    const mid = start.clone().add(end).multiplyScalar(0.5)
-    const quat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone().normalize())
-    return { position: mid, quaternion: quat, length: len }
-  }, [from, to])
-
-  return (
-    <mesh position={position} quaternion={quaternion}>
-      <cylinderGeometry args={[0.018, 0.018, length, 8]} />
-      <meshStandardMaterial color={color} roughness={0.6} />
-    </mesh>
-  )
-}
+const MARKERS: GroupMarker[] = RAW_MARKERS.map((m) => ({
+  ...m,
+  position: m.position.map((v) => v * MODEL_SCALE) as [number, number, number],
+}))
 
 function Marker({
   marker,
@@ -128,6 +92,23 @@ function Marker({
   )
 }
 
+/** Loads the scanned human mesh and applies our own theme-aware material — the source file has no accompanying .mtl, so any embedded material references are ignored. */
+function HumanMesh({ skinColor }: { skinColor: string }) {
+  const obj = useLoader(OBJLoader, '/models/human-figure.obj')
+
+  const model = useMemo(() => {
+    const clone = obj.clone()
+    clone.traverse((child) => {
+      if (child instanceof THREE.Mesh) {
+        child.material = new THREE.MeshStandardMaterial({ color: skinColor, roughness: 0.75 })
+      }
+    })
+    return clone
+  }, [obj, skinColor])
+
+  return <primitive object={model} scale={MODEL_SCALE} />
+}
+
 function Figure({
   selectedGroupId,
   onSelect,
@@ -143,27 +124,9 @@ function Figure({
 }) {
   return (
     <group>
-      {/* Head */}
-      <mesh position={[0, 1.72, 0]}>
-        <sphereGeometry args={[0.12, 24, 24]} />
-        <meshStandardMaterial color={skinColor} roughness={0.7} />
-      </mesh>
-
-      {BONES.map(([from, to], i) => (
-        <Bone key={i} from={from} to={to} color={skinColor} />
-      ))}
-      {JOINTS.map((pos, i) => (
-        <mesh key={i} position={pos}>
-          <sphereGeometry args={[0.03, 12, 12]} />
-          <meshStandardMaterial color={skinColor} roughness={0.7} />
-        </mesh>
-      ))}
-
-      {/* Torso shell (visual only, not clickable) */}
-      <mesh position={[0, 1.22, 0]}>
-        <capsuleGeometry args={[0.15, 0.32, 4, 12]} />
-        <meshStandardMaterial color={skinColor} roughness={0.7} />
-      </mesh>
+      <Suspense fallback={null}>
+        <HumanMesh skinColor={skinColor} />
+      </Suspense>
 
       {MARKERS.map((marker) => (
         <Marker
@@ -183,7 +146,7 @@ function Figure({
 function Rig() {
   const { camera } = useThree()
   useLayoutEffect(() => {
-    camera.position.set(0, 1.15, 1.55)
+    camera.position.set(0, 1.2, 2.0)
   }, [camera])
   return null
 }
