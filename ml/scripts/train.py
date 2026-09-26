@@ -37,7 +37,7 @@ import numpy as np
 import pandas as pd
 import torch
 import torch.nn as nn
-from sklearn.ensemble import RandomForestClassifier
+from sklearn.ensemble import IsolationForest, RandomForestClassifier
 from sklearn.metrics import f1_score, accuracy_score
 from sklearn.model_selection import GroupKFold
 from torch.utils.data import DataLoader
@@ -474,6 +474,19 @@ def main():
     # catching sessions with no curling motion at all.
     build_rest_gate_config(seq_df[seq_df["class_label"] != "Incomplete"])
 
+    # === 6. Novelty/outlier detector (catches non-curl movement WITH real motion) ===
+    # The rest gate above only catches near-ZERO motion (standing still). It
+    # does nothing for a different exercise or arbitrary movement performed
+    # with real motion (waving, a lateral raise, jumping jacks) -- those clear
+    # the rest gate's ROM thresholds easily and get forced into one of the 6
+    # curl classes. There is no negative training data (no recordings labeled
+    # "not a curl") to learn an explicit rejection class from, but novelty
+    # detection needs no negatives: it only needs to know what IN-distribution
+    # (i.e. genuinely a curl, any quality) looks like, fit on the full
+    # engineered feature profile (not just 1-2 ROM signals), and flags
+    # anything statistically unlike all of that as an outlier.
+    build_novelty_detector(dev_df)
+
     print(f"\nSaved final model ({model_type_saved}) and artifacts to {MODEL_DIR}")
     print("Run scripts/evaluate.py next to evaluate on the held-out TEST base_ids.")
 
@@ -520,6 +533,54 @@ def build_good_form_calibration(model, X_dev, y_dev_labels):
     print(f"\nGood-form-score display calibration anchor: {anchor:.4f} "
           f"(raw P(Perfect)={anchor:.2f} will now display as 100%)")
     return config
+
+
+def build_novelty_detector(dev_df: pd.DataFrame, false_reject_rate: float = 0.02):
+    """Fit an IsolationForest on the full 41-feature aggregate profile of
+    every dev-pool sequence (all 6 classes -- Incomplete included, since a
+    truncated-but-real curl is still in-distribution for "is this a curl at
+    all"). Never touches the test set: this is a fitted parameter (unlike
+    the physical-floor rest gate), so it follows the same train/val-only
+    discipline as the classifier itself.
+
+    The rejection threshold is set empirically from the in-distribution
+    score distribution: the `false_reject_rate` (default 2%) percentile of
+    dev-pool decision_function scores, so at most ~2% of genuine training
+    reps would have been (falsely) rejected by this threshold -- a
+    data-grounded choice, not an arbitrary cutoff.
+    """
+    X_dev_full = dev_df[AGGREGATE_FEATURE_NAMES].values
+    detector = IsolationForest(n_estimators=200, contamination="auto", random_state=SEED)
+    detector.fit(X_dev_full)
+
+    scores = detector.decision_function(X_dev_full)
+    threshold = float(np.percentile(scores, false_reject_rate * 100))
+
+    joblib.dump(detector, MODEL_DIR / "novelty_detector.joblib")
+    config = {
+        "feature_names": AGGREGATE_FEATURE_NAMES,
+        "false_reject_rate": false_reject_rate,
+        "threshold": threshold,
+        "dev_pool_score_stats": {
+            "min": float(scores.min()), "max": float(scores.max()),
+            "mean": float(scores.mean()), "threshold_percentile": f"{false_reject_rate:.0%}",
+        },
+        "rule": (
+            "Reject the session as 'unrecognized_movement' if "
+            "detector.decision_function(features) < threshold. Fit on all 6 "
+            "classes' engineered features (any real curl, any quality, incl. "
+            "truncated 'Incomplete' reps, counts as in-distribution); catches "
+            "movement with real motion that still doesn't statistically "
+            "resemble any real curl (a different exercise, arbitrary "
+            "movement) -- complementary to the rest gate, which only catches "
+            "near-zero motion."
+        ),
+    }
+    with open(MODEL_DIR / "novelty_detector_config.json", "w") as f:
+        json.dump(config, f, indent=2)
+    print(f"\nNovelty detector: threshold={threshold:.4f} "
+          f"(dev-pool scores range {scores.min():.4f} to {scores.max():.4f})")
+    return detector, config
 
 
 def build_rest_gate_config(seq_df: pd.DataFrame, safety_factor: float = 0.5):

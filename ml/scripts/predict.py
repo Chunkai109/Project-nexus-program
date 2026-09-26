@@ -52,7 +52,10 @@ def main():
           f"the model never saw during training or model selection...\n")
     correct = 0
     for seq in targets:
-        predictor.start_session()
+        # use_wallclock_duration=False: these frames are replayed from the
+        # CSV instantly, not paced in real time, so wall-clock elapsed time
+        # is meaningless here -- the raw recorded frame count is correct.
+        predictor.start_session(use_wallclock_duration=False)
         for frame in seq.keypoints:
             predictor.add_frame_from_array(frame)
         result = predictor.end_session()

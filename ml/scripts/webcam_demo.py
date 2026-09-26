@@ -139,6 +139,9 @@ def main():
             elif result_dict.get("prediction") == "no_exercise_detected":
                 last_result_text = "No exercise detected (not enough arm movement)"
                 print(result_dict)
+            elif result_dict.get("prediction") == "unrecognized_movement":
+                last_result_text = "Movement detected, but doesn't look like a bicep curl"
+                print(result_dict)
             elif result_dict:
                 last_result_text = result_dict.get("error", "no prediction")
                 print(last_result_text)
