@@ -335,64 +335,65 @@ export function ExerciseFormFields({
                   {form.muscleEmgTargets.length > 0 ? `${form.muscleEmgTargets.length} Set` : 'None set'}
                 </span>
               </div>
-              <p className="mb-4 text-[13px] text-ink-muted">
-                Drag to rotate the figure, then tap a node to reveal its muscle group — Chest and Back sit on opposite
-                sides, so rotate to reach the back. Pick the specific muscle from the dropdown below.
-              </p>
               <MuscleGroupPicker selectedGroupId={form.draftMuscleGroupId} onSelect={selectDraftMuscleGroup} height={280} />
               <div className="my-4 text-center text-[13px]">
                 {!draftGroup && <span className="text-ink-faint">No muscle group selected yet</span>}
                 {draftGroup && <span className="font-medium text-accent">{draftGroup.label} selected</span>}
               </div>
-              {draftGroup && (
-                <label className="block">
-                  <span className="mb-2 block text-[13px] font-medium text-ink-muted">Muscle</span>
-                  <div className="relative">
-                    <select
-                      value={form.draftMuscleId ?? ''}
-                      onChange={(e) => selectDraftMuscle(e.target.value)}
-                      className={clsx(fieldClass, 'appearance-none pr-9')}
-                    >
-                      <option value="" disabled>
-                        Select a muscle…
-                      </option>
-                      {draftGroup.muscles.map((m) => (
-                        <option key={m.id} value={m.id}>
-                          {m.label}
-                        </option>
-                      ))}
-                    </select>
-                    <ChevronDown className="pointer-events-none absolute right-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-faint" />
-                  </div>
-                </label>
-              )}
             </div>
 
             <div className="flex flex-col items-center gap-2 rounded-xl bg-surface-secondary p-6">
               <p className="mb-1 self-start text-[11px] font-semibold uppercase tracking-wide text-ink-faint">
                 Target EMG Activation
               </p>
-              {form.draftMuscleId ? (
+              {draftGroup ? (
                 <>
-                  <p className="mb-2 self-start text-[13px] font-medium text-accent">{muscleLabel(form.draftMuscleId)}</p>
-                  <div className="w-full">
-                    <Slider
-                      label="Target EMG %MVC"
-                      value={form.draftMuscleEmgPct}
-                      min={0}
-                      max={100}
-                      unit="%"
-                      onChange={setDraftMuscleEmgPct}
-                    />
-                  </div>
-                  <Button size="sm" className="mt-2 w-full" onClick={confirmMuscleEmgTarget}>
-                    <Check className="h-3.5 w-3.5" />
-                    Confirm This Muscle Target
-                  </Button>
+                  <label className="block w-full">
+                    <span className="mb-2 block text-[13px] font-medium text-ink-muted">Muscle</span>
+                    <div className="relative">
+                      <select
+                        value={form.draftMuscleId ?? ''}
+                        onChange={(e) => selectDraftMuscle(e.target.value)}
+                        className={clsx(fieldClass, 'appearance-none pr-9')}
+                      >
+                        <option value="" disabled>
+                          Select a muscle…
+                        </option>
+                        {draftGroup.muscles.map((m) => (
+                          <option key={m.id} value={m.id}>
+                            {m.label}
+                          </option>
+                        ))}
+                      </select>
+                      <ChevronDown className="pointer-events-none absolute right-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-faint" />
+                    </div>
+                  </label>
+                  {form.draftMuscleId ? (
+                    <>
+                      <div className="w-full">
+                        <Slider
+                          label="Target EMG %MVC"
+                          value={form.draftMuscleEmgPct}
+                          min={0}
+                          max={100}
+                          unit="%"
+                          onChange={setDraftMuscleEmgPct}
+                        />
+                      </div>
+                      <Button size="sm" className="mt-2 w-full" onClick={confirmMuscleEmgTarget}>
+                        <Check className="h-3.5 w-3.5" />
+                        Confirm This Muscle Target
+                      </Button>
+                    </>
+                  ) : (
+                    <p className="w-full rounded-lg bg-surface p-3.5 text-center text-[13px] text-ink-faint">
+                      Select a muscle above to set its target.
+                    </p>
+                  )}
                 </>
               ) : (
                 <p className="w-full rounded-lg bg-surface p-3.5 text-center text-[13px] text-ink-faint">
-                  Select a muscle group and muscle to set its target.
+                  Select a muscle group to continue.
                 </p>
               )}
             </div>

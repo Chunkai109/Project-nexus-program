@@ -146,7 +146,7 @@ function Figure({
 function Rig() {
   const { camera } = useThree()
   useLayoutEffect(() => {
-    camera.position.set(0, 1.2, 2.0)
+    camera.position.set(0, 1.0, 1.5)
   }, [camera])
   return null
 }
@@ -189,7 +189,7 @@ export function MuscleGroupPicker({
           skinColor={skinColor}
         />
         <OrbitControls
-          target={[0, 1.1, 0]}
+          target={[0, 0.95, 0]}
           enableZoom={false}
           enablePan={false}
           minPolarAngle={0.6}
