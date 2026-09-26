@@ -1,0 +1,42 @@
+{
+  "vid_0003": {
+    "num_sequences": 11,
+    "accuracy": 1.0,
+    "true_class": "Drag"
+  },
+  "vid_0011": {
+    "num_sequences": 11,
+    "accuracy": 1.0,
+    "true_class": "Half"
+  },
+  "vid_0022": {
+    "num_sequences": 11,
+    "accuracy": 1.0,
+    "true_class": "Heave"
+  },
+  "vid_0024": {
+    "num_sequences": 11,
+    "accuracy": 1.0,
+    "true_class": "Heave"
+  },
+  "vid_0030": {
+    "num_sequences": 11,
+    "accuracy": 1.0,
+    "true_class": "Perfect"
+  },
+  "vid_0036": {
+    "num_sequences": 11,
+    "accuracy": 1.0,
+    "true_class": "Perfect"
+  },
+  "vid_0037": {
+    "num_sequences": 11,
+    "accuracy": 1.0,
+    "true_class": "Perfect"
+  },
+  "vid_0048": {
+    "num_sequences": 11,
+    "accuracy": 1.0,
+    "true_class": "Swing"
+  }
+}

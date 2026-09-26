@@ -1,6 +1,9 @@
 {
-  "angle_top_threshold": 50.05992049995361,
-  "angle_bottom_threshold": 170.76133586567397,
-  "velocity_epsilon": 1.5431934296486773,
-  "smoothing_window": 9
+  "class_names": [
+    "Perfect",
+    "Drag",
+    "Swing",
+    "Half",
+    "Heave"
+  ]
 }

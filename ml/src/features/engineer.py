@@ -1,46 +1,44 @@
 """Per-frame feature engineering, shared by training and inference.
 
-After normalization (hip-centered, scale-normalized, handedness-canonicalized
--- see src/preprocessing/normalize.py), the "active" arm is always represented
-by the *right*-side keypoints (left is the idle/supporting arm, mirrored in
-if it was originally the working one). Every feature below is computed from
-that canonical frame.
+Classes in this dataset (Perfect / Drag / Swing / Half / Heave) are named,
+real bicep-curl form errors, so -- unlike a pure phase-detection problem --
+features must capture more than just "how bent is the elbow": they need to
+capture range of motion (Half = incomplete rep), torso/body movement
+(Swing, Heave = using momentum from the body instead of the arm), and
+elbow position stability (Drag = elbow drifting away from the torso).
 
-Feature set (7 values per frame) and why each one is here:
+After normalization (scale-normalized, handedness-canonicalized -- see
+normalize.py), the working arm is always the canonical *right* side.
 
-  elbow_angle_active     - instantaneous shoulder-elbow-wrist angle of the
-                            working arm. The single most direct signal of
-                            curl phase (small angle = flexed/top, large
-                            angle = extended/bottom).
-  elbow_angle_other       - same angle for the idle arm. Mostly near-constant,
-                            but gives the model context to distinguish a real
-                            phase transition from idle-arm noise/occlusion.
-  wrist_height_active     - vertical position of the working wrist relative
-                            to the shoulder (normalized). A second, largely
-                            independent measurement of "how curled" the arm
-                            is, using a different landmark pair -- adds
-                            robustness if the elbow keypoint is briefly noisy.
-  wrist_height_other      - same, idle arm, same rationale as elbow_angle_other.
-  elbow_angle_active_vel  - short causal finite-difference velocity of the
-                            working elbow angle. Sign distinguishes
-                            concentric (flexing) from eccentric (extending)
-                            motion at the same angle -- angle alone cannot.
-  wrist_height_active_vel - velocity counterpart for wrist height.
-  elbow_angle_active_rollstd - rolling standard deviation of the working
-                            elbow angle over a short window. Captures
-                            "how much is currently moving" independent of
-                            direction, which helps separate held top/bottom
-                            positions (near zero) from mid-range motion.
+Feature set (8 values per frame):
 
-Explicitly NOT included: raw x/y pixel coordinates (would leak
-camera framing/subject position despite normalization noise), hip/torso
-lean, and joint-displacement magnitudes for non-arm joints -- none of these
-carry information about curl phase and would only add noise for this
-specific classification target.
+  elbow_angle_active        - shoulder-elbow-wrist angle, working arm.
+                               Direct range-of-motion signal -> targets "Half".
+  elbow_angle_other         - same, idle arm. Context / sanity signal.
+  wrist_height_active       - wrist height relative to shoulder, working arm.
+                               Second, largely independent ROM measurement.
+  torso_lean_angle          - angle of the shoulder-center-to-hip-center
+                               vector from vertical. The hip is recentered
+                               to (0,0,0) by MediaPipe's own world-landmark
+                               convention, but *relative* shoulder position
+                               still moves when the torso leans/sways, so
+                               this is a real, non-trivial signal -> targets
+                               "Swing"/"Heave" (using body momentum).
+  elbow_forward_drift_active - horizontal (x) distance of the working elbow
+                               from the hip-shoulder line. A curl with good
+                               form keeps the elbow tucked at the side;
+                               drift away from the torso is exactly what
+                               "Drag" describes.
+  elbow_angle_active_vel    - short causal velocity of the working elbow
+                               angle. Captures tempo/jerkiness (rapid,
+                               uneven motion is characteristic of heaving).
+  wrist_height_active_vel   - velocity counterpart for wrist height.
+  torso_lean_vel            - velocity of torso lean. A large, fast swing
+                               shows up here even if the peak lean angle
+                               is similar to a slower sway.
 
-All buffers are short (<=5 frames, i.e. <=~0.2s at 24fps) and strictly
-causal, so the identical code runs online during live inference with low
-latency, and offline during dataset preparation.
+All buffers are short and strictly causal so the same code runs online
+during live inference and offline during dataset preparation.
 """
 from __future__ import annotations
 
@@ -49,18 +47,24 @@ from collections import deque
 import numpy as np
 
 from ..preprocessing import landmarks as lm
-from ..preprocessing.normalize import joint_angle
+from ..preprocessing.normalize import joint_angle, hip_center, shoulder_center
 
 FEATURE_NAMES = [
     "elbow_angle_active",
     "elbow_angle_other",
     "wrist_height_active",
-    "wrist_height_other",
+    "torso_lean_angle",
+    "elbow_forward_drift_active",
     "elbow_angle_active_vel",
     "wrist_height_active_vel",
-    "elbow_angle_active_rollstd",
+    "torso_lean_vel",
 ]
 NUM_FEATURES = len(FEATURE_NAMES)
+
+# Raw normalized landmark subset used for the "raw landmarks" LSTM input
+# channel (compared empirically against the engineered channel in training).
+RAW_JOINTS = lm.CORE_JOINTS  # nose, L/R shoulder, L/R elbow, L/R wrist, L/R hip
+RAW_DIM = len(RAW_JOINTS) * 3
 
 
 def _angle(coords: np.ndarray, side: str) -> float:
@@ -71,61 +75,103 @@ def _angle(coords: np.ndarray, side: str) -> float:
 
 
 def _wrist_height(coords: np.ndarray, side: str) -> float:
-    # In image coordinates y grows downward, so (shoulder_y - wrist_y) is
-    # positive and larger the higher the wrist is raised relative to the
-    # shoulder -- i.e. larger when more curled up.
     shoulder_y = lm.get(coords, f"{side}_shoulder")[1]
     wrist_y = lm.get(coords, f"{side}_wrist")[1]
     return float(shoulder_y - wrist_y)
 
 
-class FeatureExtractor:
-    """Causal, stateful per-frame feature extractor. Feed normalized frames
-    (the `.coords` of a `NormalizedFrame` from SequenceNormalizer) one at a
-    time, in order, via `.step()`.
-    """
+def _torso_lean_angle(coords: np.ndarray) -> float:
+    hip = hip_center(coords)
+    shoulder = shoulder_center(coords)
+    vertical = shoulder - hip
+    # angle between the torso vector and world-up (y axis in this dataset's
+    # convention); 0 = perfectly upright.
+    horiz = np.linalg.norm([vertical[0], vertical[2]])
+    return float(np.degrees(np.arctan2(horiz, abs(vertical[1]) + 1e-8)))
 
-    def __init__(self, vel_window: int = 3, std_window: int = 5):
+
+def _elbow_forward_drift(coords: np.ndarray, side: str) -> float:
+    hip = hip_center(coords)
+    shoulder = shoulder_center(coords)
+    elbow = lm.get(coords, f"{side}_elbow")
+    # perpendicular horizontal (x) distance of the elbow from the hip-shoulder
+    # line, in the coordinate frame's own x axis (left-right).
+    torso_x = (hip[0] + shoulder[0]) / 2.0
+    return float(elbow[0] - torso_x)
+
+
+def raw_landmark_vector(coords: np.ndarray) -> np.ndarray:
+    return np.concatenate([lm.get(coords, name) for name in RAW_JOINTS])
+
+
+class FeatureExtractor:
+    """Causal, stateful per-frame feature extractor."""
+
+    def __init__(self, vel_window: int = 3):
         self._angle_hist: deque[float] = deque(maxlen=vel_window)
         self._height_hist: deque[float] = deque(maxlen=vel_window)
-        self._angle_std_hist: deque[float] = deque(maxlen=std_window)
+        self._lean_hist: deque[float] = deque(maxlen=vel_window)
 
     def step(self, coords: np.ndarray) -> np.ndarray:
-        angle_active = _angle(coords, "right")   # canonical working arm
+        angle_active = _angle(coords, "right")
         angle_other = _angle(coords, "left")
         height_active = _wrist_height(coords, "right")
-        height_other = _wrist_height(coords, "left")
+        lean = _torso_lean_angle(coords)
+        drift_active = _elbow_forward_drift(coords, "right")
 
         self._angle_hist.append(angle_active)
         self._height_hist.append(height_active)
-        self._angle_std_hist.append(angle_active)
+        self._lean_hist.append(lean)
 
         angle_vel = self._causal_velocity(self._angle_hist)
         height_vel = self._causal_velocity(self._height_hist)
-        angle_rollstd = float(np.std(self._angle_std_hist)) if len(self._angle_std_hist) > 1 else 0.0
+        lean_vel = self._causal_velocity(self._lean_hist)
 
         return np.array([
-            angle_active, angle_other,
-            height_active, height_other,
-            angle_vel, height_vel,
-            angle_rollstd,
+            angle_active, angle_other, height_active, lean,
+            drift_active, angle_vel, height_vel, lean_vel,
         ], dtype=float)
 
     @staticmethod
     def _causal_velocity(hist: deque[float]) -> float:
         if len(hist) < 2:
             return 0.0
-        vals = np.array(hist)
-        # Average of consecutive frame-to-frame differences within the
-        # short window -- a light causal smoothing of the instantaneous
-        # velocity, cheap enough for real-time use.
-        return float(np.mean(np.diff(vals)))
+        return float(np.mean(np.diff(np.array(hist))))
 
 
 def extract_sequence_features(normalized_coords_seq: list[np.ndarray]) -> np.ndarray:
-    """Convenience batch wrapper for dataset preparation: run a fresh causal
-    FeatureExtractor over an already-normalized sequence (list of (17,3)
-    arrays, in order) and return a (T, NUM_FEATURES) array.
-    """
+    """Run a fresh causal FeatureExtractor over an already-normalized
+    sequence and return a (T, NUM_FEATURES) array."""
     extractor = FeatureExtractor()
     return np.stack([extractor.step(c) for c in normalized_coords_seq])
+
+
+def extract_sequence_raw(normalized_coords_seq: list[np.ndarray]) -> np.ndarray:
+    """Return the (T, RAW_DIM) raw-landmark-subset channel."""
+    return np.stack([raw_landmark_vector(c) for c in normalized_coords_seq])
+
+
+def aggregate_sequence_features(feature_matrix: np.ndarray) -> np.ndarray:
+    """Collapse a (T, NUM_FEATURES) per-frame matrix into a fixed-length
+    per-sequence summary vector for classical ML (RF/XGBoost): mean, std,
+    min, max, and range of each engineered feature, plus sequence length.
+    This is the "engineered sequence features" input Random Forest/XGBoost
+    need (they cannot consume a variable-length raw sequence directly).
+    """
+    mean = feature_matrix.mean(axis=0)
+    std = feature_matrix.std(axis=0)
+    fmin = feature_matrix.min(axis=0)
+    fmax = feature_matrix.max(axis=0)
+    frange = fmax - fmin
+    length = np.array([feature_matrix.shape[0]], dtype=float)
+    return np.concatenate([mean, std, fmin, fmax, frange, length])
+
+
+AGGREGATE_FEATURE_NAMES = (
+    [f"{n}_mean" for n in FEATURE_NAMES]
+    + [f"{n}_std" for n in FEATURE_NAMES]
+    + [f"{n}_min" for n in FEATURE_NAMES]
+    + [f"{n}_max" for n in FEATURE_NAMES]
+    + [f"{n}_range" for n in FEATURE_NAMES]
+    + ["sequence_length"]
+)

@@ -1,0 +1,62 @@
+[
+  {
+    "feature": "wrist_height_active_max",
+    "importance": 0.10323854269466834
+  },
+  {
+    "feature": "elbow_forward_drift_active_std",
+    "importance": 0.06888899795015874
+  },
+  {
+    "feature": "elbow_forward_drift_active_mean",
+    "importance": 0.06237096514810792
+  },
+  {
+    "feature": "elbow_angle_active_min",
+    "importance": 0.05604244032453485
+  },
+  {
+    "feature": "torso_lean_angle_std",
+    "importance": 0.053179639538981756
+  },
+  {
+    "feature": "wrist_height_active_range",
+    "importance": 0.05025210246641526
+  },
+  {
+    "feature": "wrist_height_active_mean",
+    "importance": 0.049108090191469736
+  },
+  {
+    "feature": "elbow_angle_active_mean",
+    "importance": 0.04565965914334589
+  },
+  {
+    "feature": "elbow_forward_drift_active_range",
+    "importance": 0.04169922889708427
+  },
+  {
+    "feature": "wrist_height_active_vel_range",
+    "importance": 0.0366797109021827
+  },
+  {
+    "feature": "elbow_angle_other_min",
+    "importance": 0.03530643101307171
+  },
+  {
+    "feature": "torso_lean_angle_mean",
+    "importance": 0.02922324449929863
+  },
+  {
+    "feature": "elbow_angle_other_std",
+    "importance": 0.027779478543050126
+  },
+  {
+    "feature": "wrist_height_active_vel_std",
+    "importance": 0.025944225405059574
+  },
+  {
+    "feature": "elbow_forward_drift_active_min",
+    "importance": 0.025812347104813043
+  }
+]

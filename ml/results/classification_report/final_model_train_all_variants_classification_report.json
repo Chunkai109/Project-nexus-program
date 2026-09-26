@@ -1,0 +1,95 @@
+{
+  "accuracy": 0.9946524064171123,
+  "classification_error": 0.005347593582887722,
+  "macro_f1": 0.9949018538713196,
+  "weighted_f1": 0.994679742125858,
+  "per_class": {
+    "Perfect": {
+      "precision": 1.0,
+      "recall": 0.9848484848484849,
+      "f1-score": 0.9923664122137404,
+      "support": 132.0
+    },
+    "Drag": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 55.0
+    },
+    "Swing": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 66.0
+    },
+    "Half": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 66.0
+    },
+    "Heave": {
+      "precision": 0.9649122807017544,
+      "recall": 1.0,
+      "f1-score": 0.9821428571428571,
+      "support": 55.0
+    },
+    "accuracy": 0.9946524064171123,
+    "macro avg": {
+      "precision": 0.9929824561403509,
+      "recall": 0.9969696969696968,
+      "f1-score": 0.9949018538713196,
+      "support": 374.0
+    },
+    "weighted avg": {
+      "precision": 0.9948400412796697,
+      "recall": 0.9946524064171123,
+      "f1-score": 0.994679742125858,
+      "support": 374.0
+    }
+  },
+  "confusion_matrix": [
+    [
+      130,
+      0,
+      0,
+      0,
+      2
+    ],
+    [
+      0,
+      55,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      66,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      66,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      0,
+      55
+    ]
+  ],
+  "class_order": [
+    "Perfect",
+    "Drag",
+    "Swing",
+    "Half",
+    "Heave"
+  ]
+}

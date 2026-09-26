@@ -1,85 +1,70 @@
-"""Loading the raw provided dataset (COCO-style per-video JSON files).
+"""Loading the PhysioVision bicep-curl CSV dataset.
 
-The uploaded ZIP (`VidData/VidData/000000.json` ... `000030.json`, each with
-a matching `.mp4`) contains, for every one of its 31 videos, one synthetic
-avatar with a unique body shape performing a standing dumbbell bicep curl.
-Every video already is bicep-curl data -- inspection confirmed the
-`categories` field is identical (`person`, `dumbbell`) across all 31 files
-and no other exercise/equipment type appears anywhere, and 6 sampled videos
-were visually confirmed to show the same curl motion. So "extracting only
-the bicep exercise data" here means: use all 31 sequences, since there is
-nothing else in this ZIP to filter out. This module only reads the JSON
-(pose/mocap) side; the .mp4 videos are not needed for a landmark-based model
-and are left untouched.
+The provided ZIP contains a single `reduced.csv`: 37,439 rows, one per
+(video, frame), with columns video_id, class_label, frame_number, and
+x0..x32/y0..y32/z0..z32 (MediaPipe Pose world landmarks). Inspection found:
+
+- video_id encodes 49 independent SOURCE recordings ("vid_0001" ..
+  "vid_0049"), each stored 11 times: one "_orig" copy plus ten "_aug_0"
+  .. "_aug_9" pre-generated augmented copies (539 video_id values total).
+- Every one of the 11 copies of a given source video shares the same
+  class_label (augmentation does not relabel).
+- Class distribution over the 49 *source* recordings: Perfect=17,
+  Drag=8, Half=8, Heave=8, Swing=8.
+
+This means video_id is NOT an independent unit -- an "_orig" video and its
+"_aug_3" sibling are near-duplicates of the same underlying performance.
+Splitting by video_id would leak near-identical examples across
+train/val/test. `base_id` (the "vid_00NN" prefix) is the true independent
+unit and is what all splitting must group by.
 """
 from __future__ import annotations
 
-import json
-import zipfile
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 
 from . import landmarks as lm
+
+BASE_ID_RE = re.compile(r"(vid_\d+)_")
 
 
 @dataclass
 class RawSequence:
-    subject_id: str          # unique per avatar/video (there is exactly one sequence per subject)
-    video_number: int
-    gender: str
-    keypoints: np.ndarray     # (T, 17, 3) COCO17 (x, y, visibility), pixel space
-    rep_count: np.ndarray     # (T,) continuous rep-progress value from the dataset (reference only)
+    video_id: str
+    base_id: str          # true independent source-recording id
+    is_original: bool      # True for the "_orig" copy, False for "_aug_*"
+    class_label: str
+    keypoints: np.ndarray   # (T, 33, 3)
     num_frames: int
 
 
-def _parse_json_bytes(raw_bytes: bytes) -> RawSequence:
-    data = json.loads(raw_bytes)
-    info = data["info"]
-    images_by_id = {im["id"]: im for im in data["images"]}
-    person_anns = {a["image_id"]: a for a in data["annotations"] if a["category_id"] == 0}
+def load_all_sequences(csv_path: str) -> list[RawSequence]:
+    df = pd.read_csv(csv_path)
+    required = {"video_id", "class_label", "frame_number"}
+    missing = required - set(df.columns)
+    if missing:
+        raise ValueError(f"CSV is missing required columns: {missing}")
 
-    frame_ids = sorted(images_by_id.keys())
-    kps = np.zeros((len(frame_ids), lm.NUM_KEYPOINTS, 3), dtype=float)
-    rep_count = np.zeros(len(frame_ids), dtype=float)
-    for t, fid in enumerate(frame_ids):
-        rep_count[t] = images_by_id[fid]["rep_count"]
-        kps[t] = lm.keypoints_from_coco_annotation(person_anns[fid]["keypoints"])
-
-    subject_id = f"subj_{info['video_number']:03d}"
-    return RawSequence(
-        subject_id=subject_id,
-        video_number=info["video_number"],
-        gender=info.get("avatar_presenting_gender", "unknown"),
-        keypoints=kps,
-        rep_count=rep_count,
-        num_frames=len(frame_ids),
-    )
-
-
-def load_all_sequences(raw_source: str) -> list[RawSequence]:
-    """Load every bicep-curl sequence's JSON from either a directory
-    containing the extracted `*.json` files, or the original ZIP file
-    directly (never modified -- opened read-only).
-    """
-    path = Path(raw_source)
     sequences: list[RawSequence] = []
+    for video_id, group in df.groupby("video_id", sort=True):
+        group = group.sort_values("frame_number")
+        base_match = BASE_ID_RE.match(video_id)
+        base_id = base_match.group(1) if base_match else video_id
+        is_original = video_id.endswith("_orig")
 
-    if path.is_dir():
-        json_files = sorted(path.glob("*.json"))
-        if not json_files:
-            # maybe raw_source points at the zip's top folder; search recursively
-            json_files = sorted(path.rglob("*.json"))
-        for jf in json_files:
-            sequences.append(_parse_json_bytes(jf.read_bytes()))
-    elif path.suffix.lower() == ".zip":
-        with zipfile.ZipFile(path, "r") as zf:
-            names = sorted(n for n in zf.namelist() if n.lower().endswith(".json"))
-            for name in names:
-                sequences.append(_parse_json_bytes(zf.read(name)))
-    else:
-        raise ValueError(f"raw_source must be a directory or .zip file, got: {raw_source}")
+        labels = group["class_label"].unique()
+        if len(labels) != 1:
+            raise ValueError(f"{video_id} has inconsistent labels: {labels}")
 
-    sequences.sort(key=lambda s: s.video_number)
+        kps = lm.frames_from_dataframe(group)
+        sequences.append(RawSequence(
+            video_id=video_id, base_id=base_id, is_original=is_original,
+            class_label=labels[0], keypoints=kps, num_frames=len(group),
+        ))
+
+    sequences.sort(key=lambda s: s.video_id)
     return sequences

@@ -1,103 +1,95 @@
 {
-  "num_sequences_bicep": 31,
-  "num_subjects": 31,
-  "num_total_frames": 9574,
+  "num_video_ids_total": 539,
+  "num_independent_source_recordings": 49,
+  "note_on_augmentation": "Each of the 49 independent source recordings appears 11 times in the CSV (1 '_orig' + 10 pre-generated '_aug_*' copies, 539 rows total video_ids). All splitting is done on the 49 base_ids so augmented copies of a training recording never appear in val/test.",
+  "num_total_frames": 37439,
   "sequence_length_frames": {
-    "min": 186,
-    "max": 591,
-    "mean": 308.83870967741933
+    "min": 16,
+    "max": 86,
+    "mean": 69.46011131725417
   },
-  "num_classes": 4,
+  "num_classes": 5,
   "class_names": [
-    "bottom",
-    "concentric",
-    "top",
-    "eccentric"
+    "Perfect",
+    "Drag",
+    "Swing",
+    "Half",
+    "Heave"
   ],
-  "class_counts_overall": {
-    "eccentric": 2746,
-    "bottom": 2685,
-    "concentric": 2648,
-    "top": 1495
+  "class_counts_source_recordings": {
+    "Perfect": 17,
+    "Drag": 8,
+    "Half": 8,
+    "Heave": 8,
+    "Swing": 8
   },
-  "class_balance_ratio_max_min": 1.836789297658863,
-  "active_arm_detected_per_subject": {
-    "subj_000": "right",
-    "subj_001": "right",
-    "subj_002": "right",
-    "subj_003": "right",
-    "subj_004": "right",
-    "subj_005": "right",
-    "subj_006": "right",
-    "subj_007": "right",
-    "subj_008": "right",
-    "subj_009": "right",
-    "subj_010": "right",
-    "subj_011": "right",
-    "subj_012": "left",
-    "subj_013": "right",
-    "subj_014": "right",
-    "subj_015": "right",
-    "subj_016": "right",
-    "subj_017": "right",
-    "subj_018": "right",
-    "subj_019": "right",
-    "subj_020": "right",
-    "subj_021": "right",
-    "subj_022": "right",
-    "subj_023": "right",
-    "subj_024": "left",
-    "subj_025": "right",
-    "subj_026": "right",
-    "subj_027": "left",
-    "subj_028": "right",
-    "subj_029": "right",
-    "subj_030": "right"
+  "class_counts_all_video_ids_incl_augmented": {
+    "Perfect": 187,
+    "Drag": 88,
+    "Half": 88,
+    "Heave": 88,
+    "Swing": 88
   },
-  "gender_distribution": {
-    "female": 20,
-    "male": 11
+  "class_counts_orig_only": {
+    "Perfect": 17,
+    "Drag": 8,
+    "Half": 8,
+    "Heave": 8,
+    "Swing": 8
   },
-  "landmarks_used": [
+  "landmarks_used_engineered": [
     "elbow_angle_active",
     "elbow_angle_other",
     "wrist_height_active",
-    "wrist_height_other",
+    "torso_lean_angle",
+    "elbow_forward_drift_active",
     "elbow_angle_active_vel",
     "wrist_height_active_vel",
-    "elbow_angle_active_rollstd"
+    "torso_lean_vel"
   ],
-  "data_format": "COCO-style JSON (info/categories/images/annotations) + companion mp4 (unused)",
-  "missing_or_corrupted_sequences": 0,
+  "landmarks_used_raw_channel": [
+    "nose",
+    "left_shoulder",
+    "right_shoulder",
+    "left_elbow",
+    "right_elbow",
+    "left_wrist",
+    "right_wrist",
+    "left_hip",
+    "right_hip"
+  ],
+  "data_format": "CSV: video_id, class_label, frame_number, x0..x32/y0..y32/z0..z32 (MediaPipe Pose world landmarks, hip-centered, metric)",
+  "missing_values": 0,
+  "subject_identifiers": "Not provided. No person/subject id exists in this dataset -- video_id / base_id identifies a *recording*, not a verified unique human subject. Splitting by base_id prevents augmentation-copy leakage (the only leakage we can concretely detect and prevent from the data given), but cannot guarantee two different base_ids never show the same physical person. This is disclosed as a limitation, not claimed as true subject-independence.",
   "split": {
     "train": {
-      "num_subjects": 22,
-      "num_frames": 6569,
+      "num_source_recordings": 34,
       "class_counts": {
-        "eccentric": 1886,
-        "bottom": 1857,
-        "concentric": 1819,
-        "top": 1007
+        "Perfect": 12,
+        "Half": 6,
+        "Swing": 6,
+        "Drag": 5,
+        "Heave": 5
       }
     },
     "val": {
-      "num_subjects": 5,
-      "num_frames": 1661,
+      "num_source_recordings": 7,
       "class_counts": {
-        "eccentric": 500,
-        "concentric": 461,
-        "bottom": 426,
-        "top": 274
+        "Drag": 2,
+        "Perfect": 2,
+        "Half": 1,
+        "Heave": 1,
+        "Swing": 1
       }
     },
     "test": {
-      "num_subjects": 4,
-      "num_frames": 1344,
+      "num_source_recordings": 8,
       "class_counts": {
-        "bottom": 402,
-        "concentric": 368,
-        "eccentric": 360,
-        "top": 214
+        "Perfect": 3,
+        "Heave": 2,
+        "Drag": 1,
+        "Half": 1,
+        "Swing": 1
       }
     }
   }

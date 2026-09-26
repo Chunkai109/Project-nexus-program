@@ -1,34 +1,33 @@
 """Subject- and camera-invariant normalization, shared by training and inference.
 
-Normalization strategy (see the project report for the full justification):
+The dataset's coordinates are already MediaPipe `pose_world_landmarks`:
+metric (real-world-scale), hip-centered 3D positions (confirmed by
+inspection -- the hip center sits at (0,0,0) every single frame, to
+numerical noise). That removes absolute position for free. On top of that
+we apply:
 
-1. Translation: every frame is re-centered on the mid-hip point. This removes
-   the person's absolute position in the frame / distance from the left edge
-   etc. -- a model must not learn "where in the image" someone stands.
+1. Scale normalization: divide by a running (causal) median shoulder-to-hip
+   distance, so two subjects of different builds (or MediaPipe's own
+   per-frame scale estimate wobbling slightly) produce comparable
+   proportions. This is still needed even though the units are already
+   "metric" -- MediaPipe's world-landmark scale is a proportion estimate,
+   not a laser-measured body size.
 
-2. Scale: coordinates are divided by a running (causal) median of the
-   shoulder-to-hip distance. This removes body size and camera-distance
-   effects: a tall subject filmed close up and a short subject filmed far
-   away produce the same normalized geometry. The estimate is causal
-   (computed only from frames seen so far) so the exact same code path can
-   run on a live camera stream frame-by-frame, not just on complete,
-   already-recorded sequences.
+2. Handedness canonicalization: this dataset's curl is performed one arm at
+   a time (confirmed: ~88% of sequences show a clearly larger elbow
+   range-of-motion on one side). Which arm is used has nothing to do with
+   the quality label (Perfect/Drag/Swing/Half/Heave apply the same way to
+   either arm), so we detect the higher-ROM arm and mirror left<->right
+   when needed so the "working" arm is always presented on the same
+   canonical side. This is the same normalization/augmentation-style
+   technique used for the earlier dataset, re-applied here because it is
+   independently justified by this dataset's own motion pattern, not
+   carried over by default.
 
-3. Handedness canonicalization ("mirroring"): this dataset's dumbbell curl is
-   performed one arm at a time, and which arm is used is not semantically
-   meaningful (it's not part of "exercise quality/phase") -- a curl is a
-   curl whichever arm does it. We detect which arm has the larger elbow
-   range-of-motion and, if it is the left arm, mirror the frame
-   left<->right so the "working" arm is always presented to the model on
-   the same canonical side. This directly implements the "mirroring
-   left/right where semantically valid" normalization/augmentation the
-   project spec calls for, and shrinks what the model has to learn.
-
-All of this is implemented as a small stateful class (`SequenceNormalizer`)
-fed one frame at a time, in order, via `.step()`. Dataset preparation feeds
-it an entire recorded sequence frame by frame (simulating a live stream);
-`src/inference/predictor.py` feeds it live MediaPipe frames the exact same
-way. There is no separate "batch" normalization code path.
+Implemented as a small causal, stateful class (`SequenceNormalizer`) fed one
+frame at a time -- dataset preparation replays a whole recorded video
+through it in order; live inference feeds it a real camera stream the exact
+same way.
 """
 from __future__ import annotations
 
@@ -55,25 +54,18 @@ def shoulder_center(frame: np.ndarray) -> np.ndarray:
 
 
 def torso_scale(frame: np.ndarray) -> float:
-    """Shoulder-center to hip-center distance for one frame -- the raw
-    (noisy, single-frame) body-size reference used to build a smoothed,
-    causal running estimate in SequenceNormalizer.
-    """
-    d = shoulder_center(frame) - hip_center(frame)
-    return float(np.linalg.norm(d))
+    return float(np.linalg.norm(shoulder_center(frame) - hip_center(frame)))
 
 
 def joint_angle(a: np.ndarray, b: np.ndarray, c: np.ndarray) -> float:
-    """Angle at vertex `b` formed by points a-b-c, in degrees."""
-    ba = a - b
-    bc = c - b
+    """Angle at vertex `b` formed by points a-b-c, in degrees (3D)."""
+    ba, bc = a - b, c - b
     denom = (np.linalg.norm(ba) * np.linalg.norm(bc)) + EPS
     cos_ang = np.dot(ba, bc) / denom
     return float(np.degrees(np.arccos(np.clip(cos_ang, -1.0, 1.0))))
 
 
 def elbow_angle(frame: np.ndarray, side: str) -> float:
-    """Shoulder-elbow-wrist angle in degrees for 'left' or 'right'."""
     s = lm.get(frame, f"{side}_shoulder")
     e = lm.get(frame, f"{side}_elbow")
     w = lm.get(frame, f"{side}_wrist")
@@ -81,10 +73,9 @@ def elbow_angle(frame: np.ndarray, side: str) -> float:
 
 
 def mirror_frame(frame: np.ndarray, center_x: float) -> np.ndarray:
-    """Mirror a (17,3) frame horizontally about `center_x` and swap
-    left/right-named keypoints so the array stays semantically consistent
-    (index for "left_elbow" still holds whichever elbow is anatomically
-    left after the flip).
+    """Mirror a (33,3) frame across the sagittal (x=center_x) plane and
+    swap left/right-named keypoints. Only x flips -- y (vertical) and z
+    (forward/back depth) are unaffected by a left-right mirror.
     """
     out = frame.copy()
     out[:, 0] = 2 * center_x - out[:, 0]
@@ -96,22 +87,15 @@ def mirror_frame(frame: np.ndarray, center_x: float) -> np.ndarray:
 
 @dataclass
 class NormalizedFrame:
-    coords: np.ndarray       # (17,3) hip-centered, scale-normalized, mirror-canonicalized
-    scale: float             # running scale estimate used
-    active_side_raw: str     # 'left' or 'right' -- which raw side was detected as active
-    mirrored: bool           # whether this frame was flipped to canonicalize
+    coords: np.ndarray       # (33,3) scale-normalized, mirror-canonicalized
+    scale: float
+    active_side_raw: str     # 'left' or 'right'
+    mirrored: bool
 
 
 class SequenceNormalizer:
-    """Causal, stateful normalizer. Call `.step(frame)` once per incoming
-    frame, in temporal order, for both dataset preparation (replaying a
-    recorded sequence) and live inference (a real camera stream).
-    """
-
     def __init__(self, active_side: str | None = None,
                  scale_window: int = 30, rom_window: int = 90):
-        # `active_side`: pass 'left'/'right' to force a known working arm
-        # (e.g. the user selected it during app calibration). None = auto-detect.
         self.forced_active_side = active_side
         self._scale_buf: deque[float] = deque(maxlen=scale_window)
         self._angle_buf = {"left": deque(maxlen=rom_window), "right": deque(maxlen=rom_window)}
@@ -130,7 +114,6 @@ class SequenceNormalizer:
         self._angle_buf["left"].append(elbow_angle(frame, "left"))
         self._angle_buf["right"].append(elbow_angle(frame, "right"))
         if len(self._angle_buf["left"]) < 10:
-            # Cold start: not enough history to judge range of motion yet.
             return "right"
         rom = {}
         for side in ("left", "right"):
@@ -143,9 +126,12 @@ class SequenceNormalizer:
         active_side = self._detect_active_side(frame)
         scale = self._running_scale(frame)
 
+        # Hip is already ~(0,0,0) in this dataset's world landmarks, but we
+        # explicitly re-center anyway so the same code is correct for any
+        # input that isn't already hip-centered. Frames here are pure
+        # (33,3) x/y/z -- no separate visibility column.
         center = hip_center(frame)
-        centered = frame.copy()
-        centered[:, :2] = (centered[:, :2] - center) / scale
+        centered = (frame - center) / scale
 
         mirrored = active_side == "left"
         if mirrored:

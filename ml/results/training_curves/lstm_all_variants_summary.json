@@ -1,0 +1,14 @@
+{
+  "raw": {
+    "best_val_f1": 1.0,
+    "best_epoch": 10
+  },
+  "engineered": {
+    "best_val_f1": 0.42227889757301523,
+    "best_epoch": 9
+  },
+  "combo": {
+    "best_val_f1": 0.6101398601398602,
+    "best_epoch": 11
+  }
+}

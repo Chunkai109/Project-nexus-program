@@ -1,99 +1,90 @@
 """Canonical landmark representation shared by training data and live MediaPipe input.
 
-Both the training dataset (COCO-style keypoints baked into the provided JSON
-files) and a live MediaPipe Pose stream are converted into the *same*
-(17, 3) array of (x, y, visibility) before anything else happens. Every
-downstream module (normalize.py, engineer.py, phase_labels.py,
-inference/predictor.py) only ever sees this canonical array, which is what
-guarantees training and real-time inference run identical code.
+The PhysioVision dataset (`reduced.csv`) stores, per frame, columns
+x0..x32, y0..y32, z0..z32 -- these are exactly MediaPipe Pose's 33
+standard landmarks, in MediaPipe's own index order, and (confirmed by
+inspection: left_hip/right_hip average to ~(0,0,0) with near-zero
+per-frame variance) in **world-landmark** space: metric, hip-centered
+3D coordinates, not the default normalized-image-plane landmarks.
+
+That means live inference MUST read `pose_world_landmarks` from MediaPipe
+Pose (not the default `pose_landmarks`) to match the training distribution.
+This module defines that shared (33, 3) representation and the two thin
+adapters (CSV row <-> live MediaPipe result) that build it, so every
+downstream module (normalize.py, features/engineer.py, inference/predictor.py)
+operates on identical data regardless of source.
 """
 from __future__ import annotations
 
 import numpy as np
 
-# Order matches the `categories[0]["keypoints"]` list in the provided
-# dataset's JSON files exactly, and is a strict subset of MediaPipe Pose's
-# 33 landmarks.
-COCO17_NAMES = [
-    "nose", "left_eye", "right_eye", "left_ear", "right_ear",
-    "left_shoulder", "right_shoulder",
-    "left_elbow", "right_elbow",
-    "left_wrist", "right_wrist",
-    "left_hip", "right_hip",
-    "left_knee", "right_knee",
-    "left_ankle", "right_ankle",
+# Standard MediaPipe Pose landmark order (mediapipe.solutions.pose.PoseLandmark).
+MEDIAPIPE_LANDMARK_NAMES = [
+    "nose", "left_eye_inner", "left_eye", "left_eye_outer",
+    "right_eye_inner", "right_eye", "right_eye_outer",
+    "left_ear", "right_ear", "mouth_left", "mouth_right",
+    "left_shoulder", "right_shoulder", "left_elbow", "right_elbow",
+    "left_wrist", "right_wrist", "left_pinky", "right_pinky",
+    "left_index", "right_index", "left_thumb", "right_thumb",
+    "left_hip", "right_hip", "left_knee", "right_knee",
+    "left_ankle", "right_ankle", "left_heel", "right_heel",
+    "left_foot_index", "right_foot_index",
 ]
-KP_INDEX = {name: i for i, name in enumerate(COCO17_NAMES)}
-NUM_KEYPOINTS = len(COCO17_NAMES)
+KP_INDEX = {name: i for i, name in enumerate(MEDIAPIPE_LANDMARK_NAMES)}
+NUM_KEYPOINTS = len(MEDIAPIPE_LANDMARK_NAMES)  # 33
 
-# Standard MediaPipe Pose landmark indices (mediapipe.solutions.pose.PoseLandmark)
-# for the subset of joints that overlap with COCO17, in COCO17 order. Using the
-# raw integer indices here means this module has no hard dependency on the
-# `mediapipe` package itself -- it only needs objects with .x/.y/.visibility.
-MEDIAPIPE_INDEX_FOR_COCO17 = [
-    0,   # nose
-    2,   # left_eye
-    5,   # right_eye
-    7,   # left_ear
-    8,   # right_ear
-    11,  # left_shoulder
-    12,  # right_shoulder
-    13,  # left_elbow
-    14,  # right_elbow
-    15,  # left_wrist
-    16,  # right_wrist
-    23,  # left_hip
-    24,  # right_hip
-    25,  # left_knee
-    26,  # right_knee
-    27,  # left_ankle
-    28,  # right_ankle
-]
-
-# Keypoint name pairs that must be swapped when a frame is mirrored
-# left<->right (used by normalize.py to canonicalize the "active" arm).
 MIRROR_PAIRS = [
-    ("left_eye", "right_eye"), ("left_ear", "right_ear"),
+    ("left_eye_inner", "right_eye_inner"), ("left_eye", "right_eye"),
+    ("left_eye_outer", "right_eye_outer"), ("left_ear", "right_ear"),
+    ("mouth_left", "mouth_right"),
     ("left_shoulder", "right_shoulder"), ("left_elbow", "right_elbow"),
-    ("left_wrist", "right_wrist"), ("left_hip", "right_hip"),
-    ("left_knee", "right_knee"), ("left_ankle", "right_ankle"),
+    ("left_wrist", "right_wrist"), ("left_pinky", "right_pinky"),
+    ("left_index", "right_index"), ("left_thumb", "right_thumb"),
+    ("left_hip", "right_hip"), ("left_knee", "right_knee"),
+    ("left_ankle", "right_ankle"), ("left_heel", "right_heel"),
+    ("left_foot_index", "right_foot_index"),
+]
+
+# The reduced feature subset actually used downstream (arms + shoulders +
+# hips + nose) -- everything needed for elbow angles, wrist height and
+# torso lean, without hand/eye/foot detail this exercise doesn't need.
+CORE_JOINTS = [
+    "nose", "left_shoulder", "right_shoulder", "left_elbow", "right_elbow",
+    "left_wrist", "right_wrist", "left_hip", "right_hip",
 ]
 
 
-def keypoints_from_coco_annotation(flat_keypoints: list[float]) -> np.ndarray:
-    """Convert a COCO-style flat [x,y,v, x,y,v, ...] list (17*3 long, as
-    stored in the dataset's `annotations[i]['keypoints']` field) into a
-    (17, 3) array in canonical COCO17_NAMES order.
-    """
-    arr = np.asarray(flat_keypoints, dtype=float).reshape(-1, 3)
-    if arr.shape[0] != NUM_KEYPOINTS:
-        raise ValueError(f"expected {NUM_KEYPOINTS} keypoints, got {arr.shape[0]}")
-    return arr
-
-
-def keypoints_from_mediapipe(landmarks, image_width: float, image_height: float) -> np.ndarray:
-    """Convert a live MediaPipe Pose result's landmark list (33 entries with
-    normalized .x/.y in [0,1] and .visibility) into the same (17, 3) pixel-space
-    array used by the training pipeline.
-
-    `image_width`/`image_height` are the pixel dimensions of the frame the
-    landmarks were detected on -- required because MediaPipe reports x, y as
-    fractions of width/height respectively, and our normalization pipeline
-    needs both axes on a consistent pixel scale (see normalize.py).
-    """
+def row_to_frame(row) -> np.ndarray:
+    """Build a (33, 3) array from one row of the training CSV (a pandas
+    Series or dict-like with x{i}/y{i}/z{i} columns)."""
     out = np.zeros((NUM_KEYPOINTS, 3), dtype=float)
-    for coco_i, mp_i in enumerate(MEDIAPIPE_INDEX_FOR_COCO17):
-        lm = landmarks[mp_i]
-        out[coco_i, 0] = lm.x * image_width
-        out[coco_i, 1] = lm.y * image_height
-        out[coco_i, 2] = getattr(lm, "visibility", 1.0)
+    for i in range(NUM_KEYPOINTS):
+        out[i, 0] = row[f"x{i}"]
+        out[i, 1] = row[f"y{i}"]
+        out[i, 2] = row[f"z{i}"]
+    return out
+
+
+def frames_from_dataframe(df) -> np.ndarray:
+    """Vectorized equivalent of calling row_to_frame on every row of a
+    dataframe (already sorted in the desired frame order): returns
+    (num_rows, 33, 3).
+    """
+    cols = [f"{axis}{i}" for i in range(NUM_KEYPOINTS) for axis in ("x", "y", "z")]
+    return df[cols].to_numpy(dtype=float).reshape(len(df), NUM_KEYPOINTS, 3)
+
+
+def world_landmarks_to_frame(world_landmarks) -> np.ndarray:
+    """Build a (33, 3) array from a live MediaPipe `pose_world_landmarks`
+    result (an object with a `.landmark` list of 33 entries, each with
+    .x/.y/.z in meters, hip-centered -- NOT the default normalized
+    `pose_landmarks`)."""
+    lm_list = world_landmarks.landmark if hasattr(world_landmarks, "landmark") else world_landmarks
+    out = np.zeros((NUM_KEYPOINTS, 3), dtype=float)
+    for i, lm in enumerate(lm_list):
+        out[i] = (lm.x, lm.y, lm.z)
     return out
 
 
 def get(frame: np.ndarray, name: str) -> np.ndarray:
-    """Return the (x, y) position of a named keypoint in a (17,3) frame."""
-    return frame[KP_INDEX[name], :2]
-
-
-def visibility(frame: np.ndarray, name: str) -> float:
-    return float(frame[KP_INDEX[name], 2])
+    return frame[KP_INDEX[name], :3]

@@ -1,0 +1,70 @@
+{
+  "lstm_raw": {
+    "train": {
+      "accuracy": 0.9117647058823529,
+      "macro_f1": 0.9301211937556342,
+      "n_sequences": 374
+    },
+    "val": {
+      "accuracy": 1.0,
+      "macro_f1": 1.0,
+      "n_sequences": 77
+    },
+    "test": {
+      "accuracy": 1.0,
+      "macro_f1": 1.0,
+      "n_sequences": 88
+    }
+  },
+  "lstm_engineered": {
+    "train": {
+      "accuracy": 0.393048128342246,
+      "macro_f1": 0.323046066252588,
+      "n_sequences": 374
+    },
+    "val": {
+      "accuracy": 0.5324675324675324,
+      "macro_f1": 0.42227889757301523,
+      "n_sequences": 77
+    },
+    "test": {
+      "accuracy": 0.2840909090909091,
+      "macro_f1": 0.2689458689458689,
+      "n_sequences": 88
+    }
+  },
+  "lstm_combo": {
+    "train": {
+      "accuracy": 0.5026737967914439,
+      "macro_f1": 0.5031679980329866,
+      "n_sequences": 374
+    },
+    "val": {
+      "accuracy": 0.6753246753246753,
+      "macro_f1": 0.6101398601398602,
+      "n_sequences": 77
+    },
+    "test": {
+      "accuracy": 0.6136363636363636,
+      "macro_f1": 0.6224350205198359,
+      "n_sequences": 88
+    }
+  },
+  "classical_train_only": {
+    "train": {
+      "accuracy": 0.9919786096256684,
+      "macro_f1": 0.992391414912013,
+      "n_sequences": 374
+    },
+    "val": {
+      "accuracy": 0.974025974025974,
+      "macro_f1": 0.9713043478260868,
+      "n_sequences": 77
+    },
+    "test": {
+      "accuracy": 1.0,
+      "macro_f1": 1.0,
+      "n_sequences": 88
+    }
+  }
+}
