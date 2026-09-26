@@ -6,8 +6,8 @@ import { useExerciseForm } from '@/lib/useExerciseForm'
 
 /**
  * The same fields ProtocolBuilder's "New Exercise" form offers, reached
- * instead from the "Fine-tune Exercise" button on that exercise's
- * Optimization Analytics page.
+ * instead from the "Edit Exercise" button on that exercise's Optimization
+ * Analytics page.
  */
 export function ExerciseFineTune({ exerciseId }: { exerciseId: string }) {
   const { exercises, patients, updateExercise } = useAppData()
@@ -50,7 +50,7 @@ export function ExerciseFineTune({ exerciseId }: { exerciseId: string }) {
     <Card className="p-7">
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h2 className="text-[15px] font-semibold text-ink">Fine-Tune Exercise</h2>
+          <h2 className="text-[15px] font-semibold text-ink">Edit Exercise</h2>
           <p className="text-[13px] text-ink-faint">Define biomechanical thresholds prescribed for this exercise</p>
         </div>
         {saved && <span className="text-[13px] font-medium text-emerald">Saved.</span>}
