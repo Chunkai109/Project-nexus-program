@@ -84,6 +84,7 @@ def main():
     recording = False
     last_result_text = "Press 's' to start a rep"
     start_time = time.time()
+    last_timestamp_ms = -1
 
     print("Webcam demo running. Focus the video window: 's' start rep, 'e' end rep, 'q' quit.")
     while True:
@@ -91,31 +92,52 @@ def main():
         if not ok:
             break
         h, w = frame.shape[:2]
-        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
-        timestamp_ms = int((time.time() - start_time) * 1000)
-        result = landmarker.detect_for_video(mp_image, timestamp_ms)
 
-        if result.pose_landmarks:
-            draw_skeleton(frame, result.pose_landmarks[0], w, h)
-            if recording and result.pose_world_landmarks:
-                predictor.add_frame_from_world_landmarks(result.pose_world_landmarks[0])
+        try:
+            rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
+            # detect_for_video() requires a STRICTLY increasing timestamp on
+            # every call. Wall-clock milliseconds can repeat on a fast
+            # machine/camera and MediaPipe raises on that -- guard against it
+            # rather than letting one repeated millisecond kill the whole loop
+            # (this is what silently froze the window mid-recording).
+            timestamp_ms = int((time.time() - start_time) * 1000)
+            if timestamp_ms <= last_timestamp_ms:
+                timestamp_ms = last_timestamp_ms + 1
+            last_timestamp_ms = timestamp_ms
+            result = landmarker.detect_for_video(mp_image, timestamp_ms)
+
+            if result.pose_landmarks:
+                draw_skeleton(frame, result.pose_landmarks[0], w, h)
+                if recording and result.pose_world_landmarks:
+                    predictor.add_frame_from_world_landmarks(result.pose_world_landmarks[0])
+        except Exception as exc:  # noqa: BLE001 -- keep the demo alive on any bad frame
+            print(f"[frame error, skipped] {exc}")
 
         key = cv2.waitKey(1) & 0xFF
         if key == ord("s") and not recording:
+            print("[s] starting rep...")
             predictor.start_session()
             recording = True
             last_result_text = "Recording rep..."
         elif key == ord("e") and recording:
+            print("[e] ending rep, evaluating...")
             recording = False
-            result_dict = predictor.end_session()
+            try:
+                result_dict = predictor.end_session()
+            except Exception as exc:  # noqa: BLE001
+                print(f"[end_session error] {exc}")
+                last_result_text = f"error: {exc}"
+                result_dict = {}
             if result_dict.get("prediction") is not None:
                 last_result_text = (f"{result_dict['prediction']} "
                                      f"({result_dict['confidence']:.0%} confidence)")
                 print(result_dict)
-            else:
+            elif result_dict:
                 last_result_text = result_dict.get("error", "no prediction")
+                print(last_result_text)
         elif key == ord("q"):
+            print("[q] quitting")
             break
 
         status = f"REC ({predictor.num_frames_buffered()} frames)" if recording else "idle"
