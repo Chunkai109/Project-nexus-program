@@ -1,10 +1,30 @@
-import { BodySilhouette } from './BodySilhouette'
-import { JOINT_PRESETS, NODE_POSITIONS } from '@/lib/joints'
+import { Body3DPicker, scaleMarkers, type BodyMarker } from './Body3DPicker'
+
+/**
+ * One marker per `JOINT_PRESETS` entry, positioned at that joint's actual
+ * location on the mesh — measured the same way as the muscle picker's
+ * markers (true outward surface point at the joint's height, nudged out a
+ * small fixed margin so it hugs the limb without being occluded by it).
+ */
+const RAW_MARKERS: BodyMarker[] = [
+  { id: 'left-shoulder', value: 'left-shoulder', position: [-2.74, 17.0, -0.29] },
+  { id: 'right-shoulder', value: 'right-shoulder', position: [2.74, 17.0, -0.29] },
+  { id: 'left-elbow', value: 'left-elbow', position: [-4.92, 13.2, -0.74] },
+  { id: 'right-elbow', value: 'right-elbow', position: [4.92, 13.2, -0.74] },
+  { id: 'left-hip', value: 'left-hip', position: [-2.12, 10.6, 0.17] },
+  { id: 'right-hip', value: 'right-hip', position: [2.12, 10.6, 0.17] },
+  { id: 'left-knee', value: 'left-knee', position: [-2.5, 5.9, -0.64] },
+  { id: 'right-knee', value: 'right-knee', position: [2.5, 5.9, -0.64] },
+]
+
+const MARKERS = scaleMarkers(RAW_MARKERS)
 
 /**
  * One tap picks a whole joint (both underlying sensor nodes at once), rather
  * than requiring two separate taps on raw sensor dots. The confirmed angle
- * this produces is exactly the same nodeA/nodeB pair shape as before.
+ * this produces is exactly the same nodeA/nodeB pair shape as before. Uses
+ * the same rotatable 3D scan as the EMG step's muscle picker so a physio
+ * only has to learn one figure.
  */
 export function JointPicker({
   selectedJointId,
@@ -15,32 +35,5 @@ export function JointPicker({
   onSelect: (jointId: string) => void
   height?: number
 }) {
-  return (
-    <svg viewBox="0 0 200 400" style={{ height, width: height / 2 }} className="mx-auto">
-      <BodySilhouette />
-      {JOINT_PRESETS.map((preset) => {
-        const pos = NODE_POSITIONS[preset.markerNodeId]
-        if (!pos) return null
-        const isSelected = selectedJointId === preset.id
-        const color = isSelected ? 'var(--color-accent)' : 'var(--color-ink-faint)'
-        return (
-          <g
-            key={preset.id}
-            transform={`translate(${pos.x}, ${pos.y})`}
-            onClick={() => onSelect(preset.id)}
-            className="cursor-pointer"
-          >
-            {isSelected && <circle r={13} fill="none" stroke="var(--color-accent)" strokeOpacity={0.35} strokeWidth={2} />}
-            <circle
-              r={isSelected ? 9 : 7}
-              fill="var(--color-surface)"
-              stroke={color}
-              strokeWidth={isSelected ? 2.5 : 2}
-              style={{ transition: 'r 150ms ease' }}
-            />
-          </g>
-        )
-      })}
-    </svg>
-  )
+  return <Body3DPicker markers={MARKERS} selectedValue={selectedJointId} onSelect={onSelect} height={height} />
 }
