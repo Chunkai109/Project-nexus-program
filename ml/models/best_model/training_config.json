@@ -1,0 +1,95 @@
+{
+  "model_type": "xgboost",
+  "hyperparameters": {
+    "n_estimators": 400,
+    "max_depth": 5,
+    "learning_rate": 0.03,
+    "reg_lambda": 3.0
+  },
+  "cv_macro_f1_mean": 0.8755062659950699,
+  "cv_macro_f1_std": 0.02627668372566112,
+  "train_only_metrics": {
+    "accuracy": 0.9505251940934694,
+    "macro_f1": 0.9528958446627385
+  },
+  "val_only_metrics": {
+    "accuracy": 0.8916315472606864,
+    "macro_f1": 0.8937539049009846
+  },
+  "dev_pool_refit_metrics": {
+    "accuracy": 0.9414337788578372,
+    "macro_f1": 0.9439013282033685
+  },
+  "classes": [
+    "bottom",
+    "concentric",
+    "eccentric",
+    "top"
+  ],
+  "seed": 42,
+  "all_candidate_results": [
+    {
+      "model_type": "xgboost",
+      "params": {
+        "n_estimators": 400,
+        "max_depth": 5,
+        "learning_rate": 0.03,
+        "reg_lambda": 3.0
+      },
+      "cv_macro_f1_mean": 0.8755062659950699,
+      "cv_macro_f1_std": 0.02627668372566112
+    },
+    {
+      "model_type": "random_forest",
+      "params": {
+        "n_estimators": 300,
+        "max_depth": 10,
+        "min_samples_leaf": 3
+      },
+      "cv_macro_f1_mean": 0.8754352680372429,
+      "cv_macro_f1_std": 0.025901272915184893
+    },
+    {
+      "model_type": "xgboost",
+      "params": {
+        "n_estimators": 300,
+        "max_depth": 4,
+        "learning_rate": 0.05,
+        "reg_lambda": 2.0
+      },
+      "cv_macro_f1_mean": 0.8753365452819537,
+      "cv_macro_f1_std": 0.0270540614394159
+    },
+    {
+      "model_type": "random_forest",
+      "params": {
+        "n_estimators": 400,
+        "max_depth": null,
+        "min_samples_leaf": 1
+      },
+      "cv_macro_f1_mean": 0.8750572164790874,
+      "cv_macro_f1_std": 0.027164492691800695
+    },
+    {
+      "model_type": "xgboost",
+      "params": {
+        "n_estimators": 150,
+        "max_depth": 3,
+        "learning_rate": 0.1,
+        "reg_lambda": 1.0
+      },
+      "cv_macro_f1_mean": 0.8733015374719972,
+      "cv_macro_f1_std": 0.02937900396922566
+    },
+    {
+      "model_type": "random_forest",
+      "params": {
+        "n_estimators": 200,
+        "max_depth": 6,
+        "min_samples_leaf": 5
+      },
+      "cv_macro_f1_mean": 0.865402820266253,
+      "cv_macro_f1_std": 0.024551555726985023
+    }
+  ]
+}

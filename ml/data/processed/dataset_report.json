@@ -1,0 +1,104 @@
+{
+  "num_sequences_bicep": 31,
+  "num_subjects": 31,
+  "num_total_frames": 9574,
+  "sequence_length_frames": {
+    "min": 186,
+    "max": 591,
+    "mean": 308.83870967741933
+  },
+  "num_classes": 4,
+  "class_names": [
+    "bottom",
+    "concentric",
+    "top",
+    "eccentric"
+  ],
+  "class_counts_overall": {
+    "eccentric": 2746,
+    "bottom": 2685,
+    "concentric": 2648,
+    "top": 1495
+  },
+  "class_balance_ratio_max_min": 1.836789297658863,
+  "active_arm_detected_per_subject": {
+    "subj_000": "right",
+    "subj_001": "right",
+    "subj_002": "right",
+    "subj_003": "right",
+    "subj_004": "right",
+    "subj_005": "right",
+    "subj_006": "right",
+    "subj_007": "right",
+    "subj_008": "right",
+    "subj_009": "right",
+    "subj_010": "right",
+    "subj_011": "right",
+    "subj_012": "left",
+    "subj_013": "right",
+    "subj_014": "right",
+    "subj_015": "right",
+    "subj_016": "right",
+    "subj_017": "right",
+    "subj_018": "right",
+    "subj_019": "right",
+    "subj_020": "right",
+    "subj_021": "right",
+    "subj_022": "right",
+    "subj_023": "right",
+    "subj_024": "left",
+    "subj_025": "right",
+    "subj_026": "right",
+    "subj_027": "left",
+    "subj_028": "right",
+    "subj_029": "right",
+    "subj_030": "right"
+  },
+  "gender_distribution": {
+    "female": 20,
+    "male": 11
+  },
+  "landmarks_used": [
+    "elbow_angle_active",
+    "elbow_angle_other",
+    "wrist_height_active",
+    "wrist_height_other",
+    "elbow_angle_active_vel",
+    "wrist_height_active_vel",
+    "elbow_angle_active_rollstd"
+  ],
+  "data_format": "COCO-style JSON (info/categories/images/annotations) + companion mp4 (unused)",
+  "missing_or_corrupted_sequences": 0,
+  "split": {
+    "train": {
+      "num_subjects": 22,
+      "num_frames": 6569,
+      "class_counts": {
+        "eccentric": 1886,
+        "bottom": 1857,
+        "concentric": 1819,
+        "top": 1007
+      }
+    },
+    "val": {
+      "num_subjects": 5,
+      "num_frames": 1661,
+      "class_counts": {
+        "eccentric": 500,
+        "concentric": 461,
+        "bottom": 426,
+        "top": 274
+      }
+    },
+    "test": {
+      "num_subjects": 4,
+      "num_frames": 1344,
+      "class_counts": {
+        "bottom": 402,
+        "concentric": 368,
+        "eccentric": 360,
+        "top": 214
+      }
+    }
+  }
+}

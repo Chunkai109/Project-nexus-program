@@ -1,0 +1,4 @@
+__pycache__/
+*.pyc
+ml/data/raw/*
+!ml/data/raw/.gitkeep
