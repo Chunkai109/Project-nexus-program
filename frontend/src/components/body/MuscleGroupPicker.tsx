@@ -11,25 +11,27 @@ const MODEL_SCALE = 0.087
 /**
  * Marker positions are authored in the model's own (pre-scale) coordinate
  * space, then converted once below — much easier to eyeball against the raw
- * mesh than working in the tiny post-scale numbers. Each is pushed outward
- * past the body's actual surface at that point (verified empirically) so the
- * opaque mesh in front of it never blocks the raycast; bilateral regions get
- * two markers that both select the same group.
+ * mesh than working in the tiny post-scale numbers. Each was measured
+ * directly off the mesh's own vertices (the true surface point furthest
+ * outward in its region) and nudged out by a small, fixed margin so it hugs
+ * the body instead of floating, while still clearing the surface enough that
+ * the opaque mesh never blocks its raycast; bilateral regions get two
+ * markers that both select the same group.
  */
 const RAW_MARKERS: { id: string; groupId: string; position: [number, number, number] }[] = [
-  { id: 'chest', groupId: 'chest', position: [0, 15.3, 2.2] },
-  { id: 'back', groupId: 'back', position: [0, 15.3, -2.5] },
-  { id: 'core', groupId: 'core', position: [0, 11.3, 2.0] },
-  { id: 'left-shoulder', groupId: 'shoulder', position: [-2.0, 17.0, 0.6] },
-  { id: 'right-shoulder', groupId: 'shoulder', position: [2.0, 17.0, 0.6] },
-  { id: 'left-arm', groupId: 'arm', position: [-3.4, 13.6, 0.3] },
-  { id: 'right-arm', groupId: 'arm', position: [3.4, 13.6, 0.3] },
-  { id: 'left-forearm', groupId: 'forearm', position: [-5.2, 10.6, 0.2] },
-  { id: 'right-forearm', groupId: 'forearm', position: [5.2, 10.6, 0.2] },
-  { id: 'left-upper-leg', groupId: 'upper-leg', position: [-1.6, 8.0, 1.6] },
-  { id: 'right-upper-leg', groupId: 'upper-leg', position: [1.6, 8.0, 1.6] },
-  { id: 'left-lower-leg', groupId: 'lower-leg', position: [-1.3, 3.3, 1.3] },
-  { id: 'right-lower-leg', groupId: 'lower-leg', position: [1.3, 3.3, 1.3] },
+  { id: 'chest', groupId: 'chest', position: [0, 15.3, 1.33] },
+  { id: 'back', groupId: 'back', position: [0, 15.3, -2.0] },
+  { id: 'core', groupId: 'core', position: [0, 11.3, 1.35] },
+  { id: 'left-shoulder', groupId: 'shoulder', position: [-2.74, 17.0, -0.29] },
+  { id: 'right-shoulder', groupId: 'shoulder', position: [2.74, 17.0, -0.29] },
+  { id: 'left-arm', groupId: 'arm', position: [-4.66, 13.6, -1.16] },
+  { id: 'right-arm', groupId: 'arm', position: [4.66, 13.6, -1.16] },
+  { id: 'left-forearm', groupId: 'forearm', position: [-5.96, 10.55, -0.67] },
+  { id: 'right-forearm', groupId: 'forearm', position: [5.96, 10.55, -0.67] },
+  { id: 'left-upper-leg', groupId: 'upper-leg', position: [-2.47, 8.0, -0.27] },
+  { id: 'right-upper-leg', groupId: 'upper-leg', position: [2.47, 8.0, -0.27] },
+  { id: 'left-lower-leg', groupId: 'lower-leg', position: [-2.48, 3.3, -0.77] },
+  { id: 'right-lower-leg', groupId: 'lower-leg', position: [2.48, 3.3, -0.77] },
 ]
 
 interface GroupMarker {
