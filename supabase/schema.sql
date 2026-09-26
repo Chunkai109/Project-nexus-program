@@ -34,8 +34,9 @@ create table if not exists patients (
 -- angle_configs mirrors the app's AngleConfig[] shape directly:
 --   [{ "id": "...", "nodeA": 1, "nodeB": 3, "targetMin": 90, "targetMax": 110, "faultThresholdDeg": 8 }, ...]
 -- muscle_emg_targets mirrors the app's MuscleEmgTarget[] shape — one target
--- %MVC per muscle node, replacing the old single global target_emg_mvc:
---   [{ "podId": 1, "targetMvc": 65 }, ...]
+-- %MVC per muscle (see MUSCLE_GROUPS in lib/muscles.ts), replacing the old
+-- single global target_emg_mvc:
+--   [{ "muscleId": "left-vastus-medialis", "targetMvc": 65 }, ...]
 -- ---------------------------------------------------------------
 create table if not exists exercises (
   id uuid primary key default gen_random_uuid(),

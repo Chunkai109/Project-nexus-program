@@ -1,4 +1,4 @@
-import type { MuscleEmgTarget, PodId } from '@/types'
+import type { PodId } from '@/types'
 
 /**
  * Labels for sensor nodes beyond the 6-pod hardware kit (shoulder/elbow/hip
@@ -63,19 +63,4 @@ export const JOINT_PRESETS: JointPreset[] = [
 /** Reverse lookup so editing an existing confirmed angle can re-select the joint it came from. */
 export function jointPresetForPair(nodeA: PodId, nodeB: PodId): JointPreset | undefined {
   return JOINT_PRESETS.find((p) => (p.nodeA === nodeA && p.nodeB === nodeB) || (p.nodeA === nodeB && p.nodeB === nodeA))
-}
-
-/** The EMG-capable (muscle) nodes a physio can set a target activation for. */
-export const MUSCLE_OPTIONS: { id: PodId; label: string }[] = [
-  { id: 1, label: 'Left Vastus Medialis' },
-  { id: 2, label: 'Right Vastus Medialis' },
-  { id: 7, label: 'Left Deltoid' },
-  { id: 8, label: 'Right Deltoid' },
-]
-
-const DEFAULT_MUSCLE_EMG_TARGET = 65
-
-/** This muscle's confirmed target %MVC, or a sensible default if the physio hasn't set one for it. */
-export function muscleEmgTarget(targets: MuscleEmgTarget[], podId: PodId): number {
-  return targets.find((t) => t.podId === podId)?.targetMvc ?? DEFAULT_MUSCLE_EMG_TARGET
 }

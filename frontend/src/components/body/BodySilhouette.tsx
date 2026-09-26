@@ -1,4 +1,4 @@
-/** The outline stick figure shared by BodyMap, JointPicker and MuscleEmgPicker, so all three line up on the same 200×400 viewBox. */
+/** The outline stick figure shared by BodyMap and JointPicker, so both line up on the same 200×400 viewBox. */
 export function BodySilhouette() {
   return (
     <g fill="none" stroke="var(--color-border-strong)" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">

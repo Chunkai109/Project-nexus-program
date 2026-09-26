@@ -1,4 +1,5 @@
-import type { AngleConfig, Exercise, MuscleEmgTarget, PatientRecord, RepSample, SessionRecord } from '@/types'
+import type { AngleConfig, Exercise, PatientRecord, RepSample, SessionRecord } from '@/types'
+import { normalizeMuscleEmgTargets, type LegacyMuscleEmgTarget } from '@/lib/muscles'
 
 /** Defined here (not in AppDataContext, which imports this file) to avoid a circular import; re-exported from AppDataContext for existing callers. */
 export type NewExercise = Omit<Exercise, 'id' | 'createdAt'>
@@ -20,7 +21,7 @@ export interface ExerciseRow {
   muscle_groups: string[]
   sets: number
   reps: number
-  muscle_emg_targets: MuscleEmgTarget[]
+  muscle_emg_targets: LegacyMuscleEmgTarget[]
   therapist_note: string
   setup_instructions: string
   est_minutes: number
@@ -59,7 +60,7 @@ export function exerciseFromRow(row: ExerciseRow): Exercise {
     muscleGroups: row.muscle_groups,
     sets: row.sets,
     reps: row.reps,
-    muscleEmgTargets: row.muscle_emg_targets ?? [],
+    muscleEmgTargets: normalizeMuscleEmgTargets(row.muscle_emg_targets),
     therapistNote: row.therapist_note,
     setupInstructions: row.setup_instructions,
     estMinutes: row.est_minutes,

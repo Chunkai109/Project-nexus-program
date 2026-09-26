@@ -10,7 +10,7 @@ import { TrendChart } from '@/components/charts/TrendChart'
 import { EmgActivationBar } from '@/components/charts/EmgActivationBar'
 import { useAppData } from '@/lib/data/AppDataContext'
 import { formatRelativeTime } from '@/lib/formatRelativeTime'
-import { muscleEmgTarget } from '@/lib/joints'
+import { muscleEmgTarget } from '@/lib/muscles'
 import type { SessionRecord, TelemetryPoint } from '@/types'
 
 function average(values: number[]): number {
@@ -38,8 +38,8 @@ export function SessionSummary() {
   const { sessions, exercises } = useAppData()
   const session = useMemo(() => sessions.find((s) => s.id === sessionId) ?? null, [sessions, sessionId])
   const exercise = useMemo(() => exercises.find((e) => e.id === session?.exerciseId) ?? null, [exercises, session])
-  const targetEmgLeft = muscleEmgTarget(exercise?.muscleEmgTargets ?? [], 1)
-  const targetEmgRight = muscleEmgTarget(exercise?.muscleEmgTargets ?? [], 2)
+  const targetEmgLeft = muscleEmgTarget(exercise?.muscleEmgTargets ?? [], 'left-vastus-medialis')
+  const targetEmgRight = muscleEmgTarget(exercise?.muscleEmgTargets ?? [], 'right-vastus-medialis')
 
   const priorSession = useMemo(() => {
     if (!session) return null

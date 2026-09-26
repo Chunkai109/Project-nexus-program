@@ -19,8 +19,9 @@ export interface ExerciseFormState {
   draftMin: number
   draftMax: number
   draftFaultThresholdDeg: number
-  /** The muscle currently being defined, before it's confirmed into muscleEmgTargets. */
-  draftMuscleId: PodId | null
+  /** The muscle group/muscle currently being defined, before it's confirmed into muscleEmgTargets. */
+  draftMuscleGroupId: string | null
+  draftMuscleId: string | null
   draftMuscleEmgPct: number
 }
 
@@ -40,6 +41,7 @@ function blankForm(): ExerciseFormState {
     draftMin: 90,
     draftMax: 110,
     draftFaultThresholdDeg: 8,
+    draftMuscleGroupId: null,
     draftMuscleId: null,
     draftMuscleEmgPct: 65,
   }
@@ -61,6 +63,7 @@ function formFromExercise(ex: Exercise): ExerciseFormState {
     draftMin: 90,
     draftMax: 110,
     draftFaultThresholdDeg: 8,
+    draftMuscleGroupId: null,
     draftMuscleId: null,
     draftMuscleEmgPct: 65,
   }
@@ -143,10 +146,15 @@ export function useExerciseForm(initial?: Exercise) {
     }))
   }
 
-  function selectDraftMuscle(podId: PodId) {
+  /** Picking a group clears any specific muscle from the previous group — the dropdown always reflects the group currently selected. */
+  function selectDraftMuscleGroup(groupId: string) {
+    setForm((f) => ({ ...f, draftMuscleGroupId: groupId, draftMuscleId: null, draftMuscleEmgPct: 65 }))
+  }
+
+  function selectDraftMuscle(muscleId: string) {
     setForm((f) => {
-      const existing = f.muscleEmgTargets.find((t) => t.podId === podId)
-      return { ...f, draftMuscleId: podId, draftMuscleEmgPct: existing?.targetMvc ?? 65 }
+      const existing = f.muscleEmgTargets.find((t) => t.muscleId === muscleId)
+      return { ...f, draftMuscleId: muscleId, draftMuscleEmgPct: existing?.targetMvc ?? 65 }
     })
   }
 
@@ -158,18 +166,18 @@ export function useExerciseForm(initial?: Exercise) {
   function confirmMuscleEmgTarget() {
     setForm((f) => {
       if (f.draftMuscleId == null) return f
-      const newTarget: MuscleEmgTarget = { podId: f.draftMuscleId, targetMvc: f.draftMuscleEmgPct }
-      const existingIndex = f.muscleEmgTargets.findIndex((t) => t.podId === f.draftMuscleId)
+      const newTarget: MuscleEmgTarget = { muscleId: f.draftMuscleId, targetMvc: f.draftMuscleEmgPct }
+      const existingIndex = f.muscleEmgTargets.findIndex((t) => t.muscleId === f.draftMuscleId)
       const muscleEmgTargets =
         existingIndex >= 0
           ? f.muscleEmgTargets.map((t, i) => (i === existingIndex ? newTarget : t))
           : [...f.muscleEmgTargets, newTarget]
-      return { ...f, muscleEmgTargets, draftMuscleId: null, draftMuscleEmgPct: 65 }
+      return { ...f, muscleEmgTargets, draftMuscleGroupId: null, draftMuscleId: null, draftMuscleEmgPct: 65 }
     })
   }
 
-  function removeMuscleEmgTarget(podId: PodId) {
-    setForm((f) => ({ ...f, muscleEmgTargets: f.muscleEmgTargets.filter((t) => t.podId !== podId) }))
+  function removeMuscleEmgTarget(muscleId: string) {
+    setForm((f) => ({ ...f, muscleEmgTargets: f.muscleEmgTargets.filter((t) => t.muscleId !== muscleId) }))
   }
 
   function buildPayload(): NewExercise {
@@ -198,6 +206,7 @@ export function useExerciseForm(initial?: Exercise) {
     confirmAngle,
     removeAngleConfig,
     loadAngleIntoDraft,
+    selectDraftMuscleGroup,
     selectDraftMuscle,
     setDraftMuscleEmgPct,
     confirmMuscleEmgTarget,

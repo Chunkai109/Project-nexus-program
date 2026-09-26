@@ -35,9 +35,9 @@ export interface AngleConfig {
   faultThresholdDeg: number
 }
 
-/** A physio-set target %MVC for one specific muscle. Setting a new value for a muscle that already has one replaces it. */
+/** A physio-set target %MVC for one specific muscle (see MUSCLE_GROUPS in lib/muscles.ts). Setting a new value for a muscle that already has one replaces it. */
 export interface MuscleEmgTarget {
-  podId: PodId
+  muscleId: string
   targetMvc: number
 }
 
@@ -47,7 +47,7 @@ export interface Exercise {
   muscleGroups: string[]
   sets: number
   reps: number
-  /** Per-muscle target EMG activation, keyed by which muscle node it was set on (see MUSCLE_OPTIONS in lib/joints.ts). */
+  /** Per-muscle target EMG activation, independent of the sensor hardware — a documented characteristic of the protocol. */
   muscleEmgTargets: MuscleEmgTarget[]
   therapistNote: string
   setupInstructions: string

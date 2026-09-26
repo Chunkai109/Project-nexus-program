@@ -1,7 +1,5 @@
 import { useState } from 'react'
-import { Save } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
-import { Button } from '@/components/ui/Button'
 import { ExerciseFormFields } from './ExerciseFormFields'
 import { useAppData } from '@/lib/data/AppDataContext'
 import { useExerciseForm } from '@/lib/useExerciseForm'
@@ -24,6 +22,7 @@ export function ExerciseFineTune({ exerciseId }: { exerciseId: string }) {
     confirmAngle,
     removeAngleConfig,
     loadAngleIntoDraft,
+    selectDraftMuscleGroup,
     selectDraftMuscle,
     setDraftMuscleEmgPct,
     confirmMuscleEmgTarget,
@@ -54,13 +53,7 @@ export function ExerciseFineTune({ exerciseId }: { exerciseId: string }) {
           <h2 className="text-[15px] font-semibold text-ink">Fine-Tune Exercise</h2>
           <p className="text-[13px] text-ink-faint">Define biomechanical thresholds prescribed for this exercise</p>
         </div>
-        <div className="flex items-center gap-3">
-          {saved && <span className="text-[13px] font-medium text-emerald">Saved.</span>}
-          <Button size="sm" onClick={handleSave} disabled={!canSave}>
-            <Save className="h-3.5 w-3.5" />
-            Save Changes
-          </Button>
-        </div>
+        {saved && <span className="text-[13px] font-medium text-emerald">Saved.</span>}
       </div>
       <ExerciseFormFields
         form={form}
@@ -72,10 +65,14 @@ export function ExerciseFineTune({ exerciseId }: { exerciseId: string }) {
         confirmAngle={confirmAngle}
         removeAngleConfig={removeAngleConfig}
         loadAngleIntoDraft={loadAngleIntoDraft}
+        selectDraftMuscleGroup={selectDraftMuscleGroup}
         selectDraftMuscle={selectDraftMuscle}
         setDraftMuscleEmgPct={setDraftMuscleEmgPct}
         confirmMuscleEmgTarget={confirmMuscleEmgTarget}
         removeMuscleEmgTarget={removeMuscleEmgTarget}
+        canSave={canSave}
+        onSave={handleSave}
+        saveLabel="Save Changes"
       />
     </Card>
   )

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Pencil, Plus, Save, Trash2, X } from 'lucide-react'
+import { Pencil, Plus, Trash2 } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
@@ -32,6 +32,7 @@ export function ProtocolBuilder() {
     confirmAngle,
     removeAngleConfig,
     loadAngleIntoDraft,
+    selectDraftMuscleGroup,
     selectDraftMuscle,
     setDraftMuscleEmgPct,
     confirmMuscleEmgTarget,
@@ -71,21 +72,9 @@ export function ProtocolBuilder() {
   if (mode === 'form') {
     return (
       <Card className="p-7">
-        <div className="mb-6 flex items-center justify-between">
-          <div>
-            <h2 className="text-[15px] font-semibold text-ink">{editingId ? 'Edit Exercise' : 'New Exercise'}</h2>
-            <p className="text-[13px] text-ink-faint">Define biomechanical thresholds prescribed for this exercise</p>
-          </div>
-          <div className="flex gap-2">
-            <Button variant="ghost" size="sm" onClick={() => setMode('list')}>
-              <X className="h-3.5 w-3.5" />
-              Cancel
-            </Button>
-            <Button size="sm" onClick={handleSave} disabled={!canSave}>
-              <Save className="h-3.5 w-3.5" />
-              Save Protocol
-            </Button>
-          </div>
+        <div className="mb-6">
+          <h2 className="text-[15px] font-semibold text-ink">{editingId ? 'Edit Exercise' : 'New Exercise'}</h2>
+          <p className="text-[13px] text-ink-faint">Define biomechanical thresholds prescribed for this exercise</p>
         </div>
         <ExerciseFormFields
           form={form}
@@ -97,10 +86,15 @@ export function ProtocolBuilder() {
           confirmAngle={confirmAngle}
           removeAngleConfig={removeAngleConfig}
           loadAngleIntoDraft={loadAngleIntoDraft}
+          selectDraftMuscleGroup={selectDraftMuscleGroup}
           selectDraftMuscle={selectDraftMuscle}
           setDraftMuscleEmgPct={setDraftMuscleEmgPct}
           confirmMuscleEmgTarget={confirmMuscleEmgTarget}
           removeMuscleEmgTarget={removeMuscleEmgTarget}
+          canSave={canSave}
+          onSave={handleSave}
+          onCancel={() => setMode('list')}
+          saveLabel={editingId ? 'Save Changes' : 'Save Protocol'}
         />
       </Card>
     )
