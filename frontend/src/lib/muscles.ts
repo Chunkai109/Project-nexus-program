@@ -34,6 +34,31 @@ export const MUSCLE_GROUPS: MuscleGroup[] = [
   { id: 'lower-leg', label: 'Lower Leg', muscles: sidedMuscles(['Gastrocnemius', 'Soleus', 'Tibialis Anterior']) },
 ]
 
+export interface MuscleGroupNode {
+  /** Unique per marker — bilateral groups (e.g. Shoulder) get two nodes that both select the same group. */
+  id: string
+  groupId: string
+  x: number
+  y: number
+}
+
+/** SVG (viewBox 0 0 200 400) marker positions for the muscle-group picker's stickman, sharing the same silhouette as JointPicker/BodyMap. */
+export const MUSCLE_GROUP_NODES: MuscleGroupNode[] = [
+  { id: 'chest', groupId: 'chest', x: 100, y: 86 },
+  { id: 'back', groupId: 'back', x: 100, y: 116 },
+  { id: 'core', groupId: 'core', x: 100, y: 146 },
+  { id: 'left-shoulder', groupId: 'shoulder', x: 68, y: 72 },
+  { id: 'right-shoulder', groupId: 'shoulder', x: 132, y: 72 },
+  { id: 'left-arm', groupId: 'arm', x: 50, y: 84 },
+  { id: 'right-arm', groupId: 'arm', x: 150, y: 84 },
+  { id: 'left-forearm', groupId: 'forearm', x: 37, y: 128 },
+  { id: 'right-forearm', groupId: 'forearm', x: 163, y: 128 },
+  { id: 'left-upper-leg', groupId: 'upper-leg', x: 72, y: 205 },
+  { id: 'right-upper-leg', groupId: 'upper-leg', x: 128, y: 205 },
+  { id: 'left-lower-leg', groupId: 'lower-leg', x: 82, y: 320 },
+  { id: 'right-lower-leg', groupId: 'lower-leg', x: 118, y: 320 },
+]
+
 export function muscleLabel(muscleId: string): string {
   for (const group of MUSCLE_GROUPS) {
     const found = group.muscles.find((m) => m.id === muscleId)

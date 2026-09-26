@@ -7,13 +7,14 @@ import { Slider } from '@/components/ui/Slider'
 import { RangeSlider } from '@/components/ui/RangeSlider'
 import { RadialGauge } from '@/components/charts/RadialGauge'
 import { JointPicker } from '@/components/body/JointPicker'
+import { MuscleGroupPicker } from '@/components/body/MuscleGroupPicker'
 import { JOINT_PRESETS } from '@/lib/joints'
 import { MUSCLE_GROUPS, muscleLabel } from '@/lib/muscles'
 import { podLabel } from '@/lib/podUtils'
 import type { ExerciseFormState } from '@/lib/useExerciseForm'
 import type { AngleConfig, PatientRecord } from '@/types'
 
-const MUSCLE_TAGS = ['Quadriceps', 'Hamstrings', 'Glutes', 'Calves', 'Stabilizers', 'Ankle Complex', 'Core']
+const MUSCLE_TAGS = MUSCLE_GROUPS.map((g) => g.label)
 
 const fieldClass =
   'w-full rounded-xl bg-surface-secondary px-4 py-3 text-[14px] text-ink outline-none ring-1 ring-transparent transition-all duration-200 focus:ring-accent/50'
@@ -79,129 +80,133 @@ export function ExerciseFormFields({
 
       <div className="mt-8">
         {step === 'basics' && (
-          <div className="flex max-w-2xl flex-col gap-6">
-            <label className="block">
-              <span className="mb-2 block text-[13px] font-medium text-ink-muted">Exercise Title</span>
-              <input
-                value={form.title}
-                onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
-                placeholder="e.g. Bilateral Squat Rehab"
-                className={fieldClass}
-              />
-            </label>
+          <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
+            <div className="flex flex-col gap-6">
+              <label className="block">
+                <span className="mb-2 block text-[13px] font-medium text-ink-muted">Exercise Title</span>
+                <input
+                  value={form.title}
+                  onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
+                  placeholder="e.g. Bilateral Squat Rehab"
+                  className={fieldClass}
+                />
+              </label>
 
-            <label className="block">
-              <span className="mb-2 block text-[13px] font-medium text-ink-muted">Assign to Patient</span>
-              <div className="relative">
-                <select
-                  value={form.assignedPatientId ?? ''}
-                  onChange={(e) => setForm((f) => ({ ...f, assignedPatientId: e.target.value || null }))}
-                  className={clsx(fieldClass, 'appearance-none pr-9')}
-                >
-                  <option value="">All Patients</option>
-                  {patients.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name} · {p.email}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown className="pointer-events-none absolute right-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-faint" />
-              </div>
-              {patients.length === 0 && (
-                <p className="mt-1.5 text-[12px] text-ink-faint">
-                  No patients have signed in yet — this exercise will be visible to whoever signs in until you assign it.
-                </p>
-              )}
-            </label>
-
-            <div>
-              <span className="mb-2 block text-[13px] font-medium text-ink-muted">Target Muscle Group</span>
-              <div className="flex flex-wrap gap-2">
-                {MUSCLE_TAGS.map((tag) => (
-                  <button
-                    key={tag}
-                    type="button"
-                    onClick={() => toggleTag(tag)}
-                    className={clsx(
-                      'rounded-full px-3.5 py-1.5 text-[13px] font-medium transition-colors duration-200',
-                      form.muscleGroups.includes(tag)
-                        ? 'bg-accent/10 text-accent'
-                        : 'bg-surface-secondary text-ink-muted hover:bg-surface-hover',
-                    )}
+              <label className="block">
+                <span className="mb-2 block text-[13px] font-medium text-ink-muted">Assign to Patient</span>
+                <div className="relative">
+                  <select
+                    value={form.assignedPatientId ?? ''}
+                    onChange={(e) => setForm((f) => ({ ...f, assignedPatientId: e.target.value || null }))}
+                    className={clsx(fieldClass, 'appearance-none pr-9')}
                   >
-                    {tag}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="grid grid-cols-3 gap-4">
-              <label className="block">
-                <span className="mb-2 block text-[13px] font-medium text-ink-muted">Sets</span>
-                <input
-                  type="number"
-                  value={form.sets}
-                  min={1}
-                  onChange={(e) => setForm((f) => ({ ...f, sets: Number(e.target.value) }))}
-                  className={fieldClass}
-                />
+                    <option value="">All Patients</option>
+                    {patients.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name} · {p.email}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-faint" />
+                </div>
+                {patients.length === 0 && (
+                  <p className="mt-1.5 text-[12px] text-ink-faint">
+                    No patients have signed in yet — this exercise will be visible to whoever signs in until you assign it.
+                  </p>
+                )}
               </label>
-              <label className="block">
-                <span className="mb-2 block text-[13px] font-medium text-ink-muted">Reps</span>
-                <input
-                  type="number"
-                  value={form.reps}
-                  min={1}
-                  onChange={(e) => setForm((f) => ({ ...f, reps: Number(e.target.value) }))}
-                  className={fieldClass}
-                />
-              </label>
-              <label className="block">
-                <span className="mb-2 block text-[13px] font-medium text-ink-muted">Est. Minutes</span>
-                <input
-                  type="number"
-                  value={form.estMinutes}
-                  min={1}
-                  onChange={(e) => setForm((f) => ({ ...f, estMinutes: Number(e.target.value) }))}
-                  className={fieldClass}
-                />
-              </label>
-            </div>
 
-            <label className="block">
-              <span className="mb-2 block text-[13px] font-medium text-ink-muted">Therapist Note (shown to patient)</span>
-              <textarea
-                value={form.therapistNote}
-                onChange={(e) => setForm((f) => ({ ...f, therapistNote: e.target.value }))}
-                rows={2}
-                className={clsx(fieldClass, 'resize-none')}
-                placeholder="e.g. Focus on symmetric weight distribution."
-              />
-            </label>
-
-            <label className="block">
-              <span className="mb-2 block text-[13px] font-medium text-ink-muted">Setup Instructions Editor</span>
-              <div className="rounded-xl bg-surface-secondary ring-1 ring-transparent transition-all duration-200 focus-within:ring-accent/50">
-                <div className="flex items-center gap-1 border-b border-border px-2 py-1.5">
-                  {[Bold, Italic, List].map((Icon, i) => (
+              <div>
+                <span className="mb-2 block text-[13px] font-medium text-ink-muted">Target Muscle Group</span>
+                <div className="flex flex-wrap gap-2">
+                  {MUSCLE_TAGS.map((tag) => (
                     <button
-                      key={i}
+                      key={tag}
                       type="button"
-                      className="rounded p-1.5 text-ink-faint transition-colors duration-200 hover:bg-surface-hover hover:text-ink"
+                      onClick={() => toggleTag(tag)}
+                      className={clsx(
+                        'rounded-full px-3.5 py-1.5 text-[13px] font-medium transition-colors duration-200',
+                        form.muscleGroups.includes(tag)
+                          ? 'bg-accent/10 text-accent'
+                          : 'bg-surface-secondary text-ink-muted hover:bg-surface-hover',
+                      )}
                     >
-                      <Icon className="h-3.5 w-3.5" />
+                      {tag}
                     </button>
                   ))}
                 </div>
-                <textarea
-                  value={form.setupInstructions}
-                  onChange={(e) => setForm((f) => ({ ...f, setupInstructions: e.target.value }))}
-                  rows={3}
-                  className="w-full resize-none bg-transparent px-4 py-3 text-[14px] text-ink outline-none placeholder:text-ink-faint"
-                  placeholder="Write pod placement guidelines for the patient…"
-                />
               </div>
-            </label>
+
+              <div className="grid grid-cols-3 gap-4">
+                <label className="block">
+                  <span className="mb-2 block text-[13px] font-medium text-ink-muted">Sets</span>
+                  <input
+                    type="number"
+                    value={form.sets}
+                    min={1}
+                    onChange={(e) => setForm((f) => ({ ...f, sets: Number(e.target.value) }))}
+                    className={fieldClass}
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-2 block text-[13px] font-medium text-ink-muted">Reps</span>
+                  <input
+                    type="number"
+                    value={form.reps}
+                    min={1}
+                    onChange={(e) => setForm((f) => ({ ...f, reps: Number(e.target.value) }))}
+                    className={fieldClass}
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-2 block text-[13px] font-medium text-ink-muted">Est. Minutes</span>
+                  <input
+                    type="number"
+                    value={form.estMinutes}
+                    min={1}
+                    onChange={(e) => setForm((f) => ({ ...f, estMinutes: Number(e.target.value) }))}
+                    className={fieldClass}
+                  />
+                </label>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-6">
+              <label className="block">
+                <span className="mb-2 block text-[13px] font-medium text-ink-muted">Therapist Note (shown to patient)</span>
+                <textarea
+                  value={form.therapistNote}
+                  onChange={(e) => setForm((f) => ({ ...f, therapistNote: e.target.value }))}
+                  rows={4}
+                  className={clsx(fieldClass, 'resize-none')}
+                  placeholder="e.g. Focus on symmetric weight distribution."
+                />
+              </label>
+
+              <label className="block">
+                <span className="mb-2 block text-[13px] font-medium text-ink-muted">Setup Instructions Editor</span>
+                <div className="rounded-xl bg-surface-secondary ring-1 ring-transparent transition-all duration-200 focus-within:ring-accent/50">
+                  <div className="flex items-center gap-1 border-b border-border px-2 py-1.5">
+                    {[Bold, Italic, List].map((Icon, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        className="rounded p-1.5 text-ink-faint transition-colors duration-200 hover:bg-surface-hover hover:text-ink"
+                      >
+                        <Icon className="h-3.5 w-3.5" />
+                      </button>
+                    ))}
+                  </div>
+                  <textarea
+                    value={form.setupInstructions}
+                    onChange={(e) => setForm((f) => ({ ...f, setupInstructions: e.target.value }))}
+                    rows={9}
+                    className="w-full resize-none bg-transparent px-4 py-3 text-[14px] text-ink outline-none placeholder:text-ink-faint"
+                    placeholder="Write pod placement guidelines for the patient…"
+                  />
+                </div>
+              </label>
+            </div>
           </div>
         )}
 
@@ -331,24 +336,12 @@ export function ExerciseFormFields({
                 </span>
               </div>
               <p className="mb-4 text-[13px] text-ink-muted">
-                Pick a muscle group, then the specific muscle within it, to set a target EMG activation.
+                Tap a node below to reveal its muscle group, then pick the specific muscle within it from the dropdown.
               </p>
-              <div className="mb-4 flex flex-wrap gap-2">
-                {MUSCLE_GROUPS.map((group) => (
-                  <button
-                    key={group.id}
-                    type="button"
-                    onClick={() => selectDraftMuscleGroup(group.id)}
-                    className={clsx(
-                      'rounded-full px-3.5 py-1.5 text-[13px] font-medium transition-colors duration-200',
-                      form.draftMuscleGroupId === group.id
-                        ? 'bg-accent/10 text-accent'
-                        : 'bg-surface text-ink-muted hover:bg-surface-hover',
-                    )}
-                  >
-                    {group.label}
-                  </button>
-                ))}
+              <MuscleGroupPicker selectedGroupId={form.draftMuscleGroupId} onSelect={selectDraftMuscleGroup} height={220} />
+              <div className="my-4 text-center text-[13px]">
+                {!draftGroup && <span className="text-ink-faint">No muscle group selected yet</span>}
+                {draftGroup && <span className="font-medium text-accent">{draftGroup.label} selected</span>}
               </div>
               {draftGroup && (
                 <label className="block">
@@ -372,7 +365,6 @@ export function ExerciseFormFields({
                   </div>
                 </label>
               )}
-              {!draftGroup && <p className="text-[13px] text-ink-faint">No muscle group selected yet</p>}
             </div>
 
             <div className="flex flex-col items-center gap-2 rounded-xl bg-surface-secondary p-6">
