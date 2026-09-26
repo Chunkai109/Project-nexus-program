@@ -108,8 +108,8 @@ def load_final_model():
     return "lstm", (model, ckpt["mode"]), config
 
 
-def predict_classical(model, sub_df):
-    X = sub_df[AGGREGATE_FEATURE_NAMES].values
+def predict_classical(model, sub_df, feature_cols=AGGREGATE_FEATURE_NAMES):
+    X = sub_df[feature_cols].values
     return model.predict(X)
 
 
@@ -126,7 +126,7 @@ def predict_lstm(model_tuple, data, indices, batch_size=64):
     return np.array(preds), np.array(labels)
 
 
-def evaluate_final_model(model_type, model_obj, split):
+def evaluate_final_model(model_type, model_obj, split, feature_cols=AGGREGATE_FEATURE_NAMES):
     seq_df = pd.read_csv(PROCESSED_DIR / "sequence_features.csv")
     data = load_sequences_npz(PROCESSED_DIR / "sequences.npz") if model_type == "lstm" else None
 
@@ -135,7 +135,7 @@ def evaluate_final_model(model_type, model_obj, split):
         if model_type == "classical":
             sub_df = seq_df[seq_df["base_id"].isin(base_ids)]
             y_true = sub_df["class_label"].map(CLASS_TO_IDX).values
-            y_pred = predict_classical(model_obj, sub_df)
+            y_pred = predict_classical(model_obj, sub_df, feature_cols)
             video_ids = sub_df["video_id"].values
             is_original = sub_df["is_original"].values
         else:
@@ -172,7 +172,7 @@ def evaluate_final_model(model_type, model_obj, split):
     return summary
 
 
-def evaluate_all_candidates_diagnostic(split):
+def evaluate_all_candidates_diagnostic(split, feature_cols=AGGREGATE_FEATURE_NAMES):
     """Reproduces the shortcut-learning diagnosis from development: every
     LSTM channel + the classical baseline, evaluated on train/val/test.
     """
@@ -206,7 +206,7 @@ def evaluate_all_candidates_diagnostic(split):
         for part, base_ids in split.items():
             sub_df = seq_df[seq_df["base_id"].isin(base_ids)]
             y_true = sub_df["class_label"].map(CLASS_TO_IDX).values
-            y_pred = predict_classical(clf, sub_df)
+            y_pred = predict_classical(clf, sub_df, feature_cols)
             diagnosis["classical_train_only"][part] = {
                 "accuracy": float(accuracy_score(y_true, y_pred)),
                 "macro_f1": float(f1_score(y_true, y_pred, average="macro", zero_division=0)),
@@ -245,17 +245,22 @@ def main():
 
     with open(PROCESSED_DIR / "base_id_split.json") as f:
         split = json.load(f)
+    with open(MODEL_DIR / "training_config.json") as f:
+        config = json.load(f)
+    feature_cols = config.get("selected_features", AGGREGATE_FEATURE_NAMES)
 
     print("Evaluating all trained candidates (train/val/test) for the shortcut-learning check...")
-    evaluate_all_candidates_diagnostic(split)
+    evaluate_all_candidates_diagnostic(split, feature_cols)
 
     model_type, model_obj, config = load_final_model()
     print(f"\n\nFinal saved model type: {model_type}")
     if model_type == "classical":
-        print(f"  {config['best_classical_type']} {config['best_classical_params']}")
+        print(f"  {config['best_classical_type']} {config['best_classical_params']} "
+              f"(feature_set={config.get('best_classical_feature_set', 'full')}, "
+              f"{len(feature_cols)}/{len(AGGREGATE_FEATURE_NAMES)} features)")
         if hasattr(model_obj, "feature_importances_"):
             order = np.argsort(model_obj.feature_importances_)[::-1]
-            top = [{"feature": AGGREGATE_FEATURE_NAMES[i], "importance": float(model_obj.feature_importances_[i])}
+            top = [{"feature": feature_cols[i], "importance": float(model_obj.feature_importances_[i])}
                    for i in order[:15]]
             with open(REPORT_DIR / "feature_importance.json", "w") as f:
                 json.dump(top, f, indent=2)
@@ -265,13 +270,22 @@ def main():
     else:
         print(f"  LSTM mode={model_obj[1]}")
 
-    summary = evaluate_final_model(model_type, model_obj, split)
+    summary = evaluate_final_model(model_type, model_obj, split, feature_cols)
     plot_training_curves()
 
     with open(REPORT_DIR / "summary.json", "w") as f:
         json.dump(summary, f, indent=2)
 
+    headline = config.get("headline_generalization_metric")
+    print("\n" + "=" * 70)
+    if headline:
+        print(f"HEADLINE GENERALIZATION ESTIMATE (report this number, not test accuracy):")
+        print(f"  {headline['name']}: {headline['value']:.4f} (+/- {headline['std']:.4f})")
+        print(f"  {headline['note']}")
+    print("=" * 70)
     print("\n=== FINAL MODEL SUMMARY (accuracy / macro-F1 / weighted-F1) ===")
+    print("(train/val numbers below are optimistic -- val was folded into the final refit;")
+    print(" test is only 8 independent recordings, so treat it as illustrative, not definitive)")
     for name, m in summary.items():
         print(f"{name:16s}: acc={m['accuracy']:.4f}  macroF1={m['macro_f1']:.4f}  weightedF1={m['weighted_f1']:.4f}")
 

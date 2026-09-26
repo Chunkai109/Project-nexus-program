@@ -40,6 +40,37 @@ RandomForest on the engineered, scale/position-invariant features, whose
 top feature importances line up with the actual class definitions (ROM ->
 Half, elbow drift -> Drag, torso-lean variability -> Swing/Heave).
 
+## Headline generalization number
+
+**Report the 5-fold GroupKFold CV macro-F1 (0.85 ± 0.076 over the 34-recording
+dev pool), not the held-out test accuracy (100%), as the model's expected
+real-world performance.** The test split is only 8 independent recordings --
+a single point estimate there isn't statistically reliable on its own, even
+at 100%. `training_config.json`'s `"headline_generalization_metric"` field
+carries this number and caveat programmatically; `scripts/evaluate.py`
+prints it prominently for the same reason. A follow-up diagnosis
+(train macro-F1 0.995 vs. CV macro-F1 0.85) found a real ~0.14 train/CV gap
+consistent with mild overfitting; a regularization + feature-count search
+(`scripts/train.py`'s `RF_GRID`/`XGB_GRID`/`TOP_K_REDUCED_FEATURES`) was run
+against it and did **not** find a setting that closed the gap (best
+alternative: 0.845 vs. 0.851 for the original setting) -- the gap most
+likely reflects the small number of independent training recordings rather
+than a fixable hyperparameter choice.
+
+## No-exercise rejection gate
+
+The model has 5 classes, all bicep-curl-specific -- there was no way for it
+to say "this isn't a curl at all," so standing still (or any non-curl
+motion) was forced through the 5-way classifier, sometimes with deceptively
+high confidence (a near-zero range of motion looks like an extreme case of
+"Half"). `scripts/train.py`'s `build_rest_gate_config()` derives a
+motion-magnitude floor from the weakest real repetition across all 49
+source recordings and saves it to `models/best_model/rest_gate_config.json`;
+`BicepCurlPredictor.end_session()` checks it before ever calling the
+classifier, returning `prediction: "no_exercise_detected"` (no fabricated
+class or confidence) when a session shows no real curling motion on any
+gate signal.
+
 ## Reproducing
 
 ```bash

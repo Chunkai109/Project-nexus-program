@@ -25,8 +25,32 @@
         "max_depth": 4,
         "min_samples_leaf": 2
       },
+      "feature_set": "full",
       "cv_macro_f1_mean": 0.8509928242774543,
       "cv_macro_f1_std": 0.07562706744212484
+    },
+    {
+      "model_type": "random_forest",
+      "params": {
+        "n_estimators": 300,
+        "max_depth": 4,
+        "min_samples_leaf": 4,
+        "max_features": "log2"
+      },
+      "feature_set": "reduced",
+      "cv_macro_f1_mean": 0.8447781519116917,
+      "cv_macro_f1_std": 0.07366009024466626
+    },
+    {
+      "model_type": "random_forest",
+      "params": {
+        "n_estimators": 200,
+        "max_depth": 4,
+        "min_samples_leaf": 2
+      },
+      "feature_set": "reduced",
+      "cv_macro_f1_mean": 0.8446519392406133,
+      "cv_macro_f1_std": 0.07865364719951569
     },
     {
       "model_type": "random_forest",
@@ -35,8 +59,80 @@
         "max_depth": 6,
         "min_samples_leaf": 1
       },
+      "feature_set": "full",
       "cv_macro_f1_mean": 0.8396592327312826,
       "cv_macro_f1_std": 0.08242350779230158
+    },
+    {
+      "model_type": "random_forest",
+      "params": {
+        "n_estimators": 300,
+        "max_depth": 6,
+        "min_samples_leaf": 1
+      },
+      "feature_set": "reduced",
+      "cv_macro_f1_mean": 0.8367708396265178,
+      "cv_macro_f1_std": 0.08272050459127271
+    },
+    {
+      "model_type": "random_forest",
+      "params": {
+        "n_estimators": 400,
+        "max_depth": 3,
+        "min_samples_leaf": 3,
+        "max_features": "sqrt"
+      },
+      "feature_set": "reduced",
+      "cv_macro_f1_mean": 0.8154317534614635,
+      "cv_macro_f1_std": 0.09380255210791055
+    },
+    {
+      "model_type": "random_forest",
+      "params": {
+        "n_estimators": 400,
+        "max_depth": 3,
+        "min_samples_leaf": 3,
+        "max_features": "sqrt"
+      },
+      "feature_set": "full",
+      "cv_macro_f1_mean": 0.8111534189983228,
+      "cv_macro_f1_std": 0.09532861499875035
+    },
+    {
+      "model_type": "random_forest",
+      "params": {
+        "n_estimators": 300,
+        "max_depth": 4,
+        "min_samples_leaf": 4,
+        "max_features": "log2"
+      },
+      "feature_set": "full",
+      "cv_macro_f1_mean": 0.8107211267340799,
+      "cv_macro_f1_std": 0.10582629931196182
+    },
+    {
+      "model_type": "random_forest",
+      "params": {
+        "n_estimators": 300,
+        "max_depth": 3,
+        "min_samples_leaf": 5,
+        "max_features": "sqrt"
+      },
+      "feature_set": "reduced",
+      "cv_macro_f1_mean": 0.8058310778501424,
+      "cv_macro_f1_std": 0.0889323508427999
+    },
+    {
+      "model_type": "random_forest",
+      "params": {
+        "n_estimators": 300,
+        "max_depth": 3,
+        "min_samples_leaf": 5,
+        "max_features": "sqrt"
+      },
+      "feature_set": "full",
+      "cv_macro_f1_mean": 0.8022624469369832,
+      "cv_macro_f1_std": 0.08443446100512951
     },
     {
       "model_type": "xgboost",
@@ -46,8 +142,9 @@
         "learning_rate": 0.1,
         "reg_lambda": 2.0
       },
-      "cv_macro_f1_mean": 0.7961133102446709,
-      "cv_macro_f1_std": 0.09648571316370229
+      "feature_set": "reduced",
+      "cv_macro_f1_mean": 0.7982906074612462,
+      "cv_macro_f1_std": 0.10084558091074776
     },
     {
       "model_type": "xgboost",
@@ -57,19 +154,170 @@
         "learning_rate": 0.05,
         "reg_lambda": 3.0
       },
+      "feature_set": "reduced",
+      "cv_macro_f1_mean": 0.7971359323243044,
+      "cv_macro_f1_std": 0.10060323868368964
+    },
+    {
+      "model_type": "xgboost",
+      "params": {
+        "n_estimators": 150,
+        "max_depth": 2,
+        "learning_rate": 0.05,
+        "reg_lambda": 5.0
+      },
+      "feature_set": "full",
+      "cv_macro_f1_mean": 0.7967395293888841,
+      "cv_macro_f1_std": 0.10400738704524451
+    },
+    {
+      "model_type": "xgboost",
+      "params": {
+        "n_estimators": 150,
+        "max_depth": 3,
+        "learning_rate": 0.1,
+        "reg_lambda": 2.0
+      },
+      "feature_set": "full",
+      "cv_macro_f1_mean": 0.7961133102446709,
+      "cv_macro_f1_std": 0.09648571316370229
+    },
+    {
+      "model_type": "xgboost",
+      "params": {
+        "n_estimators": 100,
+        "max_depth": 2,
+        "learning_rate": 0.05,
+        "reg_lambda": 8.0
+      },
+      "feature_set": "reduced",
+      "cv_macro_f1_mean": 0.795275618834544,
+      "cv_macro_f1_std": 0.10139636609694003
+    },
+    {
+      "model_type": "xgboost",
+      "params": {
+        "n_estimators": 100,
+        "max_depth": 2,
+        "learning_rate": 0.05,
+        "reg_lambda": 8.0
+      },
+      "feature_set": "full",
+      "cv_macro_f1_mean": 0.7847651323803734,
+      "cv_macro_f1_std": 0.09662153232344013
+    },
+    {
+      "model_type": "random_forest",
+      "params": {
+        "n_estimators": 200,
+        "max_depth": 2,
+        "min_samples_leaf": 4
+      },
+      "feature_set": "reduced",
+      "cv_macro_f1_mean": 0.7835617966961782,
+      "cv_macro_f1_std": 0.08648738456154427
+    },
+    {
+      "model_type": "xgboost",
+      "params": {
+        "n_estimators": 150,
+        "max_depth": 2,
+        "learning_rate": 0.05,
+        "reg_lambda": 5.0
+      },
+      "feature_set": "reduced",
+      "cv_macro_f1_mean": 0.7621758435842122,
+      "cv_macro_f1_std": 0.0652732533976571
+    },
+    {
+      "model_type": "xgboost",
+      "params": {
+        "n_estimators": 250,
+        "max_depth": 4,
+        "learning_rate": 0.05,
+        "reg_lambda": 3.0
+      },
+      "feature_set": "full",
       "cv_macro_f1_mean": 0.7599638522650723,
       "cv_macro_f1_std": 0.059345755409435375
+    },
+    {
+      "model_type": "random_forest",
+      "params": {
+        "n_estimators": 200,
+        "max_depth": 2,
+        "min_samples_leaf": 4
+      },
+      "feature_set": "full",
+      "cv_macro_f1_mean": 0.7356551638663814,
+      "cv_macro_f1_std": 0.10040588670032692
     }
   ],
+  "regularization_search_note": "Re-run after diagnosis found train macro-F1 (0.995) sitting ~0.145 above the original setting's 5-fold GroupKFold CV macro-F1 (0.851) -- evidence of mild overfitting on only 34 independent training recordings. This search tried more conservative RF/XGB hyperparameters (shallower trees, larger leaf minimums, feature subsampling) AND a reduced feature set (top 20 of 41 by dev-pool importance) against the original grid, all under the same GroupKFold protocol. Whichever setting actually won on CV is recorded below -- this was a real search, not a foregone conclusion.",
   "best_classical_type": "random_forest",
   "best_classical_params": {
     "n_estimators": 200,
     "max_depth": 4,
     "min_samples_leaf": 2
   },
+  "best_classical_feature_set": "full",
   "best_classical_cv_macro_f1": 0.8509928242774543,
+  "best_classical_cv_macro_f1_std": 0.07562706744212484,
+  "original_setting_cv_macro_f1_for_comparison": 0.8509928242774543,
+  "classical_literal_train_macro_f1": 0.992391414912013,
+  "classical_literal_train_accuracy": 0.9919786096256684,
   "classical_literal_val_macro_f1": 0.9713043478260868,
   "classical_literal_val_accuracy": 0.974025974025974,
+  "classical_train_vs_cv_gap": 0.14139859063455873,
+  "selected_features": [
+    "elbow_angle_active_mean",
+    "elbow_angle_other_mean",
+    "wrist_height_active_mean",
+    "torso_lean_angle_mean",
+    "elbow_forward_drift_active_mean",
+    "elbow_angle_active_vel_mean",
+    "wrist_height_active_vel_mean",
+    "torso_lean_vel_mean",
+    "elbow_angle_active_std",
+    "elbow_angle_other_std",
+    "wrist_height_active_std",
+    "torso_lean_angle_std",
+    "elbow_forward_drift_active_std",
+    "elbow_angle_active_vel_std",
+    "wrist_height_active_vel_std",
+    "torso_lean_vel_std",
+    "elbow_angle_active_min",
+    "elbow_angle_other_min",
+    "wrist_height_active_min",
+    "torso_lean_angle_min",
+    "elbow_forward_drift_active_min",
+    "elbow_angle_active_vel_min",
+    "wrist_height_active_vel_min",
+    "torso_lean_vel_min",
+    "elbow_angle_active_max",
+    "elbow_angle_other_max",
+    "wrist_height_active_max",
+    "torso_lean_angle_max",
+    "elbow_forward_drift_active_max",
+    "elbow_angle_active_vel_max",
+    "wrist_height_active_vel_max",
+    "torso_lean_vel_max",
+    "elbow_angle_active_range",
+    "elbow_angle_other_range",
+    "wrist_height_active_range",
+    "torso_lean_angle_range",
+    "elbow_forward_drift_active_range",
+    "elbow_angle_active_vel_range",
+    "wrist_height_active_vel_range",
+    "torso_lean_vel_range",
+    "sequence_length"
+  ],
+  "headline_generalization_metric": {
+    "name": "5-fold GroupKFold CV macro-F1 (dev pool, 34 recordings)",
+    "value": 0.8509928242774543,
+    "std": 0.07562706744212484,
+    "note": "Report THIS number, not the held-out test accuracy, as the model's expected real-world performance. The test split is only 8 independent recordings, so a single point estimate there (even 100%) is not a reliable indicator on its own -- see ml/results/classification_report/test_*classification_report.json for the test numbers with that caveat attached."
+  },
   "classes": [
     "Perfect",
     "Drag",

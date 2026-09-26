@@ -55,10 +55,35 @@ class BicepCurlPredictor:
                 "predict_lstm for the equivalent streaming logic) before using it."
             )
         self.model = joblib.load(model_dir / "model_classical.joblib")
+        # Some trained models use a reduced feature subset (see
+        # train.py's regularization/feature-selection search); fall back to
+        # the full set for older training_config.json files that predate it.
+        self.selected_features = self.training_config.get("selected_features", AGGREGATE_FEATURE_NAMES)
+        self._feature_idx = [AGGREGATE_FEATURE_NAMES.index(c) for c in self.selected_features]
+
+        gate_path = model_dir / "rest_gate_config.json"
+        self.rest_gate = None
+        if gate_path.exists():
+            with open(gate_path) as f:
+                self.rest_gate = json.load(f)
+
         self._normalizer: SequenceNormalizer | None = None
         self._extractor: FeatureExtractor | None = None
         self._per_frame_features: list[np.ndarray] = []
         self._active = False
+
+    def _check_rest_gate(self, agg_by_name: dict) -> bool:
+        """Return True if the session should be rejected as no_exercise_detected.
+
+        See train.py's build_rest_gate_config() for how thresholds were
+        derived: below-threshold on EVERY gate feature (not just one) means
+        essentially no curling motion was detected in this session at all --
+        the model has no class for that, so it is never asked to guess.
+        """
+        if self.rest_gate is None:
+            return False
+        thresholds = self.rest_gate["rejection_thresholds"]
+        return all(agg_by_name[feat] < thresh for feat, thresh in thresholds.items())
 
     def start_session(self, active_side: str | None = None):
         """Begin buffering a new repetition/set.
@@ -113,7 +138,24 @@ class BicepCurlPredictor:
             }
 
         feature_matrix = np.stack(self._per_frame_features)
-        agg = aggregate_sequence_features(feature_matrix).reshape(1, -1)
+        agg_full = aggregate_sequence_features(feature_matrix)
+        agg_by_name = dict(zip(AGGREGATE_FEATURE_NAMES, agg_full))
+
+        if self._check_rest_gate(agg_by_name):
+            return {
+                "exercise": "bicep_curl",
+                "prediction": "no_exercise_detected",
+                "confidence": None,
+                "message": (
+                    "Little to no arm movement was detected during this session "
+                    "(range of motion below the weakest real repetition on record "
+                    "for every motion signal checked) -- this doesn't look like a "
+                    "bicep curl, so no quality class was guessed."
+                ),
+                "num_frames": n_frames,
+            }
+
+        agg = agg_full[self._feature_idx].reshape(1, -1)
         proba = self.model.predict_proba(agg)[0]
         pred_idx = int(np.argmax(proba))
 
