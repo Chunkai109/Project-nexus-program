@@ -30,10 +30,10 @@ export function Breadcrumb({ steps, activeIndex }: { steps: Step[]; activeIndex:
               >
                 {state === 'done' ? <Check className="h-3 w-3" strokeWidth={3} /> : i + 1}
               </span>
-              {step.label}
+              <span className="hidden sm:inline">{step.label}</span>
             </div>
             {i < steps.length - 1 && (
-              <div className={clsx('h-px w-6', i < activeIndex ? 'bg-emerald/40' : 'bg-border')} />
+              <div className={clsx('h-px w-3 sm:w-6', i < activeIndex ? 'bg-emerald/40' : 'bg-border')} />
             )}
           </div>
         )

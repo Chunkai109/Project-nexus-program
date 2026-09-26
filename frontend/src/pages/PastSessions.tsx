@@ -23,7 +23,7 @@ export function PastSessions() {
     <PageShell>
       <PatientTopNav weeklyDone={3} weeklyTotal={4} battery={92} bleConnected />
 
-      <main className="px-10 py-12">
+      <main className="px-4 py-6 sm:px-6 sm:py-8 lg:px-10 lg:py-12">
         <PatientNavTabs />
 
         <div className="mb-10">

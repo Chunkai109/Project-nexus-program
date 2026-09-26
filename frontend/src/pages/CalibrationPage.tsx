@@ -99,7 +99,7 @@ export function CalibrationPage() {
   if (!exercise) {
     return (
       <PageShell>
-        <main className="flex min-h-screen flex-col items-center justify-center gap-4 px-10 text-center">
+        <main className="flex min-h-screen flex-col items-center justify-center gap-4 px-6 text-center">
           <p className="text-[17px] font-semibold text-ink">Exercise not found</p>
           <p className="max-w-sm text-[14px] text-ink-faint">
             This protocol may have been removed by your physiotherapist. Head back to your exercise list to see what's currently assigned.
@@ -146,7 +146,7 @@ export function CalibrationPage() {
 
   return (
     <PageShell>
-      <header className="translucent-header sticky top-0 z-20 flex items-center justify-between border-b border-border px-10 py-4">
+      <header className="translucent-header sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-border px-4 py-3 sm:px-6 lg:px-10 lg:py-4">
         <Logo size="sm" />
         <Breadcrumb
           steps={[{ label: 'Step 1: Sensor Placement' }, { label: 'Step 2: Calibration' }, { label: 'Step 3: Live Session' }]}
@@ -155,9 +155,9 @@ export function CalibrationPage() {
         <ThemeToggle />
       </header>
 
-      <main className="mx-auto flex max-w-2xl flex-col gap-6 px-10 py-10">
+      <main className="mx-auto flex max-w-2xl flex-col gap-6 px-4 py-6 sm:px-6 sm:py-8 lg:px-10 lg:py-10">
         <Card className="p-7">
-          <div className="mb-1 flex items-center justify-between">
+          <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
             <h1 className="text-[17px] font-semibold text-ink">EMG Baseline &amp; MVC Calibration</h1>
             <span
               className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${hubConnected ? 'bg-emerald/10 text-emerald' : 'bg-surface-secondary text-ink-faint'}`}

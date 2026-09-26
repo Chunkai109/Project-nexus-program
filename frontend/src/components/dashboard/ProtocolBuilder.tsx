@@ -102,7 +102,7 @@ export function ProtocolBuilder() {
 
   return (
     <Card className="p-7">
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-[15px] font-semibold text-ink">Exercise Protocols</h2>
           <p className="text-[13px] text-ink-faint">
@@ -129,10 +129,10 @@ export function ProtocolBuilder() {
           {exercises.map((ex) => {
             const assignedPatient = patients.find((p) => p.id === ex.assignedPatientId)
             return (
-              <div key={ex.id} className="flex items-center justify-between gap-4 rounded-xl bg-surface-secondary p-4">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <p className="truncate text-[14px] font-semibold text-ink">{ex.title}</p>
+              <div key={ex.id} className="flex flex-wrap items-start justify-between gap-3 rounded-xl bg-surface-secondary p-4">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[14px] font-semibold text-ink">{ex.title}</p>
+                  <div className="mt-1 flex flex-wrap items-center gap-2">
                     <Badge tone="accent">{ex.sets}×{ex.reps}</Badge>
                     {assignedPatient ? (
                       <Badge tone="violet">{assignedPatient.name}</Badge>
@@ -140,7 +140,7 @@ export function ProtocolBuilder() {
                       <span className="text-[12px] text-ink-faint">All Patients</span>
                     )}
                   </div>
-                  <p className="mt-0.5 truncate text-[13px] text-ink-faint">{describeAngleConfigs(ex.angleConfigs)}</p>
+                  <p className="mt-1 truncate text-[13px] text-ink-faint">{describeAngleConfigs(ex.angleConfigs)}</p>
                 </div>
                 {pendingDeleteId === ex.id ? (
                   <div className="flex flex-shrink-0 items-center gap-2">

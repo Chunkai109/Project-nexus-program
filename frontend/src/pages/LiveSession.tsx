@@ -98,7 +98,7 @@ export function LiveSession() {
   if (!exercise) {
     return (
       <PageShell>
-        <main className="flex min-h-screen flex-col items-center justify-center gap-4 px-10 text-center">
+        <main className="flex min-h-screen flex-col items-center justify-center gap-4 px-6 text-center">
           <p className="text-[17px] font-semibold text-ink">Exercise not found</p>
           <p className="max-w-sm text-[14px] text-ink-faint">
             This protocol may have been removed by your physiotherapist. Head back to your exercise list to see what's currently assigned.
@@ -138,13 +138,13 @@ export function LiveSession() {
 
   return (
     <PageShell>
-      <header className="translucent-header sticky top-0 z-20 flex items-center justify-between border-b border-border px-10 py-4">
+      <header className="translucent-header sticky top-0 z-20 flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3 sm:px-6 lg:px-10 lg:py-4">
         <Logo size="sm" />
         <Breadcrumb
           steps={[{ label: 'Step 1: Sensor Placement' }, { label: 'Step 2: Calibration' }, { label: 'Step 3: Live Session' }]}
           activeIndex={2}
         />
-        <div className="flex items-center gap-5 text-sm text-ink-muted">
+        <div className="flex items-center gap-3 text-sm text-ink-muted sm:gap-5">
           <span className="flex items-center gap-1.5">
             <Timer className="h-4 w-4 text-accent" />
             {mm}:{ss}
@@ -157,7 +157,7 @@ export function LiveSession() {
         </div>
       </header>
 
-      <main className="grid grid-cols-1 gap-6 px-10 py-10 lg:grid-cols-[1.5fr_1fr]">
+      <main className="grid grid-cols-1 gap-6 px-4 py-6 sm:px-6 sm:py-8 lg:grid-cols-[1.5fr_1fr] lg:px-10 lg:py-10">
         {/* Primary viewport */}
         <div className="flex flex-col gap-4">
           <CameraViewport

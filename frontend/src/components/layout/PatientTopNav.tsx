@@ -20,11 +20,11 @@ export function PatientTopNav({
   const navigate = useNavigate()
 
   return (
-    <header className="translucent-header sticky top-0 z-20 flex items-center justify-between gap-6 border-b border-border px-8 py-4">
+    <header className="translucent-header sticky top-0 z-20 flex items-center justify-between gap-1.5 border-b border-border px-3 py-3 sm:gap-4 sm:px-6 sm:py-4 lg:gap-6 lg:px-8">
       <Logo size="sm" />
 
-      <div className="flex items-center gap-3 rounded-full bg-surface-secondary px-4 py-2">
-        <div className="flex items-center gap-2 text-sm">
+      <div className="flex items-center gap-1 rounded-full bg-surface-secondary px-2 py-1.5 sm:gap-3 sm:px-4 sm:py-2">
+        <div className="flex items-center gap-1 text-sm sm:gap-2">
           <span className={bleConnected ? 'relative flex h-2 w-2' : 'flex h-2 w-2'}>
             {bleConnected && (
               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald opacity-75" />
@@ -32,17 +32,17 @@ export function PatientTopNav({
             <span className={`relative inline-flex h-2 w-2 rounded-full ${bleConnected ? 'bg-emerald' : 'bg-crimson'}`} />
           </span>
           <Bluetooth className="h-4 w-4 text-ink-muted" />
-          <span className="text-ink-muted">{bleConnected ? 'ESP32 Connected' : 'ESP32 Disconnected'}</span>
+          <span className="hidden text-ink-muted sm:inline">{bleConnected ? 'ESP32 Connected' : 'ESP32 Disconnected'}</span>
         </div>
-        <div className="h-4 w-px bg-border-strong" />
-        <div className="flex items-center gap-1.5 text-sm text-ink-muted">
+        <div className="hidden h-4 w-px bg-border-strong sm:block" />
+        <div className="flex items-center gap-1 text-sm text-ink-muted">
           <BatteryMedium className="h-4 w-4" />
           {battery}%
         </div>
       </div>
 
-      <div className="flex items-center gap-5">
-        <div className="hidden min-w-[180px] flex-col gap-1.5 sm:flex">
+      <div className="flex items-center gap-1.5 sm:gap-3 lg:gap-5">
+        <div className="hidden min-w-[180px] flex-col gap-1.5 lg:flex">
           <div className="flex items-center justify-between text-xs">
             <span className="text-ink-muted">Weekly Progress</span>
             <span className="font-medium text-ink">
@@ -52,9 +52,9 @@ export function PatientTopNav({
           <ProgressBar value={weeklyDone} max={weeklyTotal} tone="emerald" />
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-1.5 sm:gap-3">
           <ThemeToggle />
-          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-accent text-sm font-semibold text-white">
+          <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-accent text-sm font-semibold text-white">
             {(user?.name ?? 'A').charAt(0).toUpperCase()}
           </div>
           <div className="hidden text-sm leading-tight md:block">
@@ -66,7 +66,7 @@ export function PatientTopNav({
               signOut()
               navigate('/login')
             }}
-            className="ml-1 rounded-full p-2 text-ink-faint transition-colors duration-200 hover:bg-surface-secondary hover:text-crimson"
+            className="rounded-full p-1.5 text-ink-faint transition-colors duration-200 hover:bg-surface-secondary hover:text-crimson sm:ml-1 sm:p-2"
             aria-label="Sign out"
             title="Sign out"
           >

@@ -55,7 +55,7 @@ export function SessionSummary() {
   if (!session) {
     return (
       <PageShell>
-        <main className="flex min-h-screen flex-col items-center justify-center gap-4 px-10 text-center">
+        <main className="flex min-h-screen flex-col items-center justify-center gap-4 px-6 text-center">
           <p className="text-[17px] font-semibold text-ink">Session not found</p>
           <p className="max-w-sm text-[14px] text-ink-faint">
             This session record may no longer be available. Head back to your exercise list to start a new one.
@@ -93,7 +93,7 @@ export function SessionSummary() {
 
   return (
     <PageShell>
-      <header className="translucent-header sticky top-0 z-20 flex items-center justify-between border-b border-border px-10 py-4">
+      <header className="translucent-header sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-border px-4 py-3 sm:px-6 lg:px-10 lg:py-4">
         <Logo size="sm" />
         <div className="flex items-center gap-2 text-emerald">
           <CheckCircle2 className="h-4 w-4" />
@@ -102,9 +102,9 @@ export function SessionSummary() {
         <ThemeToggle />
       </header>
 
-      <main className="mx-auto flex max-w-3xl flex-col gap-6 px-10 py-10">
+      <main className="mx-auto flex max-w-3xl flex-col gap-6 px-4 py-6 sm:px-6 sm:py-8 lg:px-10 lg:py-10">
         <Card className="p-7">
-          <div className="mb-1 flex items-center justify-between">
+          <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
             <h1 className="text-[19px] font-semibold text-ink">{session.exerciseTitle}</h1>
             <span className="text-[13px] text-ink-faint">{formatRelativeTime(session.completedAt)}</span>
           </div>

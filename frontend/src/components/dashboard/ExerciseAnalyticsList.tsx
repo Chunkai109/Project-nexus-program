@@ -39,11 +39,11 @@ export function ExerciseAnalyticsList({ onSelectExercise }: { onSelectExercise: 
                 key={ex.id}
                 type="button"
                 onClick={() => onSelectExercise(ex.id)}
-                className="flex w-full items-center justify-between gap-4 rounded-xl bg-surface-secondary p-4 text-left transition-colors duration-200 hover:bg-surface-hover"
+                className="flex w-full flex-wrap items-start justify-between gap-3 rounded-xl bg-surface-secondary p-4 text-left transition-colors duration-200 hover:bg-surface-hover"
               >
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <p className="truncate text-[14px] font-semibold text-ink">{ex.title}</p>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[14px] font-semibold text-ink">{ex.title}</p>
+                  <div className="mt-1 flex flex-wrap items-center gap-2">
                     <Badge tone="accent">{ex.sets}×{ex.reps}</Badge>
                     {assignedPatient ? (
                       <Badge tone="violet">{assignedPatient.name}</Badge>
@@ -51,7 +51,7 @@ export function ExerciseAnalyticsList({ onSelectExercise }: { onSelectExercise: 
                       <span className="text-[12px] text-ink-faint">All Patients</span>
                     )}
                   </div>
-                  <p className="mt-0.5 truncate text-[13px] text-ink-faint">{describeAngleConfigs(ex.angleConfigs)}</p>
+                  <p className="mt-1 truncate text-[13px] text-ink-faint">{describeAngleConfigs(ex.angleConfigs)}</p>
                 </div>
                 <ChevronRight className="h-4 w-4 flex-shrink-0 text-ink-faint" />
               </button>

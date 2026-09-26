@@ -24,10 +24,10 @@ export function PatientExercises() {
     <PageShell>
       <PatientTopNav weeklyDone={3} weeklyTotal={4} battery={92} bleConnected />
 
-      <main className="px-10 py-12">
+      <main className="px-4 py-6 sm:px-6 sm:py-8 lg:px-10 lg:py-12">
         <PatientNavTabs />
 
-        <div className="mb-10 flex items-end justify-between">
+        <div className="mb-10 flex flex-wrap items-end justify-between gap-3">
           <div>
             <h1 className="text-[28px] font-semibold tracking-tight text-ink">Prescribed Exercises</h1>
             <p className="mt-1.5 text-[15px] text-ink-muted">
