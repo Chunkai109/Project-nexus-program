@@ -8,6 +8,8 @@ import { useTheme } from '@/lib/ThemeContext'
 /** The scanned human mesh is ~20.7 units tall in its own coordinate space; this brings it down to the ~1.8-unit scene scale the camera/OrbitControls are tuned for. */
 export const MODEL_SCALE = 0.087
 
+const EMPTY_SET: Set<string> = new Set()
+
 export interface BodyMarker {
   id: string
   value: string
@@ -26,18 +28,24 @@ export function scaleMarkers(raw: BodyMarker[]): BodyMarker[] {
 function Marker({
   marker,
   isSelected,
+  isConfirmed,
   onSelect,
   accentColor,
   baseColor,
+  confirmedColor,
 }: {
   marker: BodyMarker
   isSelected: boolean
+  isConfirmed: boolean
   onSelect: (value: string) => void
   accentColor: string
   baseColor: string
+  confirmedColor: string
 }) {
   const [hovered, setHovered] = useState(false)
   const downPos = useRef<{ x: number; y: number } | null>(null)
+
+  const color = isSelected ? accentColor : isConfirmed ? confirmedColor : baseColor
 
   return (
     <mesh
@@ -63,9 +71,9 @@ function Marker({
     >
       <sphereGeometry args={[isSelected || hovered ? 0.052 : 0.042, 20, 20]} />
       <meshStandardMaterial
-        color={isSelected ? accentColor : baseColor}
-        emissive={isSelected ? accentColor : '#000000'}
-        emissiveIntensity={isSelected ? 0.4 : 0}
+        color={color}
+        emissive={isSelected || isConfirmed ? color : '#000000'}
+        emissiveIntensity={isSelected || isConfirmed ? 0.4 : 0}
         roughness={0.4}
       />
     </mesh>
@@ -92,16 +100,20 @@ function HumanMesh({ skinColor }: { skinColor: string }) {
 function Figure({
   markers,
   selectedValue,
+  confirmedValues,
   onSelect,
   accentColor,
   baseColor,
+  confirmedColor,
   skinColor,
 }: {
   markers: BodyMarker[]
   selectedValue: string | null
+  confirmedValues: Set<string>
   onSelect: (value: string) => void
   accentColor: string
   baseColor: string
+  confirmedColor: string
   skinColor: string
 }) {
   return (
@@ -115,9 +127,11 @@ function Figure({
           key={marker.id}
           marker={marker}
           isSelected={selectedValue === marker.value}
+          isConfirmed={confirmedValues.has(marker.value)}
           onSelect={onSelect}
           accentColor={accentColor}
           baseColor={baseColor}
+          confirmedColor={confirmedColor}
         />
       ))}
     </group>
@@ -143,18 +157,25 @@ function Rig() {
 export function Body3DPicker({
   markers,
   selectedValue,
+  confirmedValues,
   onSelect,
   height = 260,
+  unconfirmedColor,
 }: {
   markers: BodyMarker[]
   selectedValue: string | null
+  /** Markers whose value is in this set render in the confirmed (green) color instead of the default. */
+  confirmedValues?: Set<string>
   onSelect: (value: string) => void
   height?: number
+  /** Color for markers that are neither selected nor confirmed. Defaults to a neutral gray. */
+  unconfirmedColor?: string
 }) {
   const { theme } = useTheme()
   const isDark = theme === 'dark'
   const accentColor = isDark ? '#0a84ff' : '#0071e3'
-  const baseColor = '#86868b'
+  const baseColor = unconfirmedColor ?? '#86868b'
+  const confirmedColor = isDark ? '#32d74b' : '#248a3d'
   const skinColor = isDark ? '#6e6e73' : '#d1d1d6'
 
   return (
@@ -167,9 +188,11 @@ export function Body3DPicker({
         <Figure
           markers={markers}
           selectedValue={selectedValue}
+          confirmedValues={confirmedValues ?? EMPTY_SET}
           onSelect={onSelect}
           accentColor={accentColor}
           baseColor={baseColor}
+          confirmedColor={confirmedColor}
           skinColor={skinColor}
         />
         <OrbitControls

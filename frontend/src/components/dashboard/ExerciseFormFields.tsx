@@ -8,7 +8,7 @@ import { RangeSlider } from '@/components/ui/RangeSlider'
 import { RadialGauge } from '@/components/charts/RadialGauge'
 import { JointPicker } from '@/components/body/JointPicker'
 import { MuscleGroupPicker } from '@/components/body/MuscleGroupPicker'
-import { JOINT_PRESETS } from '@/lib/joints'
+import { JOINT_PRESETS, jointPresetForPair } from '@/lib/joints'
 import { MUSCLE_GROUPS, muscleLabel } from '@/lib/muscles'
 import { podLabel } from '@/lib/podUtils'
 import type { ExerciseFormState } from '@/lib/useExerciseForm'
@@ -72,6 +72,9 @@ export function ExerciseFormFields({
   const [step, setStep] = useState<WizardStep>('basics')
   const stepIndex = step === 'basics' ? 0 : step === 'angles' ? 1 : 2
   const draftJoint = JOINT_PRESETS.find((p) => p.id === form.draftJointId)
+  const confirmedJointIds = new Set(
+    form.angleConfigs.map((c) => jointPresetForPair(c.nodeA, c.nodeB)?.id).filter((id): id is string => id != null),
+  )
   const draftGroup = MUSCLE_GROUPS.find((g) => g.id === form.draftMuscleGroupId)
 
   return (
@@ -225,7 +228,12 @@ export function ExerciseFormFields({
                   {form.angleConfigs.length > 0 ? `${form.angleConfigs.length} Confirmed` : 'Pending'}
                 </span>
               </div>
-              <JointPicker selectedJointId={form.draftJointId} onSelect={selectDraftJoint} height={280} />
+              <JointPicker
+                selectedJointId={form.draftJointId}
+                onSelect={selectDraftJoint}
+                confirmedJointIds={confirmedJointIds}
+                height={280}
+              />
               <div className="mt-4 text-center text-[13px]">
                 {!draftJoint && <span className="text-ink-faint">No joint selected yet</span>}
                 {draftJoint && <span className="font-medium text-accent">{draftJoint.label} selected</span>}

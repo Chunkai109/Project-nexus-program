@@ -1,4 +1,5 @@
 import { Body3DPicker, scaleMarkers, type BodyMarker } from './Body3DPicker'
+import { useTheme } from '@/lib/ThemeContext'
 
 /**
  * One marker per `JOINT_PRESETS` entry, positioned at that joint's actual
@@ -24,16 +25,31 @@ const MARKERS = scaleMarkers(RAW_MARKERS)
  * than requiring two separate taps on raw sensor dots. The confirmed angle
  * this produces is exactly the same nodeA/nodeB pair shape as before. Uses
  * the same rotatable 3D scan as the EMG step's muscle picker so a physio
- * only has to learn one figure.
+ * only has to learn one figure. Every joint starts red; one turns green as
+ * soon as its angle is confirmed, so at a glance you can see what's left.
  */
 export function JointPicker({
   selectedJointId,
   onSelect,
+  confirmedJointIds,
   height = 220,
 }: {
   selectedJointId: string | null
   onSelect: (jointId: string) => void
+  confirmedJointIds?: Set<string>
   height?: number
 }) {
-  return <Body3DPicker markers={MARKERS} selectedValue={selectedJointId} onSelect={onSelect} height={height} />
+  const { theme } = useTheme()
+  const unconfirmedColor = theme === 'dark' ? '#ff453a' : '#d70015'
+
+  return (
+    <Body3DPicker
+      markers={MARKERS}
+      selectedValue={selectedJointId}
+      confirmedValues={confirmedJointIds}
+      onSelect={onSelect}
+      height={height}
+      unconfirmedColor={unconfirmedColor}
+    />
+  )
 }
