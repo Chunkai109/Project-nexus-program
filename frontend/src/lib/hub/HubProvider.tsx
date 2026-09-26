@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from 'react'
-import { SmartPhysioBleClient, isWebBluetoothSupported, type BleConnectionState } from './SmartPhysioBleClient'
-import { emgActivationPercent, type PodId, type SignalLevel } from './protocol'
+import { isWebSocketSupported, SmartPhysioSocketClient, type HubConnectionState } from './SmartPhysioSocketClient'
+import { DEFAULT_HUB_WS_URL, emgActivationPercent, type PodId, type SignalLevel } from './protocol'
 
 export interface PodLiveData {
   battery?: number
@@ -8,7 +8,7 @@ export interface PodLiveData {
   pitchDeg?: number
   rollDeg?: number
   yawDeg?: number
-  /** Raw normalized ADC amplitude (0-1) straight off the EMG_DATA characteristic, before baseline/MVC calibration is applied. */
+  /** Raw normalized amplitude (0-1) straight off the hub's "emg" message, before baseline/MVC calibration is applied. */
   vrmsRaw?: number
   emgActivationPct?: number
 }
@@ -18,29 +18,29 @@ export interface EmgCalibration {
   mvc: number
 }
 
-interface BleHubValue {
+interface HubValue {
   supported: boolean
-  connectionState: BleConnectionState
+  connectionState: HubConnectionState
   errorMessage: string | null
   deviceName: string | null
   pods: Partial<Record<PodId, PodLiveData>>
   calibration: Partial<Record<PodId, EmgCalibration>>
-  connect: () => Promise<void>
+  connect: (url?: string) => Promise<void>
   disconnect: () => void
   sendHaptic: (podId: PodId, durationMs: number) => Promise<void>
-  /** Sets the per-pod EMG baseline/MVC captured by the calibration routine; subsequent EMG_DATA packets for that pod are normalized against it. */
+  /** Sets the per-pod EMG baseline/MVC captured by the calibration routine; subsequent "emg" messages for that pod are normalized against it. */
   setCalibration: (podId: PodId, calibration: EmgCalibration) => void
 }
 
-const BleContext = createContext<BleHubValue | null>(null)
+const HubContext = createContext<HubValue | null>(null)
 
-export function BleProvider({ children }: { children: ReactNode }) {
-  const [connectionState, setConnectionState] = useState<BleConnectionState>('disconnected')
+export function HubProvider({ children }: { children: ReactNode }) {
+  const [connectionState, setConnectionState] = useState<HubConnectionState>('disconnected')
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [deviceName, setDeviceName] = useState<string | null>(null)
   const [pods, setPods] = useState<Partial<Record<PodId, PodLiveData>>>({})
   const [calibration, setCalibrationState] = useState<Partial<Record<PodId, EmgCalibration>>>({})
-  const clientRef = useRef<SmartPhysioBleClient | null>(null)
+  const clientRef = useRef<SmartPhysioSocketClient | null>(null)
   // The onEmg callback below is created once inside getClient, so it reads
   // calibration through this ref rather than the state closure to always see
   // the latest per-pod baseline/MVC without having to recreate the client.
@@ -48,7 +48,7 @@ export function BleProvider({ children }: { children: ReactNode }) {
 
   const getClient = useCallback(() => {
     if (!clientRef.current) {
-      clientRef.current = new SmartPhysioBleClient({
+      clientRef.current = new SmartPhysioSocketClient({
         onConnectionChange: (state, detail) => {
           setConnectionState(state)
           setErrorMessage(state === 'error' ? (detail ?? 'Unknown error') : null)
@@ -87,9 +87,12 @@ export function BleProvider({ children }: { children: ReactNode }) {
     return clientRef.current
   }, [])
 
-  const connect = useCallback(async () => {
-    await getClient().connect()
-  }, [getClient])
+  const connect = useCallback(
+    async (url: string = DEFAULT_HUB_WS_URL) => {
+      await getClient().connect(url)
+    },
+    [getClient],
+  )
 
   const disconnect = useCallback(() => {
     clientRef.current?.disconnect()
@@ -107,9 +110,9 @@ export function BleProvider({ children }: { children: ReactNode }) {
     setCalibrationState((prev) => ({ ...prev, [podId]: calib }))
   }, [])
 
-  const value = useMemo<BleHubValue>(
+  const value = useMemo<HubValue>(
     () => ({
-      supported: isWebBluetoothSupported(),
+      supported: isWebSocketSupported(),
       connectionState,
       errorMessage,
       deviceName,
@@ -123,11 +126,11 @@ export function BleProvider({ children }: { children: ReactNode }) {
     [connectionState, errorMessage, deviceName, pods, calibration, connect, disconnect, sendHaptic, setCalibration],
   )
 
-  return <BleContext.Provider value={value}>{children}</BleContext.Provider>
+  return <HubContext.Provider value={value}>{children}</HubContext.Provider>
 }
 
-export function useBleHub(): BleHubValue {
-  const ctx = useContext(BleContext)
-  if (!ctx) throw new Error('useBleHub must be used within BleProvider')
+export function useSensorHub(): HubValue {
+  const ctx = useContext(HubContext)
+  if (!ctx) throw new Error('useSensorHub must be used within HubProvider')
   return ctx
 }

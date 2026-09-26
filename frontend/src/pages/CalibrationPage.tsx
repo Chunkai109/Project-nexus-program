@@ -9,7 +9,7 @@ import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { ProgressBar } from '@/components/ui/ProgressBar'
 import { useAppData } from '@/lib/data/AppDataContext'
-import { useBleHub } from '@/lib/ble/BleProvider'
+import { useSensorHub } from '@/lib/hub/HubProvider'
 import { PODS } from '@/lib/mockData'
 import type { PodId } from '@/types'
 
@@ -18,8 +18,8 @@ import type { PodId } from '@/types'
  *   1. Baseline Phase: limb relaxed for 3s, Vbaseline recorded per pod.
  *   2. MVC Phase: maximum voluntary contraction against resistance, Vmvc recorded per pod.
  *   3. Runtime: %Activation = (Vrms - Vbaseline) / (Vmvc - Vbaseline) * 100
- * The third step is already implemented by emgActivationPercent() in ble/protocol.ts;
- * this page's job is to capture per-patient Vbaseline/Vmvc and hand them to BleProvider.
+ * The third step is already implemented by emgActivationPercent() in hub/protocol.ts;
+ * this page's job is to capture per-patient Vbaseline/Vmvc and hand them to HubProvider.
  */
 
 const PHASE_DURATION_MS = 3000
@@ -41,7 +41,7 @@ export function CalibrationPage() {
   const navigate = useNavigate()
   const { exercises } = useAppData()
   const exercise = useMemo(() => exercises.find((e) => e.id === exerciseId) ?? null, [exercises, exerciseId])
-  const hub = useBleHub()
+  const hub = useSensorHub()
   const hubConnected = hub.connectionState === 'connected'
 
   const [phase, setPhase] = useState<Phase>('idle')

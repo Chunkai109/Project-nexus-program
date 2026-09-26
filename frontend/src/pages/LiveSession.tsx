@@ -17,7 +17,7 @@ import { useAppData } from '@/lib/data/AppDataContext'
 import { useAuth } from '@/lib/AuthContext'
 import { podSide, kneePodForSide } from '@/lib/podUtils'
 import { muscleEmgTarget } from '@/lib/muscles'
-import { useBleHub } from '@/lib/ble/BleProvider'
+import { useSensorHub } from '@/lib/hub/HubProvider'
 import { PODS } from '@/lib/mockData'
 import type { RepSample } from '@/types'
 
@@ -32,7 +32,7 @@ export function LiveSession() {
   const exercise = useMemo(() => exercises.find((e) => e.id === exerciseId) ?? null, [exercises, exerciseId])
   const [ending, setEnding] = useState(false)
   const [vision, setVision] = useState<VisionReading | null>(null)
-  const hub = useBleHub()
+  const hub = useSensorHub()
   const hubConnected = hub.connectionState === 'connected'
 
   const primaryAngle = exercise?.angleConfigs[0] ?? null
@@ -63,7 +63,7 @@ export function LiveSession() {
   // Closed-loop correction: when a real hub is connected, tell it to buzz
   // the monitored knee pod the instant a fault starts, rather than only
   // showing it on screen. Edge-triggered with a cooldown so a sustained
-  // fault doesn't flood the link with GATT writes.
+  // fault doesn't flood the socket with haptic messages.
   const lastHapticSentAt = useRef(0)
   const wasFaultActive = useRef(false)
   useEffect(() => {
