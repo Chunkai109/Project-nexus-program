@@ -28,6 +28,7 @@ Two-level protocol to avoid subject/recording leakage and test-set peeking:
 """
 from __future__ import annotations
 
+import argparse
 import json
 import sys
 from pathlib import Path
@@ -54,10 +55,32 @@ from ml.src.models.dataset import (
 from ml.src.models.lstm_model import CurlLSTM
 from ml.src.models.labels import CLASS_NAMES, CLASS_TO_IDX
 
-PROCESSED_DIR = ML_ROOT / "data" / "processed"
-MODEL_DIR = ML_ROOT / "models" / "best_model"
-CURVES_DIR = ML_ROOT / "results" / "training_curves"
+
+def _parse_tag() -> str:
+    # Parsed standalone (not inside main()) so it can determine the
+    # directory constants below, which many build_* functions reference as
+    # module-level globals. --tag isolates an experiment's output under
+    # data/processed_<tag>/, models/best_model_<tag>/, results_<tag>/ so it
+    # never overwrites the committed baseline artifacts.
+    ap = argparse.ArgumentParser(add_help=False)
+    ap.add_argument("--tag", default="")
+    args, _ = ap.parse_known_args()
+    return args.tag
+
+
+TAG = _parse_tag()
+_SUFFIX = f"_{TAG}" if TAG else ""
+PROCESSED_DIR = ML_ROOT / "data" / f"processed{_SUFFIX}"
+MODEL_DIR = ML_ROOT / "models" / f"best_model{_SUFFIX}"
+RESULTS_DIR = ML_ROOT / f"results{_SUFFIX}"
+CURVES_DIR = RESULTS_DIR / "training_curves"
 SEED = 42
+
+# Committed baseline (no synthetic-extra augmentation), for honest
+# before/after comparison -- see "synthetic_augmentation_comparison" below.
+BASELINE_CV_MACRO_F1 = 0.8850
+BASELINE_CV_MACRO_F1_STD = 0.0487
+BASELINE_TRAIN_VS_CV_GAP = 0.101
 
 
 def set_seed(seed=SEED):
@@ -281,6 +304,23 @@ def main():
     seq_df = pd.read_csv(PROCESSED_DIR / "sequence_features.csv")
     dev_base_ids = split["train"] + split["val"]
     dev_df = seq_df[seq_df["base_id"].isin(dev_base_ids)]
+
+    # Provenance transparency: how many dev-pool rows are real-original,
+    # pre-generated-aug, vs. this run's synthetic-extra (if any). The dev
+    # pool is train(34)+val(7)=41 base_ids -- only the 34 train-split ones
+    # can carry synthetic-extra rows, so a nonzero count here changes what
+    # each GroupKFold fold's training partition is weighted toward, not
+    # just its size. Worth reporting explicitly, never silently absorbed.
+    is_synth = dev_df["is_synthetic_extra"] if "is_synthetic_extra" in dev_df.columns \
+        else pd.Series(False, index=dev_df.index)
+    dev_pool_composition = {
+        "num_dev_base_ids": len(dev_base_ids),
+        "real_original": int((~is_synth & dev_df["is_original"]).sum()),
+        "pre_generated_aug": int((~is_synth & ~dev_df["is_original"]).sum()),
+        "synthetic_extra": int(is_synth.sum()),
+    }
+    print(f"  Dev pool composition: {dev_pool_composition}")
+
     X_dev_full = dev_df[AGGREGATE_FEATURE_NAMES].values
     y_dev = dev_df["class_label"].map(CLASS_TO_IDX).values
     groups_dev = dev_df["base_id"].values
@@ -421,6 +461,26 @@ def main():
         },
         "classes": CLASS_NAMES,
         "seed": SEED,
+        "tag": TAG,
+        "dev_pool_composition": dev_pool_composition,
+        "synthetic_augmentation_comparison": {
+            "baseline_cv_macro_f1": BASELINE_CV_MACRO_F1,
+            "baseline_cv_macro_f1_std": BASELINE_CV_MACRO_F1_STD,
+            "baseline_train_vs_cv_gap": BASELINE_TRAIN_VS_CV_GAP,
+            "new_cv_macro_f1": best_clf_cv_f1,
+            "new_cv_macro_f1_std": best_clf_cv_std,
+            "new_train_vs_cv_gap": clf_train_f1 - best_clf_cv_f1,
+            "dev_pool_composition": dev_pool_composition,
+            "note": (
+                "Decision protocol: only promote this tagged run to replace the "
+                "committed baseline if new_cv_macro_f1 sits clearly outside the "
+                "overlap of the two +/-1-std bands, not just nominally higher -- "
+                "5-fold CV on 41 dev-pool groups is noisy enough that a small "
+                "nominal gain is not meaningful on its own. This field records "
+                "the numbers for a human to make that call; nothing here "
+                "auto-promotes."
+            ),
+        },
     }
 
     # Save training curves for whichever LSTM variant was best (used by evaluate.py).
@@ -452,6 +512,21 @@ def main():
 
     with open(MODEL_DIR / "training_config.json", "w") as f:
         json.dump(training_config, f, indent=2)
+
+    baseline_hi = BASELINE_CV_MACRO_F1 + BASELINE_CV_MACRO_F1_STD
+    new_lo = best_clf_cv_f1 - best_clf_cv_std
+    clears_bar = new_lo > baseline_hi
+    print(f"\n=== Synthetic augmentation comparison (tag={TAG or '(none/baseline)'}) ===")
+    print(f"  baseline: CV macro-F1={BASELINE_CV_MACRO_F1:.4f} +/-{BASELINE_CV_MACRO_F1_STD:.4f}  "
+          f"train-vs-CV gap={BASELINE_TRAIN_VS_CV_GAP:.4f}")
+    print(f"  this run: CV macro-F1={best_clf_cv_f1:.4f} +/-{best_clf_cv_std:.4f}  "
+          f"train-vs-CV gap={clf_train_f1 - best_clf_cv_f1:.4f}")
+    print(f"  dev pool composition: {dev_pool_composition}")
+    print(f"  clears the '+/-1-std bands don't overlap' promotion bar: {clears_bar} "
+          f"(baseline upper={baseline_hi:.4f} vs. this run's lower={new_lo:.4f})")
+    if TAG:
+        print("  This is a TAGGED run -- committed baseline artifacts are untouched. "
+              "Promotion (re-running untagged) is a human decision, not automatic.")
 
     # === 5. Rest/no-exercise gate ===
     # The classifier's classes are all bicep-curl-specific -- there is no

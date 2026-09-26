@@ -2,3 +2,12 @@ __pycache__/
 *.pyc
 ml/data/raw/*
 !ml/data/raw/.gitkeep
+
+# Tagged experiment artifacts (see --tag in prepare_dataset.py/train.py/evaluate.py):
+# disposable scratch output for one-off comparisons against the committed
+# baseline in ml/data/processed, ml/models/best_model, ml/results. Only a
+# tagged run that clears the promotion bar gets folded into those committed
+# directories -- the tagged copies themselves are never committed.
+ml/data/processed_*/
+ml/models/best_model_*/
+ml/results_*/

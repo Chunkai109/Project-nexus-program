@@ -25,16 +25,20 @@ sys.path.insert(0, str(REPO_ROOT))
 from ml.src.preprocessing.dataset_io import load_all_sequences
 from ml.src.inference.predictor import BicepCurlPredictor
 
-PROCESSED_DIR = ML_ROOT / "data" / "processed"
-
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--csv", required=True)
     ap.add_argument("--video_id", default=None)
+    ap.add_argument("--tag", default="", help="evaluate a tagged experiment's artifacts "
+                                                 "instead of the committed baseline")
     args = ap.parse_args()
 
-    with open(PROCESSED_DIR / "base_id_split.json") as f:
+    suffix = f"_{args.tag}" if args.tag else ""
+    processed_dir = ML_ROOT / "data" / f"processed{suffix}"
+    model_dir = ML_ROOT / "models" / f"best_model{suffix}"
+
+    with open(processed_dir / "base_id_split.json") as f:
         split = json.load(f)
     test_base_ids = set(split["test"])
 
@@ -46,7 +50,7 @@ def main():
     else:
         targets = [s for s in sequences if s.is_original and s.base_id in test_base_ids]
 
-    predictor = BicepCurlPredictor()
+    predictor = BicepCurlPredictor(model_dir=model_dir)
 
     print(f"Running live-style streaming inference on {len(targets)} recording(s) "
           f"the model never saw during training or model selection...\n")

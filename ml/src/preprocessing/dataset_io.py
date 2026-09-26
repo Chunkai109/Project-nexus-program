@@ -30,6 +30,15 @@ the same `base_id` ("vid_0025") -- otherwise splitting could put literally
 overlapping frame data in both train and test. The base_id regex below
 matches the "vid_00NN" pattern wherever it appears in the string (not just
 at the start) specifically so the "incomplete_" prefix doesn't break this.
+
+A third source of rows, generated at prepare_dataset.py time (never present
+in the CSV itself), is `is_synthetic_extra` sequences -- extra rotation/
+time-warp variants of TRAIN-split `_orig` recordings, built by
+`src/preprocessing/synthetic_augment.py` to cover camera-angle and
+non-uniform-tempo variation the CSV's own pre-generated `_aug_*` copies
+never do (see that module's docstring and ml/README.md's "Synthetic
+augmentation of the training split" section for the full rationale and the
+mitigation-not-fix caveat).
 """
 from __future__ import annotations
 
@@ -54,6 +63,25 @@ class RawSequence:
     class_label: str
     keypoints: np.ndarray   # (T, 33, 3)
     num_frames: int
+    is_synthetic_extra: bool = False  # True only for generator-produced rows (see module docstring)
+
+
+def make_synthetic_sequence(source: RawSequence, keypoints: np.ndarray, suffix: str) -> RawSequence:
+    """Build a new RawSequence for a synthetic_augment.py-generated variant
+    of `source`, sharing its base_id/class_label so it is always assigned
+    to the same train/val/test split as its source (callers are
+    responsible for only ever calling this on TRAIN-split sources).
+    """
+    return RawSequence(
+        video_id=f"{source.video_id}_{suffix}",
+        base_id=source.base_id,
+        is_original=False,
+        is_truncated=False,
+        class_label=source.class_label,
+        keypoints=keypoints,
+        num_frames=keypoints.shape[0],
+        is_synthetic_extra=True,
+    )
 
 
 def load_all_sequences(csv_path: str) -> list[RawSequence]:

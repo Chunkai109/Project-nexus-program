@@ -16,6 +16,7 @@ def load_sequences_npz(path):
         "labels": data["labels"],
         "is_original": data["is_original"],
         "is_truncated": data["is_truncated"] if "is_truncated" in data else np.zeros(len(data["video_ids"]), dtype=bool),
+        "is_synthetic_extra": data["is_synthetic_extra"] if "is_synthetic_extra" in data else np.zeros(len(data["video_ids"]), dtype=bool),
         "engineered": data["engineered"],
         "raw": data["raw"],
     }

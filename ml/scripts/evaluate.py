@@ -18,6 +18,7 @@ cleanest (if noisier) independent-sample estimate.
 """
 from __future__ import annotations
 
+import argparse
 import json
 import re
 import sys
@@ -42,9 +43,19 @@ from ml.src.models.dataset import load_sequences_npz, CurlSequenceDataset, colla
 from ml.src.models.lstm_model import CurlLSTM
 from ml.src.models.labels import CLASS_NAMES, CLASS_TO_IDX
 
-PROCESSED_DIR = ML_ROOT / "data" / "processed"
-MODEL_DIR = ML_ROOT / "models" / "best_model"
-RESULTS_DIR = ML_ROOT / "results"
+
+def _parse_tag() -> str:
+    ap = argparse.ArgumentParser(add_help=False)
+    ap.add_argument("--tag", default="")
+    args, _ = ap.parse_known_args()
+    return args.tag
+
+
+TAG = _parse_tag()
+_SUFFIX = f"_{TAG}" if TAG else ""
+PROCESSED_DIR = ML_ROOT / "data" / f"processed{_SUFFIX}"
+MODEL_DIR = ML_ROOT / "models" / f"best_model{_SUFFIX}"
+RESULTS_DIR = ML_ROOT / f"results{_SUFFIX}"
 CM_DIR = RESULTS_DIR / "confusion_matrix"
 REPORT_DIR = RESULTS_DIR / "classification_report"
 CURVES_DIR = RESULTS_DIR / "training_curves"
