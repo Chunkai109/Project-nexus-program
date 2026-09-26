@@ -67,6 +67,12 @@ class BicepCurlPredictor:
             with open(gate_path) as f:
                 self.rest_gate = json.load(f)
 
+        calibration_path = model_dir / "good_form_calibration.json"
+        self.good_form_anchor = None
+        if calibration_path.exists():
+            with open(calibration_path) as f:
+                self.good_form_anchor = json.load(f)["anchor_p_perfect"]
+
         self._normalizer: SequenceNormalizer | None = None
         self._extractor: FeatureExtractor | None = None
         self._per_frame_features: list[np.ndarray] = []
@@ -159,19 +165,38 @@ class BicepCurlPredictor:
         proba = self.model.predict_proba(agg)[0]
         pred_idx = int(np.argmax(proba))
         perfect_idx = CLASS_NAMES.index("Perfect")
+        raw_good_form_score = float(proba[perfect_idx])
+
+        # RandomForest's predict_proba is a vote fraction across shallow
+        # trees, so raw P(Perfect) tops out around ~0.61 even for the best
+        # real "Perfect" example on record -- displaying that raw number as
+        # a 0-100% scale reads as mediocre for what is actually excellent
+        # form. good_form_calibration.json (see train.py's
+        # build_good_form_calibration()) rescales it so the best rep on
+        # record reads as ~100%; this is a monotonic DISPLAY-only stretch,
+        # it never changes which class was predicted or which rep ranks
+        # higher than which other rep. Falls back to the raw value if no
+        # calibration file exists (older training_config.json).
+        if self.good_form_anchor:
+            good_form_score = min(1.0, raw_good_form_score / self.good_form_anchor)
+        else:
+            good_form_score = raw_good_form_score
 
         return {
             "exercise": "bicep_curl",
             "prediction": CLASS_NAMES[pred_idx],
             "confidence": float(proba[pred_idx]),
-            # good_form_score = P(Perfect), i.e. the 6-way distribution
-            # collapsed into "looks correct" vs "looks like some kind of
-            # error" for one intuitive per-rep number. This is NOT the same
-            # thing as the model's own tested accuracy (see
-            # training_config.json's "headline_generalization_metric",
-            # ~88.5% CV macro-F1) -- that describes how reliable the model is
-            # in general; this describes how good THIS ONE rep looked.
-            "good_form_score": float(proba[perfect_idx]),
+            # good_form_score = calibrated P(Perfect) -- the 6-way
+            # distribution collapsed into "looks correct" vs "looks like
+            # some kind of error" for one intuitive per-rep number, rescaled
+            # for display (see good_form_score_raw for the uncalibrated
+            # value). This is NOT the same thing as the model's own tested
+            # accuracy (see training_config.json's
+            # "headline_generalization_metric", ~88.5% CV macro-F1) -- that
+            # describes how reliable the model is in general; this describes
+            # how good THIS ONE rep looked.
+            "good_form_score": good_form_score,
+            "good_form_score_raw": raw_good_form_score,
             "class_probabilities": {c: float(p) for c, p in zip(CLASS_NAMES, proba)},
             "num_frames": n_frames,
         }

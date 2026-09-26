@@ -448,6 +448,7 @@ def main():
             final_model.fit(X_dev, y_dev, sample_weight=sample_weights_balanced(y_dev))
         joblib.dump(final_model, MODEL_DIR / "model_classical.joblib")
         model_type_saved = "classical"
+        build_good_form_calibration(final_model, X_dev, dev_df["class_label"].values)
 
     with open(MODEL_DIR / "training_config.json", "w") as f:
         json.dump(training_config, f, indent=2)
@@ -475,6 +476,50 @@ def main():
 
     print(f"\nSaved final model ({model_type_saved}) and artifacts to {MODEL_DIR}")
     print("Run scripts/evaluate.py next to evaluate on the held-out TEST base_ids.")
+
+
+def build_good_form_calibration(model, X_dev, y_dev_labels):
+    """Calibrate the displayed "good form score" (P(Perfect)) so a genuinely
+    excellent rep reads close to 100% instead of the raw ~60% ceiling.
+
+    RandomForest's predict_proba is a vote fraction across many shallow
+    (max_depth<=4) trees -- no class ever gets near-unanimous agreement, so
+    P(Perfect) tops out around 0.61 even for the single best "Perfect"
+    example in the whole dataset. Showing that raw number as if it were a
+    0-100% quality scale reads as "mediocre" for what is actually the best
+    rep on record, which is misleading in the other direction from
+    inflating a number outright: the RANKING is honest, the SCALE is not
+    intuitive. This computes a display-only linear stretch:
+        displayed = min(1.0, raw_P(Perfect) / anchor)
+    where `anchor` is the highest P(Perfect) ever produced for a genuinely
+    "Perfect"-labeled example in the dev pool (never the test set, keeping
+    with this project's test-set discipline even though this calibration
+    doesn't affect any classification decision -- argmax/predicted class is
+    completely unchanged, only the cosmetic P(Perfect) display number is
+    rescaled). This is monotonic -- it never changes which rep looks better
+    than which other rep, only how the number reads.
+    """
+    proba = model.predict_proba(X_dev)
+    perfect_idx = list(model.classes_).index(CLASS_TO_IDX["Perfect"])
+    p_perfect = proba[:, perfect_idx]
+    perfect_mask = y_dev_labels == "Perfect"
+    anchor = float(p_perfect[perfect_mask].max())
+
+    config = {
+        "anchor_p_perfect": anchor,
+        "rule": (
+            "displayed_good_form_score = min(1.0, raw_p_perfect / anchor_p_perfect). "
+            "anchor_p_perfect is the highest P(Perfect) ever produced for a genuinely "
+            "'Perfect'-labeled dev-pool example -- i.e. the best real rep on record reads "
+            "as ~100%, not ~61%. Monotonic rescale for display only; does not change "
+            "which class is predicted or any evaluation metric."
+        ),
+    }
+    with open(MODEL_DIR / "good_form_calibration.json", "w") as f:
+        json.dump(config, f, indent=2)
+    print(f"\nGood-form-score display calibration anchor: {anchor:.4f} "
+          f"(raw P(Perfect)={anchor:.2f} will now display as 100%)")
+    return config
 
 
 def build_rest_gate_config(seq_df: pd.DataFrame, safety_factor: float = 0.5):
