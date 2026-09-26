@@ -10,12 +10,19 @@ flexion + upper-arm drift, for cheat-rep detection), an EMG sensor, an
 on-device rep counter, and a vibration motor that fires both automatically
 (on strong contraction) and on command from the dashboard.
 
+**EMG is currently disabled** (`EMG_ENABLED = false` near the top of the
+sketch) since no EMG hardware is wired up yet — the two MPU6050s, rep
+counter, WiFi/WebSocket link and vibration motor all work fully without it.
+Flip that constant back to `true` once the EMG sensor is connected; see
+[Vibration motor behavior](#vibration-motor-behavior) below for what changes.
+
 ## What you need
 
 - An ESP32 dev board (written against an ESP32-WROOM-32D)
 - Two MPU6050 IMU breakouts, wired over the same I2C bus at different
   addresses (via the AD0 pin)
-- An EMG sensor module with an analog envelope output
+- An EMG sensor module with an analog envelope output (optional while
+  `EMG_ENABLED` is `false`)
 - A vibration motor for haptic feedback, driven through a transistor
 
 ## Wiring
@@ -28,7 +35,7 @@ on-device rep counter, and a vibration motor that fires both automatically
 | MPU6050 #2 (upper arm)| VCC / GND       | 3V3 / GND |
 |                        | SDA / SCL       | GPIO 21 / GPIO 22 (shared bus) |
 |                        | AD0             | 3.3V (address `0x69`) |
-| EMG sensor            | Signal / envelope out | GPIO 35 (ADC1) |
+| EMG sensor (optional while `EMG_ENABLED` is `false`) | Signal / envelope out | GPIO 35 (ADC1) |
 | Vibration motor       | Control         | GPIO 25, through an NPN transistor |
 
 Both MPU6050s share the same I2C bus (SDA/SCL) — tying one's `AD0` pin to
@@ -75,7 +82,7 @@ that's expected.
 
 | Pod ID | Sensor                          |
 |--------|----------------------------------|
-| 1      | EMG envelope (bicep)             |
+| 1      | EMG envelope (bicep) — not reported while `EMG_ENABLED` is `false` |
 | 2      | MPU6050 #1 — forearm flexion     |
 | 3      | MPU6050 #2 — upper-arm drift     |
 
@@ -88,8 +95,10 @@ slots.
 The motor fires under two independent conditions, either of which turns it
 on:
 
-- **Automatic**: EMG activation crosses `EMG_THRESHOLD` while flexion is
-  past `CONTRACTION_LIMIT` — the original on-device form feedback.
+- **Automatic**: flexion crosses `CONTRACTION_LIMIT` — the on-device form
+  feedback. While `EMG_ENABLED` is `true`, this additionally requires EMG
+  activation to cross `EMG_THRESHOLD` at the same time (the original
+  two-signal condition); with EMG disabled it fires on flexion alone.
 - **Commanded**: the dashboard sends a `{"type":"haptic", ...}` message
   (e.g. the Sensor Setup screen's "Test Pod Vibration" button). This board
   only has one motor, so a haptic command pulses it regardless of which
@@ -102,8 +111,8 @@ in [`frontend/src/lib/hub/protocol.ts`](../frontend/src/lib/hub/protocol.ts).
 In short:
 
 - Hub → app, roughly 50 times a second: `{"type":"imu","podId":2,"pitch":12.3,"roll":-4.1,"yaw":0.8}`
-  and `{"type":"emg","podId":1,"vrms":0.34}`, plus `{"type":"status", ...}`
-  battery/signal messages every 2 seconds.
+  and, once `EMG_ENABLED` is `true`, `{"type":"emg","podId":1,"vrms":0.34}`;
+  plus `{"type":"status", ...}` battery/signal messages every 2 seconds.
 - App → hub: `{"type":"haptic","podId":2,"durationMs":400}` to pulse the
   vibration motor.
 

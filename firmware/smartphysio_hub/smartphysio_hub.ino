@@ -119,6 +119,11 @@ const float EXTENSION_LIMIT   = 20.0; // Flexion threshold when arm returns down
 const float DRIFT_TOLERANCE   = 15.0; // Max allowed deviation in Sensor 2 drift
 const int   EMG_THRESHOLD     = 500;  // EMG activation threshold
 
+// EMG sensor disabled for now (no hardware wired) — flip back to true once
+// it's connected. While false, the auto-vibration trigger below falls back
+// to flexion alone and no "emg"/pod-1-"status" WebSocket messages are sent.
+constexpr bool EMG_ENABLED = false;
+
 enum RepState { STATE_DOWN, STATE_CURLING, STATE_TOP };
 RepState repState = STATE_DOWN;
 int repCount = 0;
@@ -177,7 +182,9 @@ void setup() {
   Wire.begin(I2C_SDA, I2C_SCL);
   Wire.setClock(400000);
 
-  Serial.println("\n--- Bicep Curl Feedback System (Dual MPU + EMG + Haptic) ---");
+  Serial.println(EMG_ENABLED
+                    ? "\n--- Bicep Curl Feedback System (Dual MPU + EMG + Haptic) ---"
+                    : "\n--- Bicep Curl Feedback System (Dual MPU + Haptic, EMG disabled) ---");
 
   if (!initSensor(MPU1_ADDR)) Serial.println("Sensor 1 (0x68) NOT detected!");
   if (!initSensor(MPU2_ADDR)) Serial.println("Sensor 2 (0x69) NOT detected!");
@@ -253,8 +260,8 @@ void loop() {
   float flexion = 90-roll1; // Sensor 1
   float drift   = roll2-90;            // Sensor 2
 
-  // 4. Sample EMG Sensor
-  int emgRaw = analogRead(EMG_PIN);
+  // 4. Sample EMG Sensor (skipped while disabled — see EMG_ENABLED above)
+  int emgRaw = EMG_ENABLED ? analogRead(EMG_PIN) : 0;
 
   // 5. Baseline Lock for Upper Arm Drift
   if (!isBaseSet) {
@@ -275,12 +282,12 @@ void loop() {
   }
 
   // 6. Vibration Motor Trigger Condition:
-  // Fires automatically when EMG > 500 AND Flexion > 80 degrees (the original
-  // on-device feedback), OR when the dashboard sends an explicit "haptic"
-  // command over WebSocket (e.g. the Sensor Setup screen's "Test Pod
-  // Vibration" button) — this board only has one motor, so either source
-  // can pulse it.
-  bool autonomousActive = (emgRaw > EMG_THRESHOLD && flexion > CONTRACTION_LIMIT);
+  // Fires automatically when Flexion > 80 degrees (and, once EMG_ENABLED is
+  // flipped back on, also requires EMG > 500 — the original on-device
+  // feedback), OR when the dashboard sends an explicit "haptic" command over
+  // WebSocket (e.g. the Sensor Setup screen's "Test Pod Vibration" button) —
+  // this board only has one motor, so either source can pulse it.
+  bool autonomousActive = flexion > CONTRACTION_LIMIT && (!EMG_ENABLED || emgRaw > EMG_THRESHOLD);
   bool appCommandActive = false;
   if (hapticOffAt != 0) {
     if (millis() < hapticOffAt) {
@@ -353,17 +360,27 @@ void loop() {
     upperArmDoc["yaw"] = pitch2;
     broadcastJson(upperArmDoc);
 
-    JsonDocument emgDoc;
-    emgDoc["type"] = "emg";
-    emgDoc["podId"] = POD_EMG;
-    emgDoc["vrms"] = emgRaw / 4095.0; // 12-bit ADC full scale
-    broadcastJson(emgDoc);
+    if (EMG_ENABLED) {
+      JsonDocument emgDoc;
+      emgDoc["type"] = "emg";
+      emgDoc["podId"] = POD_EMG;
+      emgDoc["vrms"] = emgRaw / 4095.0; // 12-bit ADC full scale
+      broadcastJson(emgDoc);
+    }
 
     unsigned long wsNow = millis();
     if (wsNow - lastStatusSentAt >= STATUS_INTERVAL_MS) {
       lastStatusSentAt = wsNow;
-      const uint8_t statusPods[3] = { POD_EMG, POD_FOREARM, POD_UPPERARM };
-      for (uint8_t i = 0; i < 3; i++) {
+      if (EMG_ENABLED) {
+        JsonDocument statusDoc;
+        statusDoc["type"] = "status";
+        statusDoc["podId"] = POD_EMG;
+        statusDoc["battery"] = 100;
+        statusDoc["signal"] = "strong";
+        broadcastJson(statusDoc);
+      }
+      const uint8_t statusPods[2] = { POD_FOREARM, POD_UPPERARM };
+      for (uint8_t i = 0; i < 2; i++) {
         JsonDocument statusDoc;
         statusDoc["type"] = "status";
         statusDoc["podId"] = statusPods[i];
@@ -377,8 +394,13 @@ void loop() {
   }
 
   // Serial Monitor Output
-  Serial.printf("State: %-7s | Flex: %5.1f | Drift: %5.1f | EMG: %4d | Vib: %s | Reps: %d\n",
-                stateStr, flexion, drift, emgRaw, motorActive ? "ON " : "OFF", repCount);
+  if (EMG_ENABLED) {
+    Serial.printf("State: %-7s | Flex: %5.1f | Drift: %5.1f | EMG: %4d | Vib: %s | Reps: %d\n",
+                  stateStr, flexion, drift, emgRaw, motorActive ? "ON " : "OFF", repCount);
+  } else {
+    Serial.printf("State: %-7s | Flex: %5.1f | Drift: %5.1f | Vib: %s | Reps: %d\n",
+                  stateStr, flexion, drift, motorActive ? "ON " : "OFF", repCount);
+  }
 
   delay(20); // 50 Hz loop
 }
