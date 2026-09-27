@@ -225,7 +225,7 @@ export function LiveSession() {
               max={150}
               targetMin={simulated.targetMin}
               targetMax={simulated.targetMax}
-              label="Knee Flexion Angle"
+              label="Joint Angle"
               fault={faultActive}
             />
             <span
