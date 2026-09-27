@@ -108,6 +108,15 @@ export class BicepCurlCounter {
           if (!this.formCheatDetected) this.repCount += 1
           this.formCheatDetected = false
           this.repState = 'down'
+        } else if (flex < START_CURL_LIMIT) {
+          // Released the contraction without reaching full extension (e.g.
+          // sensor drift has nudged the effective "zero" above
+          // EXTENSION_LIMIT, or they simply didn't extend all the way this
+          // time). Fall back to 'curling' instead of staying latched in
+          // 'top' forever — this one rep goes uncounted, but the very next
+          // full extension can still complete normally instead of the
+          // counter being permanently stuck at whatever count it last hit.
+          this.repState = 'curling'
         }
         break
     }
