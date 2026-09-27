@@ -18,11 +18,18 @@ import { useAuth } from '@/lib/AuthContext'
 import { podSide, kneePodForSide } from '@/lib/podUtils'
 import { muscleEmgTarget } from '@/lib/muscles'
 import { useSensorHub } from '@/lib/hub/HubProvider'
+import { CURL_DRIFT_POD_ID, CURL_FLEX_POD_ID } from '@/lib/hub/bicepCurlCounter'
 import { PODS } from '@/lib/mockData'
 import type { RepSample } from '@/types'
 
 const HAPTIC_PULSE_MS = 400
 const HAPTIC_RETRIGGER_COOLDOWN_MS = 1500
+
+// Testing flag: disable MediaPipe camera-based pose detection entirely so
+// the hub's real MPU flex/drift data (via hub.curl, computed in HubProvider)
+// is the only input driving the rep counter, instead of it being masked by
+// vision whenever someone's in frame. Flip back to true to restore camera-based detection.
+const ENABLE_MEDIAPIPE_VISION = false
 
 export function LiveSession() {
   const { exerciseId } = useParams()
@@ -42,17 +49,31 @@ export function LiveSession() {
   const simulated = useSensorStream(!ending, primaryAngle?.targetMin ?? null, primaryAngle?.targetMax ?? null)
   const squatDepth = Math.max(0, Math.min(1, 1 - (simulated.kneeFlexionDeg - 70) / 60))
 
+  // Real flex/drift from the hub's two MPU6050 pods (2 = forearm flexion,
+  // 3 = upper-arm drift — see firmware/smartphysio_hub/smartphysio_hub.ino).
+  // The rep-counting/cheat-detection algorithm itself (hub.curl) runs inside
+  // HubProvider, synchronously per incoming message — see bicepCurlCounter.ts
+  // for why it can't be driven from here as a plain rendered-value effect.
+  const flexLive = hub.pods[CURL_FLEX_POD_ID]?.pitchDeg ?? null
+  const driftLive = hub.pods[CURL_DRIFT_POD_ID]?.pitchDeg ?? null
+  const curl = hub.curl
+  const usingHubCurl = flexLive !== null && driftLive !== null
+
   // Hybrid multimodal decision engine: prefer the camera's real joint-angle
-  // reading when a person is in frame, fall back to the wearable simulator
-  // otherwise (no camera, model still loading, or nobody in shot).
+  // reading when a person is in frame, then the hub's real MPU curl
+  // algorithm when connected, falling back to the wearable simulator only
+  // when neither real source is available.
   const usingVision = vision !== null
-  const kneeFlexionDeg = vision?.flexionDeg ?? simulated.kneeFlexionDeg
-  const faultActive = vision?.faultActive ?? simulated.faultActive
-  const faultDeg = vision ? Math.round(vision.valgusDeg) : simulated.faultDeg
+  const kneeFlexionDeg = vision?.flexionDeg ?? (usingHubCurl ? flexLive : simulated.kneeFlexionDeg)
+  const faultActive = vision?.faultActive ?? (usingHubCurl ? curl.formCheatDetected : simulated.faultActive)
+  const faultDeg = vision ? Math.round(vision.valgusDeg) : usingHubCurl ? Math.round(curl.driftError) : simulated.faultDeg
   const faultLabel = faultActive
-    ? `${monitoredSide === 'left' ? 'Left' : 'Right'} Knee Valgus Detected (+${faultDeg}° Fault)`
+    ? usingHubCurl && !usingVision
+      ? `Upper-Arm Drift Detected (+${faultDeg}° Over Baseline)`
+      : `${monitoredSide === 'left' ? 'Left' : 'Right'} Knee Valgus Detected (+${faultDeg}° Fault)`
     : null
   const activeHapticPod = faultActive ? hapticPod : null
+  const repCount = usingHubCurl ? curl.repCount : simulated.repCount
 
   // Real EMG pods (1 = left vastus medialis, 2 = right) once that specific
   // pod has actually reported an EMG reading; otherwise the wearable
@@ -91,14 +112,11 @@ export function LiveSession() {
   const [repSamples, setRepSamples] = useState<RepSample[]>([])
   const prevRepCount = useRef(0)
   useEffect(() => {
-    if (simulated.repCount > prevRepCount.current) {
-      prevRepCount.current = simulated.repCount
-      setRepSamples((prev) => [
-        ...prev,
-        { rep: simulated.repCount, angle: Math.round(kneeFlexionDeg), emgLeft, emgRight, faultActive },
-      ])
+    if (repCount > prevRepCount.current) {
+      prevRepCount.current = repCount
+      setRepSamples((prev) => [...prev, { rep: repCount, angle: Math.round(kneeFlexionDeg), emgLeft, emgRight, faultActive }])
     }
-  }, [simulated.repCount, kneeFlexionDeg, emgLeft, emgRight, faultActive])
+  }, [repCount, kneeFlexionDeg, emgLeft, emgRight, faultActive])
 
   if (!exercise) {
     return (
@@ -156,7 +174,7 @@ export function LiveSession() {
           </span>
           <span className="flex items-center gap-1.5">
             <Repeat className="h-4 w-4 text-accent" />
-            {simulated.repCount} reps
+            {repCount} reps
           </span>
           <ThemeToggle />
         </div>
@@ -169,6 +187,7 @@ export function LiveSession() {
             monitoredSide={monitoredSide}
             faultThresholdDeg={primaryAngle?.faultThresholdDeg ?? 8}
             onVisionMetrics={setVision}
+            poseDetectionEnabled={ENABLE_MEDIAPIPE_VISION}
             fallbackSkeleton={
               <PoseOverlay squatDepth={squatDepth} faultActive={faultActive} faultDeg={faultDeg} />
             }
@@ -190,7 +209,9 @@ export function LiveSession() {
             <p className="text-[13px] text-ink-faint">
               {usingVision
                 ? 'Knee angle is being measured live from your camera via MediaPipe Pose. Wearable pods still supply EMG and localized limb rotation the camera alone can\'t see.'
-                : 'No live camera reading right now, so the knee angle and fault state below are simulated from the wearable stream, per the hybrid multimodal decision engine.'}
+                : usingHubCurl
+                  ? "MediaPipe is disabled — flexion, drift and rep counting below are computed live from the ESP32's MPU6050 pods, run through the same curl algorithm as the firmware."
+                  : 'No live camera reading right now, so the knee angle and fault state below are simulated from the wearable stream, per the hybrid multimodal decision engine.'}
             </p>
           </Card>
         </div>
@@ -208,9 +229,9 @@ export function LiveSession() {
               fault={faultActive}
             />
             <span
-              className={`mt-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium ${usingVision ? 'bg-accent/10 text-accent' : 'bg-surface-secondary text-ink-faint'}`}
+              className={`mt-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium ${usingVision || usingHubCurl ? 'bg-accent/10 text-accent' : 'bg-surface-secondary text-ink-faint'}`}
             >
-              {usingVision ? 'Source: Live Camera (MediaPipe)' : 'Source: Wearable Simulation'}
+              {usingVision ? 'Source: Live Camera (MediaPipe)' : usingHubCurl ? 'Source: Live Hub (MPU)' : 'Source: Wearable Simulation'}
             </span>
           </Card>
 

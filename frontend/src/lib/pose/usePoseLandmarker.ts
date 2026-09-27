@@ -9,14 +9,19 @@ const WASM_BASE_PATH = '/mediapipe/wasm'
 const MODEL_ASSET_PATH =
   'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task'
 
-export type PoseLandmarkerStatus = 'loading' | 'ready' | 'unavailable'
+export type PoseLandmarkerStatus = 'loading' | 'ready' | 'unavailable' | 'disabled'
 
-export function usePoseLandmarker() {
-  const [status, setStatus] = useState<PoseLandmarkerStatus>('loading')
+/** Pass `enabled: false` to skip loading the model entirely (no WASM fetch, no camera-driven inference) — used to test the MPU-only rep counter without MediaPipe running at all. */
+export function usePoseLandmarker(enabled = true) {
+  const [status, setStatus] = useState<PoseLandmarkerStatus>(enabled ? 'loading' : 'disabled')
   const [error, setError] = useState<string | null>(null)
   const landmarkerRef = useRef<PoseLandmarker | null>(null)
 
   useEffect(() => {
+    if (!enabled) {
+      setStatus('disabled')
+      return
+    }
     let cancelled = false
 
     async function load() {
@@ -57,7 +62,7 @@ export function usePoseLandmarker() {
       landmarkerRef.current?.close()
       landmarkerRef.current = null
     }
-  }, [])
+  }, [enabled])
 
   function detectForVideo(video: HTMLVideoElement, timestampMs: number): PoseLandmarkerResult | null {
     if (!landmarkerRef.current) return null

@@ -33,7 +33,6 @@ struct MPUData {
 
 struct GyroOffsets {
   float gx = 0.0;
-  float gy = 0.0;
 };
 
 enum RepState { STATE_DOWN, STATE_CURLING, STATE_TOP };
@@ -109,9 +108,11 @@ void onWebSocketEvent(uint8_t clientNum, WStype_t type, uint8_t *payload, size_t
 
 GyroOffsets calib1, calib2;
 
-// Filtered Orientation Angles
-float roll1 = 0.0, pitch1 = 0.0; // Forearm
-float roll2 = 0.0, pitch2 = 0.0; // Upper Arm
+// Filtered Orientation Angles — only the roll axis is needed (flexion is
+// derived from Sensor 1's roll, drift from Sensor 2's), so pitch/yaw are
+// never computed at all rather than computed and left unused.
+float roll1 = 0.0; // Forearm
+float roll2 = 0.0; // Upper Arm
 const float ALPHA = 0.96;
 
 unsigned long prevTime = 0;
@@ -165,17 +166,15 @@ bool readSensor(uint8_t addr, MPUData &data) {
 void calibrateGyro(uint8_t addr, GyroOffsets &calib, const char* name) {
   Serial.print("Calibrating "); Serial.print(name);
   Serial.println("... Keep arm still!");
-  long sum_gx = 0, sum_gy = 0;
+  long sum_gx = 0;
   MPUData d;
   for (int i = 0; i < 400; i++) {
     if (readSensor(addr, d)) {
       sum_gx += d.gx;
-      sum_gy += d.gy;
     }
     delay(3);
   }
   calib.gx = (sum_gx / 400.0) / 131.0;
-  calib.gy = (sum_gy / 400.0) / 131.0;
 }
 
 void setup() {
@@ -204,14 +203,12 @@ void setup() {
   // Seed angles from gravity vectors
   MPUData d1, d2;
   if (readSensor(MPU1_ADDR, d1)) {
-    float ay = d1.ay / 16384.0, az = d1.az / 16384.0, ax = d1.ax / 16384.0;
-    roll1  = atan2(ay, az) * 180.0 / M_PI;
-    pitch1 = atan2(-ax, sqrt(ay * ay + az * az)) * 180.0 / M_PI;
+    float ay = d1.ay / 16384.0, az = d1.az / 16384.0;
+    roll1 = atan2(ay, az) * 180.0 / M_PI;
   }
   if (readSensor(MPU2_ADDR, d2)) {
-    float ay = d2.ay / 16384.0, az = d2.az / 16384.0, ax = d2.ax / 16384.0;
-    roll2  = atan2(ay, az) * 180.0 / M_PI;
-    pitch2 = atan2(-ax, sqrt(ay * ay + az * az)) * 180.0 / M_PI;
+    float ay = d2.ay / 16384.0, az = d2.az / 16384.0;
+    roll2 = atan2(ay, az) * 180.0 / M_PI;
   }
 
   WiFi.softAP(AP_SSID, AP_PASSWORD);
@@ -240,28 +237,18 @@ void loop() {
 
   // 1. Read and filter Sensor 1 (Forearm)
   if (readSensor(MPU1_ADDR, d1)) {
-    float ax = d1.ax / 16384.0, ay = d1.ay / 16384.0, az = d1.az / 16384.0;
+    float ay = d1.ay / 16384.0, az = d1.az / 16384.0;
     float gx = (d1.gx / 131.0) - calib1.gx;
-    float gy = (d1.gy / 131.0) - calib1.gy;
-
-    float accelRoll  = atan2(ay, az) * 180.0 / M_PI;
-    float accelPitch = atan2(-ax, sqrt(ay * ay + az * az)) * 180.0 / M_PI;
-
-    roll1  = ALPHA * (roll1 + gx * dt) + (1.0 - ALPHA) * accelRoll;
-    pitch1 = ALPHA * (pitch1 + gy * dt) + (1.0 - ALPHA) * accelPitch;
+    float accelRoll = atan2(ay, az) * 180.0 / M_PI;
+    roll1 = ALPHA * (roll1 + gx * dt) + (1.0 - ALPHA) * accelRoll;
   }
 
   // 2. Read and filter Sensor 2 (Upper Arm)
   if (readSensor(MPU2_ADDR, d2)) {
-    float ax = d2.ax / 16384.0, ay = d2.ay / 16384.0, az = d2.az / 16384.0;
+    float ay = d2.ay / 16384.0, az = d2.az / 16384.0;
     float gx = (d2.gx / 131.0) - calib2.gx;
-    float gy = (d2.gy / 131.0) - calib2.gy;
-
-    float accelRoll  = atan2(ay, az) * 180.0 / M_PI;
-    float accelPitch = atan2(-ax, sqrt(ay * ay + az * az)) * 180.0 / M_PI;
-
-    roll2  = ALPHA * (roll2 + gx * dt) + (1.0 - ALPHA) * accelRoll;
-    pitch2 = ALPHA * (pitch2 + gy * dt) + (1.0 - ALPHA) * accelPitch;
+    float accelRoll = atan2(ay, az) * 180.0 / M_PI;
+    roll2 = ALPHA * (roll2 + gx * dt) + (1.0 - ALPHA) * accelRoll;
   }
 
   // 3. Sensor Angle Formulas
@@ -350,22 +337,22 @@ void loop() {
       break;
   }
 
-  // 8. Stream live telemetry to the dashboard, if it's connected
+  // 8. Stream live telemetry to the dashboard, if it's connected. The
+  // dashboard now runs the same curl-counting algorithm as this firmware
+  // (see frontend/src/lib/useBicepCurlCounter.ts) against these two raw
+  // values, so only flexion and drift are sent — no roll/yaw, since nothing
+  // on either end uses them.
   if (connectedClientCount > 0) {
     JsonDocument forearmDoc;
     forearmDoc["type"] = "imu";
     forearmDoc["podId"] = POD_FOREARM;
     forearmDoc["pitch"] = flexion;
-    forearmDoc["roll"] = roll1;
-    forearmDoc["yaw"] = pitch1;
     broadcastJson(forearmDoc);
 
     JsonDocument upperArmDoc;
     upperArmDoc["type"] = "imu";
     upperArmDoc["podId"] = POD_UPPERARM;
     upperArmDoc["pitch"] = drift;
-    upperArmDoc["roll"] = roll2;
-    upperArmDoc["yaw"] = pitch2;
     broadcastJson(upperArmDoc);
 
     if (EMG_ENABLED) {

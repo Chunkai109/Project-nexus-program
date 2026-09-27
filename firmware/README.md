@@ -110,13 +110,21 @@ The exact JSON message shapes this firmware sends and accepts are documented
 in [`frontend/src/lib/hub/protocol.ts`](../frontend/src/lib/hub/protocol.ts).
 In short:
 
-- Hub → app, roughly 50 times a second: `{"type":"imu","podId":2,"pitch":12.3,"roll":-4.1,"yaw":0.8}`
-  and, once `EMG_ENABLED` is `true`, `{"type":"emg","podId":1,"vrms":0.34}`;
-  plus `{"type":"status", ...}` battery/signal messages every 2 seconds.
+- Hub → app, roughly 50 times a second: `{"type":"imu","podId":2,"pitch":12.3}`
+  (flexion) and `{"type":"imu","podId":3,"pitch":1.8}` (drift) — no roll/yaw,
+  since only these two values feed anything on either end. Once
+  `EMG_ENABLED` is `true`, also `{"type":"emg","podId":1,"vrms":0.34}`; plus
+  `{"type":"status", ...}` battery/signal messages every 2 seconds.
 - App → hub: `{"type":"haptic","podId":2,"durationMs":400}` to pulse the
   vibration motor.
 
 Rep counting, the cheat-rep drift check, and the automatic vibration trigger
-all run entirely on the ESP32 — the WebSocket link is for the dashboard to
-observe live sensor data and to trigger the motor manually, not something
-the rep logic depends on.
+all run **twice, independently**: once here on the ESP32 (driving the
+vibration motor and Serial output), and again on the dashboard
+(`frontend/src/lib/hub/bicepCurlCounter.ts`, run inside `HubProvider` against
+the same two `pitch` values) for the "Source: Live Hub (MPU)" rep counter
+shown in Live Session — with MediaPipe camera detection disabled
+(`ENABLE_MEDIAPIPE_VISION` in `LiveSession.tsx`) so that's the only input
+driving it. Both copies use identical thresholds, but they don't talk to
+each other — the dashboard isn't reading the firmware's rep count, it's
+computing its own from the same raw flex/drift stream.

@@ -1,6 +1,13 @@
 import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from 'react'
 import { isWebSocketSupported, SmartPhysioSocketClient, type HubConnectionState } from './SmartPhysioSocketClient'
 import { DEFAULT_HUB_WS_URL, emgActivationPercent, type PodId, type SignalLevel } from './protocol'
+import {
+  BicepCurlCounter,
+  createInitialBicepCurlResult,
+  CURL_DRIFT_POD_ID,
+  CURL_FLEX_POD_ID,
+  type BicepCurlCounterResult,
+} from './bicepCurlCounter'
 
 export interface PodLiveData {
   battery?: number
@@ -30,6 +37,8 @@ interface HubValue {
   sendHaptic: (podId: PodId, durationMs: number) => Promise<void>
   /** Sets the per-pod EMG baseline/MVC captured by the calibration routine; subsequent "emg" messages for that pod are normalized against it. */
   setCalibration: (podId: PodId, calibration: EmgCalibration) => void
+  /** Live rep count/state from the bicep-curl rig's flex+drift pods (see bicepCurlCounter.ts). Stays at its initial zero state until both pods have reported at least once. */
+  curl: BicepCurlCounterResult
 }
 
 const HubContext = createContext<HubValue | null>(null)
@@ -40,6 +49,10 @@ export function HubProvider({ children }: { children: ReactNode }) {
   const [deviceName, setDeviceName] = useState<string | null>(null)
   const [pods, setPods] = useState<Partial<Record<PodId, PodLiveData>>>({})
   const [calibration, setCalibrationState] = useState<Partial<Record<PodId, EmgCalibration>>>({})
+  const [curl, setCurl] = useState<BicepCurlCounterResult>(createInitialBicepCurlResult)
+  // Stepped synchronously inside onImu below, not from a React effect keyed
+  // on rendered pod state — see bicepCurlCounter.ts for why that matters.
+  const curlCounterRef = useRef(new BicepCurlCounter())
   const clientRef = useRef<SmartPhysioSocketClient | null>(null)
   // The onEmg callback below is created once inside getClient, so it reads
   // calibration through this ref rather than the state closure to always see
@@ -53,7 +66,11 @@ export function HubProvider({ children }: { children: ReactNode }) {
           setConnectionState(state)
           setErrorMessage(state === 'error' ? (detail ?? 'Unknown error') : null)
           if (state === 'connected') setDeviceName(detail ?? 'SmartPhysio Hub')
-          if (state === 'disconnected' || state === 'error') setPods({})
+          if (state === 'disconnected' || state === 'error') {
+            setPods({})
+            curlCounterRef.current = new BicepCurlCounter()
+            setCurl(createInitialBicepCurlResult())
+          }
         },
         onImu: (packet) => {
           setPods((prev) => ({
@@ -65,6 +82,15 @@ export function HubProvider({ children }: { children: ReactNode }) {
               yawDeg: packet.yawDeg,
             },
           }))
+          // Stepped here, synchronously per message, rather than in a React
+          // effect — see bicepCurlCounter.ts for why that distinction matters.
+          if (packet.podId === CURL_FLEX_POD_ID) {
+            const result = curlCounterRef.current.updateFlex(packet.pitchDeg)
+            if (result) setCurl(result)
+          } else if (packet.podId === CURL_DRIFT_POD_ID) {
+            const result = curlCounterRef.current.updateDrift(packet.pitchDeg)
+            if (result) setCurl(result)
+          }
         },
         onEmg: (packet) => {
           setPods((prev) => ({
@@ -122,8 +148,9 @@ export function HubProvider({ children }: { children: ReactNode }) {
       disconnect,
       sendHaptic,
       setCalibration,
+      curl,
     }),
-    [connectionState, errorMessage, deviceName, pods, calibration, connect, disconnect, sendHaptic, setCalibration],
+    [connectionState, errorMessage, deviceName, pods, calibration, connect, disconnect, sendHaptic, setCalibration, curl],
   )
 
   return <HubContext.Provider value={value}>{children}</HubContext.Provider>
