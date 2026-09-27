@@ -21,9 +21,9 @@
 // ---------------------------------------------------------------------------
 // Shared types — defined before every function in this file. Arduino's
 // auto-generated function prototypes are hoisted above all of them, so any
-// type used in a function signature (MPUData, GyroOffsets, RepState below)
-// must already be declared by this point or the auto-prototype won't
-// compile ("'MPUData' has not been declared").
+// type used in a function signature (MPUData, GyroOffsets below) must
+// already be declared by this point or the auto-prototype won't compile
+// ("'MPUData' has not been declared").
 // ---------------------------------------------------------------------------
 struct MPUData {
   int16_t ax, ay, az;
@@ -34,8 +34,6 @@ struct MPUData {
 struct GyroOffsets {
   float gx = 0.0;
 };
-
-enum RepState { STATE_DOWN, STATE_CURLING, STATE_TOP };
 
 // ---------------------------------------------------------------------------
 // SmartPhysio dashboard link — this board hosts its own WiFi access point
@@ -50,7 +48,7 @@ constexpr uint16_t WS_PORT = 81;
 // Which pod slot each sensor reports as in the dashboard.
 constexpr uint8_t POD_EMG       = 1;  // Bicep EMG envelope
 constexpr uint8_t POD_FOREARM   = 2;  // Sensor 1 — flexion
-constexpr uint8_t POD_UPPERARM  = 3;  // Sensor 2 — drift / cheat detection
+constexpr uint8_t POD_UPPERARM  = 3;  // Sensor 2 — drift
 
 constexpr unsigned long STATUS_INTERVAL_MS = 2000;
 
@@ -117,26 +115,17 @@ const float ALPHA = 0.96;
 
 unsigned long prevTime = 0;
 
-// Baseline Reference for Sensor 2 Drift
-float baselineDrift = 0.0;
-bool isBaseSet = false;
-int settleCount = 0;
-
-// Rep and Form Thresholds
-const float START_CURL_LIMIT  = 30.0; // Flexion threshold to begin rep
-const float CONTRACTION_LIMIT = 80.0; // Flexion threshold at top of curl
-const float EXTENSION_LIMIT   = 20.0; // Flexion threshold when arm returns down
-const float DRIFT_TOLERANCE   = 15.0; // Max allowed deviation in Sensor 2 drift
+// Vibration Trigger Threshold — rep counting and drift/cheat detection now
+// run entirely on the dashboard (frontend/src/lib/hub/bicepCurlCounter.ts),
+// against the same flexion/drift stream this board broadcasts below. This
+// board only needs its own threshold for the on-device haptic feedback.
+const float CONTRACTION_LIMIT = 80.0; // Flexion threshold to trigger vibration
 const int   EMG_THRESHOLD     = 500;  // EMG activation threshold
 
 // EMG sensor disabled for now (no hardware wired) — flip back to true once
 // it's connected. While false, the auto-vibration trigger below falls back
 // to flexion alone and no "emg"/pod-1-"status" WebSocket messages are sent.
 constexpr bool EMG_ENABLED = false;
-
-RepState repState = STATE_DOWN;
-int repCount = 0;
-bool formCheatDetected = false;
 
 bool initSensor(uint8_t addr) {
   Wire.beginTransmission(addr);
@@ -258,25 +247,7 @@ void loop() {
   // 4. Sample EMG Sensor (skipped while disabled — see EMG_ENABLED above)
   int emgRaw = EMG_ENABLED ? analogRead(EMG_PIN) : 0;
 
-  // 5. Baseline Lock for Upper Arm Drift
-  if (!isBaseSet) {
-    settleCount++;
-    if (settleCount > 50) {
-      baselineDrift = drift;
-      isBaseSet = true;
-      Serial.println(">>> Baseline Locked! Ready to curl. <<<\n");
-    }
-    delay(20);
-    return;
-  }
-
-  // Drift error calculation
-  float driftError = abs(drift - baselineDrift);
-  if (driftError > DRIFT_TOLERANCE) {
-    formCheatDetected = true;
-  }
-
-  // 6. Vibration Motor Trigger Condition:
+  // 5. Vibration Motor Trigger Condition:
   // Fires automatically when Flexion > 80 degrees (and, once EMG_ENABLED is
   // flipped back on, also requires EMG > 500 — the original on-device
   // feedback), OR when the dashboard sends an explicit "haptic" command over
@@ -294,54 +265,11 @@ void loop() {
   bool motorActive = autonomousActive || appCommandActive;
   digitalWrite(VIB_MOTOR_PIN, motorActive ? HIGH : LOW);
 
-  // 7. Rep State Machine
-  const char* stateStr = "DOWN";
-
-  switch (repState) {
-    case STATE_DOWN:
-      stateStr = "DOWN";
-      if (flexion < EXTENSION_LIMIT) {
-        baselineDrift = 0.95f * baselineDrift + 0.05f * drift;
-        formCheatDetected = false;
-      }
-      if (flexion > START_CURL_LIMIT) {
-        repState = STATE_CURLING;
-      }
-      break;
-
-    case STATE_CURLING:
-      stateStr = "CURLING";
-      if (flexion >= CONTRACTION_LIMIT) {
-        repState = STATE_TOP;
-      } else if (flexion < EXTENSION_LIMIT) {
-        repState = STATE_DOWN;
-      }
-      break;
-
-    case STATE_TOP:
-      stateStr = "TOP";
-      if (flexion < EXTENSION_LIMIT) {
-        if (!formCheatDetected) {
-          repCount++;
-          Serial.printf("\n====================================\n");
-          Serial.printf(">>> GOOD REP #%d COMPLETED! <<<\n", repCount);
-          Serial.printf("====================================\n\n");
-        } else {
-          Serial.printf("\n====================================\n");
-          Serial.printf(">>> INVALID REP: Drifted by %.1f deg! <<<\n", driftError);
-          Serial.printf("====================================\n\n");
-        }
-        formCheatDetected = false;
-        repState = STATE_DOWN;
-      }
-      break;
-  }
-
-  // 8. Stream live telemetry to the dashboard, if it's connected. The
-  // dashboard now runs the same curl-counting algorithm as this firmware
-  // (see frontend/src/lib/useBicepCurlCounter.ts) against these two raw
-  // values, so only flexion and drift are sent — no roll/yaw, since nothing
-  // on either end uses them.
+  // 6. Stream live telemetry to the dashboard, if it's connected. Rep
+  // counting and drift/cheat detection run entirely on the dashboard now
+  // (frontend/src/lib/hub/bicepCurlCounter.ts) against these two raw
+  // values, so this board just relays them — no roll/yaw, since nothing on
+  // either end uses them, and no on-device rep state at all.
   if (connectedClientCount > 0) {
     JsonDocument forearmDoc;
     forearmDoc["type"] = "imu";
@@ -390,11 +318,10 @@ void loop() {
 
   // Serial Monitor Output
   if (EMG_ENABLED) {
-    Serial.printf("State: %-7s | Flex: %5.1f | Drift: %5.1f | EMG: %4d | Vib: %s | Reps: %d\n",
-                  stateStr, flexion, drift, emgRaw, motorActive ? "ON " : "OFF", repCount);
+    Serial.printf("Flex: %5.1f | Drift: %5.1f | EMG: %4d | Vib: %s\n",
+                  flexion, drift, emgRaw, motorActive ? "ON " : "OFF");
   } else {
-    Serial.printf("State: %-7s | Flex: %5.1f | Drift: %5.1f | Vib: %s | Reps: %d\n",
-                  stateStr, flexion, drift, motorActive ? "ON " : "OFF", repCount);
+    Serial.printf("Flex: %5.1f | Drift: %5.1f | Vib: %s\n", flexion, drift, motorActive ? "ON " : "OFF");
   }
 
   delay(20); // 50 Hz loop

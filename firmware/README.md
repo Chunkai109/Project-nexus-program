@@ -6,14 +6,17 @@ WebSocket server — your phone or laptop connects straight to it, no router
 or internet required.
 
 This sketch implements a bicep curl feedback rig: two MPU6050 IMUs (forearm
-flexion + upper-arm drift, for cheat-rep detection), an EMG sensor, an
-on-device rep counter, and a vibration motor that fires both automatically
-(on strong contraction) and on command from the dashboard.
+flexion + upper-arm drift), an EMG sensor, and a vibration motor that fires
+both automatically (on strong contraction) and on command from the
+dashboard. **Rep counting and drift/cheat detection live entirely on the
+dashboard** (`frontend/src/lib/hub/bicepCurlCounter.ts`) — this board just
+streams raw flexion/drift and has no rep-counting state of its own; see
+[Protocol](#protocol) below.
 
 **EMG is currently disabled** (`EMG_ENABLED = false` near the top of the
-sketch) since no EMG hardware is wired up yet — the two MPU6050s, rep
-counter, WiFi/WebSocket link and vibration motor all work fully without it.
-Flip that constant back to `true` once the EMG sensor is connected; see
+sketch) since no EMG hardware is wired up yet — the two MPU6050s,
+WiFi/WebSocket link and vibration motor all work fully without it. Flip
+that constant back to `true` once the EMG sensor is connected; see
 [Vibration motor behavior](#vibration-motor-behavior) below for what changes.
 
 ## What you need
@@ -118,13 +121,11 @@ In short:
 - App → hub: `{"type":"haptic","podId":2,"durationMs":400}` to pulse the
   vibration motor.
 
-Rep counting, the cheat-rep drift check, and the automatic vibration trigger
-all run **twice, independently**: once here on the ESP32 (driving the
-vibration motor and Serial output), and again on the dashboard
-(`frontend/src/lib/hub/bicepCurlCounter.ts`, run inside `HubProvider` against
-the same two `pitch` values) for the "Source: Live Hub (MPU)" rep counter
-shown in Live Session — with MediaPipe camera detection disabled
+Rep counting and the cheat-rep drift check run **only on the dashboard**
+(`frontend/src/lib/hub/bicepCurlCounter.ts`, stepped inside `HubProvider`
+against these two `pitch` values) for the "Source: Live Hub (MPU)" rep
+counter shown in Live Session — with MediaPipe camera detection disabled
 (`ENABLE_MEDIAPIPE_VISION` in `LiveSession.tsx`) so that's the only input
-driving it. Both copies use identical thresholds, but they don't talk to
-each other — the dashboard isn't reading the firmware's rep count, it's
-computing its own from the same raw flex/drift stream.
+driving it. This board has no rep-counting state at all; its own vibration
+trigger (above) is a separate, simpler flexion-only threshold, not tied to
+reps.

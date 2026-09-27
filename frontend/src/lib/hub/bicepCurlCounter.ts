@@ -31,20 +31,20 @@ const INITIAL_RESULT: BicepCurlCounterResult = {
 }
 
 /**
- * Ports the ESP32 firmware's on-device rep-counting state machine into the
- * dashboard. Deliberately a plain stateful class rather than a React hook
- * keyed on rendered props: flex and drift arrive as two separate WebSocket
- * messages, and when several arrive within the same JS tick, React 18's
- * automatic batching coalesces them into a single render — silently
- * skipping every intermediate value in between. A threshold-crossing state
- * machine can't tolerate that (a whole rep can vanish between two
- * batched renders), so this steps synchronously inside the hub's own
- * message handler (see HubProvider.tsx) for every sample, in order, with
- * React state only used to publish the latest *result* for display.
+ * Rep-counting state machine — the sole implementation of it in the whole
+ * system. The ESP32 firmware (smartphysio_hub.ino) only streams raw
+ * flexion/drift values and has no rep-counting logic of its own; this is
+ * where reps actually get counted.
  *
- * The firmware still runs its own identical copy for the on-device
- * vibration trigger and Serial debug output — this is an independent
- * implementation, not a read of the firmware's result.
+ * Deliberately a plain stateful class rather than a React hook keyed on
+ * rendered props: flex and drift arrive as two separate WebSocket messages,
+ * and when several arrive within the same JS tick, React 18's automatic
+ * batching coalesces them into a single render — silently skipping every
+ * intermediate value in between. A threshold-crossing state machine can't
+ * tolerate that (a whole rep can vanish between two batched renders), so
+ * this steps synchronously inside the hub's own message handler (see
+ * HubProvider.tsx) for every sample, in order, with React state only used
+ * to publish the latest *result* for display.
  */
 export class BicepCurlCounter {
   private repState: CurlRepState = 'down'
