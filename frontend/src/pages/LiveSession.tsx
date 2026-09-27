@@ -22,8 +22,11 @@ import { CURL_DRIFT_POD_ID, CURL_FLEX_POD_ID } from '@/lib/hub/bicepCurlCounter'
 import { PODS } from '@/lib/mockData'
 import type { RepSample } from '@/types'
 
-const HAPTIC_PULSE_MS = 400
-const HAPTIC_RETRIGGER_COOLDOWN_MS = 1500
+// The motor pulses for exactly 1 second the instant flexion enters the
+// exercise's target corridor (see the corridor-entry effect below) — no
+// periodic retrigger, since it's an edge-triggered "you reached it" cue,
+// not a sustained correction signal.
+const HAPTIC_PULSE_MS = 1000
 
 // Testing flag: disable MediaPipe camera-based pose detection entirely so
 // the hub's real MPU flex/drift data (via hub.curl, computed in HubProvider)
@@ -72,8 +75,11 @@ export function LiveSession() {
       ? `Upper-Arm Drift Detected (+${faultDeg}° Over Baseline)`
       : `${monitoredSide === 'left' ? 'Left' : 'Right'} Knee Valgus Detected (+${faultDeg}° Fault)`
     : null
-  const activeHapticPod = faultActive ? hapticPod : null
   const repCount = usingHubCurl ? curl.repCount : simulated.repCount
+
+  const targetMin = primaryAngle?.targetMin ?? simulated.targetMin
+  const targetMax = primaryAngle?.targetMax ?? simulated.targetMax
+  const inCorridor = kneeFlexionDeg >= targetMin && kneeFlexionDeg <= targetMax
 
   // Real EMG pods (1 = left vastus medialis, 2 = right) once that specific
   // pod has actually reported an EMG reading; otherwise the wearable
@@ -86,25 +92,32 @@ export function LiveSession() {
   const emgLeft = emgLeftLive !== undefined ? Math.round(emgLeftLive) : simulated.emgLeft
   const emgRight = emgRightLive !== undefined ? Math.round(emgRightLive) : simulated.emgRight
 
-  // Closed-loop correction: when a real hub is connected, tell it to buzz
-  // the monitored knee pod the instant a fault starts, rather than only
-  // showing it on screen. Edge-triggered with a cooldown so a sustained
-  // fault doesn't flood the socket with haptic messages.
-  const lastHapticSentAt = useRef(0)
-  const wasFaultActive = useRef(false)
+  // Target-corridor feedback: pulse the monitored pod for exactly 1 second
+  // the instant flexion enters the exercise's target corridor (150°-180° for
+  // the default Bicep Curl). Purely edge-triggered — holding inside the
+  // corridor doesn't retrigger the buzz — and `pulseActive` (rather than just
+  // `inCorridor`) drives the UI so the "Pod X Active" badge tracks the real
+  // ~1s motor pulse window instead of however long the arm stays in range.
+  const [pulseActive, setPulseActive] = useState(false)
+  const wasInCorridor = useRef(false)
+  const pulseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(() => {
-    if (!hubConnected) {
-      wasFaultActive.current = faultActive
-      return
+    if (inCorridor && !wasInCorridor.current) {
+      setPulseActive(true)
+      if (pulseTimeoutRef.current) clearTimeout(pulseTimeoutRef.current)
+      pulseTimeoutRef.current = setTimeout(() => setPulseActive(false), HAPTIC_PULSE_MS)
+      if (hubConnected) hub.sendHaptic(hapticPod, HAPTIC_PULSE_MS).catch(() => {})
     }
-    const risingEdge = faultActive && !wasFaultActive.current
-    const cooldownElapsed = performance.now() - lastHapticSentAt.current > HAPTIC_RETRIGGER_COOLDOWN_MS
-    if (risingEdge || (faultActive && cooldownElapsed)) {
-      lastHapticSentAt.current = performance.now()
-      hub.sendHaptic(hapticPod, HAPTIC_PULSE_MS).catch(() => {})
+    wasInCorridor.current = inCorridor
+  }, [inCorridor, hubConnected, hub, hapticPod])
+
+  useEffect(() => {
+    return () => {
+      if (pulseTimeoutRef.current) clearTimeout(pulseTimeoutRef.current)
     }
-    wasFaultActive.current = faultActive
-  }, [faultActive, hubConnected, hub, hapticPod])
+  }, [])
+
+  const activeHapticPod = pulseActive ? hapticPod : null
 
   // Rep-by-rep telemetry: sample the effective angle/EMG the instant each
   // rep completes, so a finished session leaves behind real per-rep data
@@ -252,7 +265,7 @@ export function LiveSession() {
             <div className="mb-4 flex items-center justify-between">
               <h3 className="text-[15px] font-semibold text-ink">Haptic Biofeedback</h3>
               {activeHapticPod && (
-                <span className="flex items-center gap-1.5 text-[13px] font-semibold text-crimson">
+                <span className="flex items-center gap-1.5 text-[13px] font-semibold text-emerald">
                   <Vibrate className="h-3.5 w-3.5" />
                   Pod {activeHapticPod} Active
                 </span>
@@ -263,8 +276,8 @@ export function LiveSession() {
             </div>
             <p className="mt-3 text-center text-[13px] text-ink-muted">
               {activeHapticPod
-                ? `Vibrotactile Correction Active — realign ${monitoredSide} knee over ankle`
-                : 'Form within target corridor — no correction needed'}
+                ? `Target Corridor Reached — pulsing pod ${activeHapticPod} for 1s`
+                : `Curl into the ${targetMin}°–${targetMax}° corridor to trigger haptic feedback`}
             </p>
           </Card>
 

@@ -7,17 +7,16 @@ or internet required.
 
 This sketch implements a bicep curl feedback rig: two MPU6050 IMUs (forearm
 flexion + upper-arm drift), an EMG sensor, and a vibration motor that fires
-both automatically (on strong contraction) and on command from the
-dashboard. **Rep counting and drift/cheat detection live entirely on the
-dashboard** (`frontend/src/lib/hub/bicepCurlCounter.ts`) — this board just
-streams raw flexion/drift and has no rep-counting state of its own; see
-[Protocol](#protocol) below.
+only on command from the dashboard. **Rep counting, drift/cheat detection,
+and the target-corridor haptic trigger all live entirely on the dashboard**
+(`frontend/src/lib/hub/bicepCurlCounter.ts` and `LiveSession.tsx`) — this
+board just streams raw flexion/drift and has no rep-counting or vibration
+decision logic of its own; see [Protocol](#protocol) below.
 
 **EMG is currently disabled** (`EMG_ENABLED = false` near the top of the
 sketch) since no EMG hardware is wired up yet — the two MPU6050s,
 WiFi/WebSocket link and vibration motor all work fully without it. Flip
-that constant back to `true` once the EMG sensor is connected; see
-[Vibration motor behavior](#vibration-motor-behavior) below for what changes.
+that constant back to `true` once the EMG sensor is connected.
 
 ## What you need
 
@@ -95,17 +94,24 @@ slots.
 
 ## Vibration motor behavior
 
-The motor fires under two independent conditions, either of which turns it
-on:
+This board has no autonomous vibration trigger of its own — the motor only
+pulses when the dashboard sends a `{"type":"haptic", ...}` message. This
+board only has one motor, so a haptic command pulses it regardless of which
+podId the app addressed.
 
-- **Automatic**: flexion crosses `CONTRACTION_LIMIT` — the on-device form
-  feedback. While `EMG_ENABLED` is `true`, this additionally requires EMG
-  activation to cross `EMG_THRESHOLD` at the same time (the original
-  two-signal condition); with EMG disabled it fires on flexion alone.
-- **Commanded**: the dashboard sends a `{"type":"haptic", ...}` message
-  (e.g. the Sensor Setup screen's "Test Pod Vibration" button). This board
-  only has one motor, so a haptic command pulses it regardless of which
-  podId the app addressed.
+The dashboard sends that command in two places:
+
+- The Sensor Setup screen's "Test Pod Vibration" button (a fixed test pulse).
+- Live Session, the instant the resolved flexion angle enters the exercise's
+  configured target corridor (`targetMin`/`targetMax` on its `AngleConfig` —
+  150°-180° for the default Bicep Curl, see `buildDefaultBicepCurlExercise()`
+  in `frontend/src/lib/data/AppDataContext.tsx`). It sends a 1000ms pulse
+  exactly once per corridor entry (edge-triggered — holding inside the
+  corridor doesn't retrigger it); see the corridor-entry effect in
+  `frontend/src/pages/LiveSession.tsx`.
+
+The target corridor is purely a dashboard/exercise concept — this firmware
+has no knowledge of it and never decides on its own when to buzz.
 
 ## Protocol
 
@@ -126,6 +132,6 @@ Rep counting and the cheat-rep drift check run **only on the dashboard**
 against these two `pitch` values) for the "Source: Live Hub (MPU)" rep
 counter shown in Live Session — with MediaPipe camera detection disabled
 (`ENABLE_MEDIAPIPE_VISION` in `LiveSession.tsx`) so that's the only input
-driving it. This board has no rep-counting state at all; its own vibration
-trigger (above) is a separate, simpler flexion-only threshold, not tied to
-reps.
+driving it. This board has no rep-counting state, and no vibration trigger
+of its own either — see [Vibration motor behavior](#vibration-motor-behavior)
+above.

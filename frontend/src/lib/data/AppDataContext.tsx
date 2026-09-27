@@ -98,9 +98,9 @@ function loadExercisesFromLocalStorage(): Exercise[] {
  * install (or an emptied exercise list) always has something to test the
  * ESP32 hub against instead of starting on an empty "no exercises yet"
  * screen. Angle config targets pods 1/2 — the two pods the rest of the app
- * treats as EMG-capable (see EMG_PODS in CalibrationPage.tsx) — matching
- * the flexion range the bicep curl firmware itself curls against
- * (START_CURL_LIMIT/CONTRACTION_LIMIT in smartphysio_hub.ino).
+ * treats as EMG-capable (see EMG_PODS in CalibrationPage.tsx). The 150°-180°
+ * corridor is the top-of-curl contraction range; reaching it is what
+ * triggers the dashboard's 1-second haptic pulse (see LiveSession.tsx).
  */
 function buildDefaultBicepCurlExercise(): NewExercise {
   return {
@@ -112,7 +112,7 @@ function buildDefaultBicepCurlExercise(): NewExercise {
     therapistNote: '',
     setupInstructions: '',
     estMinutes: 5,
-    angleConfigs: [{ id: crypto.randomUUID(), nodeA: 1, nodeB: 2, targetMin: 30, targetMax: 80, faultThresholdDeg: 15 }],
+    angleConfigs: [{ id: crypto.randomUUID(), nodeA: 1, nodeB: 2, targetMin: 150, targetMax: 180, faultThresholdDeg: 15 }],
     assignedPatientId: null,
   }
 }

@@ -115,16 +115,10 @@ const float ALPHA = 0.96;
 
 unsigned long prevTime = 0;
 
-// Vibration Trigger Threshold — rep counting and drift/cheat detection now
-// run entirely on the dashboard (frontend/src/lib/hub/bicepCurlCounter.ts),
-// against the same flexion/drift stream this board broadcasts below. This
-// board only needs its own threshold for the on-device haptic feedback.
-const float CONTRACTION_LIMIT = 80.0; // Flexion threshold to trigger vibration
-const int   EMG_THRESHOLD     = 500;  // EMG activation threshold
-
 // EMG sensor disabled for now (no hardware wired) — flip back to true once
-// it's connected. While false, the auto-vibration trigger below falls back
-// to flexion alone and no "emg"/pod-1-"status" WebSocket messages are sent.
+// it's connected. While false, no "emg"/pod-1-"status" WebSocket messages
+// are sent; this board has no on-device vibration logic to affect either
+// way — see the vibration motor comment in loop() below.
 constexpr bool EMG_ENABLED = false;
 
 bool initSensor(uint8_t addr) {
@@ -248,12 +242,12 @@ void loop() {
   int emgRaw = EMG_ENABLED ? analogRead(EMG_PIN) : 0;
 
   // 5. Vibration Motor Trigger Condition:
-  // Fires automatically when Flexion > 80 degrees (and, once EMG_ENABLED is
-  // flipped back on, also requires EMG > 500 — the original on-device
-  // feedback), OR when the dashboard sends an explicit "haptic" command over
-  // WebSocket (e.g. the Sensor Setup screen's "Test Pod Vibration" button) —
-  // this board only has one motor, so either source can pulse it.
-  bool autonomousActive = flexion > CONTRACTION_LIMIT && (!EMG_ENABLED || emgRaw > EMG_THRESHOLD);
+  // This board has no autonomous vibration trigger of its own — the target
+  // flexion corridor is a per-exercise, dashboard-configurable value (see
+  // buildDefaultBicepCurlExercise() in AppDataContext.tsx), not something
+  // this firmware knows about. The motor only pulses when the dashboard
+  // sends an explicit "haptic" command over WebSocket, which it sends the
+  // instant it sees flexion enter that corridor (see LiveSession.tsx).
   bool appCommandActive = false;
   if (hapticOffAt != 0) {
     if (millis() < hapticOffAt) {
@@ -262,7 +256,7 @@ void loop() {
       hapticOffAt = 0;
     }
   }
-  bool motorActive = autonomousActive || appCommandActive;
+  bool motorActive = appCommandActive;
   digitalWrite(VIB_MOTOR_PIN, motorActive ? HIGH : LOW);
 
   // 6. Stream live telemetry to the dashboard, if it's connected. Rep

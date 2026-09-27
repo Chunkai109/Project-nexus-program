@@ -11,7 +11,8 @@ export interface BicepCurlCounterResult {
   isBaselineLocked: boolean
 }
 
-// Mirrors the thresholds in firmware/smartphysio_hub/smartphysio_hub.ino exactly.
+// Rep-counting thresholds, independent of the firmware — the ESP32 has no
+// rep-counting or vibration-trigger logic of its own; see smartphysio_hub.ino.
 const START_CURL_LIMIT = 30
 const CONTRACTION_LIMIT = 80
 const EXTENSION_LIMIT = 20
