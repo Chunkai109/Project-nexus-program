@@ -2,6 +2,8 @@ __pycache__/
 *.pyc
 ml/data/raw/*
 !ml/data/raw/.gitkeep
+ml_imu/data/imu_raw/*
+!ml_imu/data/imu_raw/.gitkeep
 
 # Tagged experiment artifacts (see --tag in prepare_dataset.py/train.py/evaluate.py):
 # disposable scratch output for one-off comparisons against the committed
