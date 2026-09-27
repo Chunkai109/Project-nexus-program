@@ -232,12 +232,17 @@ export function LiveSession() {
         {/* Secondary column */}
         <div className="flex flex-col gap-6">
           <Card className="flex flex-col items-center p-6">
+            {/* min/max span the full rep sweep (extended to contracted), not just
+                the target corridor, since kneeFlexionDeg travels across the whole
+                range every rep — clamping tightly around target (as the other two
+                RadialGauge call sites do for their narrower, target-relative
+                stats) made every rep's bottom half collapse to a flat "empty" arc. */}
             <RadialGauge
               value={kneeFlexionDeg}
-              min={40}
-              max={150}
-              targetMin={simulated.targetMin}
-              targetMax={simulated.targetMax}
+              min={0}
+              max={Math.max(200, targetMax + 20)}
+              targetMin={targetMin}
+              targetMax={targetMax}
               label="Joint Angle"
               fault={faultActive}
             />
