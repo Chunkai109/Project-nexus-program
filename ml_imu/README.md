@@ -84,6 +84,59 @@ in `imu_labels.csv` records `"peak_detection_segmented"` for these rows
 (vs. `"manual_full_session"` for tests 1-30) so the two provenances stay
 distinguishable in any later analysis.
 
+## Trained classifier
+
+A RandomForest trained on 19 per-rep aggregate features (`src/features.py`:
+mean/std/min/max/range of `flex` and `drift`, mean/std/max of `emg`,
+`vib_on` fraction, causal-velocity mean/std for `flex`/`drift`, and
+`num_frames`). No LSTM was trained or compared -- `ml/`'s vision model
+already established, with 34 training recordings, that a raw-landmark LSTM
+loses to RandomForest and shows shortcut-learning symptoms; this dataset
+has fewer independent groups (35 sessions, several classes with only 5-8
+groups), making an LSTM comparison here an even more foregone conclusion,
+skipped explicitly rather than silently.
+
+**Headline metric: 5-fold GroupKFold macro-F1 (group=`test_id`) = 1.0000,
+across every regularization setting tested, including the fully
+unregularized baseline.**
+
+**Read this number as a red flag, not a win.** This project treated the
+vision model's raw-landmark LSTM hitting 100% test accuracy as suspicious
+(shortcut learning), not celebrated -- the same skepticism applies here,
+more so. Confirmed directly by inspecting the feature distributions:
+`drift_max` alone separates Drag (21.5-32.7) from every other class (max
+~12.7 elsewhere) with a huge gap, and `flex_range` separates Half (53-83)
+and Heave (101-115) from the rest almost as cleanly. A 2-threshold decision
+tree already gets this perfectly (confirmed: `max_depth=2` scores exactly
+the same 1.0 as an unregularized forest). **This is a mechanical
+consequence of the test protocol** -- one person performing deliberately
+extreme, distinct demonstrations of each error type -- not evidence the
+model has learned anything robust or generalizable. It reliably tells
+these 35 staged, exaggerated demonstrations apart from each other; it says
+nothing about a different person, a genuinely ambiguous rep, or subtler
+real-world form errors. No separate held-out test set is used at all for
+this classifier, for the same reason `ml/`'s vision model uses CV as its
+headline number over its own tiny test split, taken further: at only 35
+raw sessions (as few as 5 for Heave), carving out a held-out split would
+leave too few groups for either side to mean anything.
+
+**How to test it** -- no IMU hardware needed, exactly like the vision
+model's `ml/scripts/predict.py`:
+
+```bash
+python -m ml_imu.scripts.train      # (re)trains the model, prints the CV breakdown above
+python -m ml_imu.scripts.predict                 # replay all 52 labeled reps
+python -m ml_imu.scripts.predict --test_id 31    # replay just one raw session's reps
+```
+
+`predict.py` replays already-recorded sessions through the trained model
+and prints prediction vs. true label per rep. Because there's no held-out
+split, this replay is illustrative of the pipeline running end-to-end
+(and a way to sanity-check individual predictions), **not an independent
+accuracy claim** -- the GroupKFold number above (with its ceiling-effect
+caveat) is the one to trust, and even that comes with the caveat spelled
+out above.
+
 ## Files
 
 ```
@@ -91,28 +144,28 @@ data/imu_raw/            # 35 raw Test N.txt logs (gitignored, not committed)
 data/processed/imu_sessions.csv  # long-format per-frame parse of all 35 sessions
 data/imu_labels.csv       # test_id, rep_index, start_frame, end_frame, label, label_source, notes
 data/dataset_report.json  # class counts + the two note_on_* provenance disclosures above
+models/best_model/        # model.joblib + training_config.json (CV metric, ceiling-effect warning, feature importance)
 src/parse_log.py          # raw log -> ImuSession (per-frame arrays)
 src/segment.py            # peak-detection rep segmentation (tests 31-35 only)
-scripts/prepare_dataset.py  # runs the whole pipeline above end to end
+src/features.py           # per-rep aggregate feature engineering
+src/labels.py             # CLASS_NAMES <-> index mapping (4 classes present in this data)
+src/predictor.py          # ImuCurlPredictor -- loads the saved model, classifies one rep's arrays
+scripts/prepare_dataset.py  # raw logs -> imu_sessions.csv + imu_labels.csv + dataset_report.json
+scripts/train.py          # GroupKFold CV + regularization search, saves models/best_model/
+scripts/predict.py        # replay recorded sessions through the trained model (no hardware needed)
 ```
 
 ## Not yet done
 
-- **No classifier has been trained yet.** This stage only produces labeled,
-  structured data (52 labeled rep-rows total: 30 whole-session + 22
-  segmented). The next step is feature engineering (e.g. aggregate
-  stats over `flex`/`drift`/`emg` per rep, mirroring `ml/src/features/
-  engineer.py`'s approach) and a small-data-appropriate model (likely
-  RandomForest again, given the precedent in `ml/`).
 - **No "Swing" or "Incomplete" examples exist in this data at all** --
-  only Perfect/Heave/Half/Drag are represented. Any IMU classifier trained
-  on this data can only ever predict among the classes actually present.
-- **Only 52 labeled rows total, from 35 raw sessions and only 3-4
-  distinct people/sessions worth of real variety** -- expect this dataset
-  to hit the same small-data ceiling `ml/` extensively documented (see
-  `ml/README.md`'s regularization search and synthetic-augmentation
-  sections), likely sooner given it's smaller than the 34-recording
-  vision training set.
+  only Perfect/Heave/Half/Drag are represented. This classifier can only
+  ever predict among the classes actually present.
+- **The 100% CV number reflects a nearly-trivially-separable task at this
+  data's current scale/protocol, not validated real-world accuracy** --
+  see "Trained classifier" above. More real data, especially from more
+  than one person and without the deliberately-exaggerated distinct
+  demonstration protocol, would be needed before this number means
+  anything close to what 88.5% CV macro-F1 means for the vision model.
 - **No synchronized dual-sensor recordings exist.** The vision dataset and
   this IMU dataset were collected completely separately (different
   sessions, not the same reps). Before any fusion/ensemble step can be
