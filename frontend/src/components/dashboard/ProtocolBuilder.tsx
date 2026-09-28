@@ -3,6 +3,7 @@ import { ChevronRight, Plus } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
+import { HoverExplain } from '@/components/ui/HoverExplain'
 import { ExerciseFormFields } from './ExerciseFormFields'
 import { useAppData } from '@/lib/data/AppDataContext'
 import { useExerciseForm } from '@/lib/useExerciseForm'
@@ -99,10 +100,12 @@ export function ProtocolBuilder({ onSelectExercise }: { onSelectExercise: (exerc
               : `${exercises.length} protocol${exercises.length === 1 ? '' : 's'} visible to patients right now.`}
           </p>
         </div>
-        <Button size="sm" onClick={startCreate}>
-          <Plus className="h-3.5 w-3.5" />
-          New Exercise
-        </Button>
+        <HoverExplain explanation="Opens the 3-step wizard (Basics, Angle Configuration, EMG Activation) to create a new exercise protocol.">
+          <Button size="sm" onClick={startCreate}>
+            <Plus className="h-3.5 w-3.5" />
+            New Exercise
+          </Button>
+        </HoverExplain>
       </div>
 
       {exercises.length === 0 ? (
@@ -117,26 +120,27 @@ export function ProtocolBuilder({ onSelectExercise }: { onSelectExercise: (exerc
           {exercises.map((ex) => {
             const assignedPatient = patients.find((p) => p.id === ex.assignedPatientId)
             return (
-              <button
-                key={ex.id}
-                type="button"
-                onClick={() => onSelectExercise(ex.id)}
-                className="flex w-full flex-wrap items-start justify-between gap-3 rounded-xl bg-surface-secondary p-4 text-left transition-colors duration-200 hover:bg-surface-hover"
-              >
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-[14px] font-semibold text-ink">{ex.title}</p>
-                  <div className="mt-1 flex flex-wrap items-center gap-2">
-                    <Badge tone="accent">{ex.sets}×{ex.reps}</Badge>
-                    {assignedPatient ? (
-                      <Badge tone="violet">{assignedPatient.name}</Badge>
-                    ) : (
-                      <span className="text-[12px] text-ink-faint">All Patients</span>
-                    )}
+              <HoverExplain key={ex.id} explanation={`Open ${ex.title}'s Optimization Analytics — edit or delete it from there.`}>
+                <button
+                  type="button"
+                  onClick={() => onSelectExercise(ex.id)}
+                  className="flex w-full flex-wrap items-start justify-between gap-3 rounded-xl bg-surface-secondary p-4 text-left transition-colors duration-200 hover:bg-surface-hover"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[14px] font-semibold text-ink">{ex.title}</p>
+                    <div className="mt-1 flex flex-wrap items-center gap-2">
+                      <Badge tone="accent">{ex.sets}×{ex.reps}</Badge>
+                      {assignedPatient ? (
+                        <Badge tone="violet">{assignedPatient.name}</Badge>
+                      ) : (
+                        <span className="text-[12px] text-ink-faint">All Patients</span>
+                      )}
+                    </div>
+                    <p className="mt-1 truncate text-[13px] text-ink-faint">{describeAngleConfigs(ex.angleConfigs)}</p>
                   </div>
-                  <p className="mt-1 truncate text-[13px] text-ink-faint">{describeAngleConfigs(ex.angleConfigs)}</p>
-                </div>
-                <ChevronRight className="h-4 w-4 flex-shrink-0 text-ink-faint" />
-              </button>
+                  <ChevronRight className="h-4 w-4 flex-shrink-0 text-ink-faint" />
+                </button>
+              </HoverExplain>
             )
           })}
         </div>

@@ -18,7 +18,7 @@ import {
 } from 'recharts'
 import { Card } from '@/components/ui/Card'
 import { RadialGauge } from '@/components/charts/RadialGauge'
-import { Inspectable } from '@/components/inspector/Inspectable'
+import { HoverExplain } from '@/components/ui/HoverExplain'
 import type { Exercise } from '@/types'
 
 const FAILURE_COLORS = ['var(--color-emerald)', 'var(--color-crimson)']
@@ -121,12 +121,10 @@ function TileHeader({
   label,
   metric,
   metricTone,
-  description,
 }: {
   label: string
   metric: string
   metricTone: 'crimson' | 'amber' | 'emerald' | 'ink'
-  description: string
 }) {
   const toneClass =
     metricTone === 'crimson'
@@ -140,7 +138,6 @@ function TileHeader({
     <div className="mb-4">
       <p className="text-[13px] font-medium text-ink-muted">{label}</p>
       <p className={`mt-1 text-[26px] font-semibold tracking-tight ${toneClass}`}>{metric}</p>
-      <p className="mt-1 text-[12px] leading-snug text-ink-faint">{description}</p>
     </div>
   )
 }
@@ -151,16 +148,13 @@ function FormFailureTile({ failureRate }: { failureRate: number }) {
     { name: 'Successful Reps', value: successRate },
     { name: 'Fault Reps', value: failureRate },
   ]
-  const description = 'Percentage of total reps triggering a MediaPipe/IMU form fault (e.g., knee valgus).'
   return (
-    <Inspectable title="Form Failure Rate" description={description} className="contents">
-      <Card className="flex flex-col p-6 lg:col-span-2">
-        <TileHeader
-          label="Form Failure Rate"
-          metric={`${failureRate}%`}
-          metricTone={failureRate > 20 ? 'crimson' : failureRate > 12 ? 'amber' : 'emerald'}
-          description={description}
-        />
+    <HoverExplain
+      explanation="Percentage of total reps triggering a MediaPipe/IMU form fault (e.g., knee valgus)."
+      className="lg:col-span-2"
+    >
+      <Card className="flex h-full flex-col p-6">
+        <TileHeader label="Form Failure Rate" metric={`${failureRate}%`} metricTone={failureRate > 20 ? 'crimson' : failureRate > 12 ? 'amber' : 'emerald'} />
         <div className="flex flex-1 items-center gap-4">
           <ResponsiveContainer width="55%" height={120}>
             <PieChart>
@@ -194,23 +188,20 @@ function FormFailureTile({ failureRate }: { failureRate: number }) {
           </div>
         </div>
       </Card>
-    </Inspectable>
+    </HoverExplain>
   )
 }
 
 function RomAchievementTile({ romAvg, targetMin, targetMax }: { romAvg: number; targetMin: number; targetMax: number }) {
   const inTarget = romAvg >= targetMin && romAvg <= targetMax
   const nearTarget = romAvg >= targetMin - 10 && romAvg <= targetMax + 10
-  const description = `Average maximum flexion achieved across all patient sessions, vs. ${targetMax}° prescribed.`
   return (
-    <Inspectable title="Target ROM Achievement" description={description} className="contents">
-      <Card className="flex flex-col items-center p-6 lg:col-span-2">
-        <TileHeader
-          label="Target ROM Achievement"
-          metric={`${romAvg}° avg`}
-          metricTone={inTarget ? 'emerald' : nearTarget ? 'amber' : 'crimson'}
-          description={description}
-        />
+    <HoverExplain
+      explanation={`Average maximum flexion achieved across all patient sessions, vs. ${targetMax}° prescribed.`}
+      className="lg:col-span-2"
+    >
+      <Card className="flex h-full flex-col items-center p-6">
+        <TileHeader label="Target ROM Achievement" metric={`${romAvg}° avg`} metricTone={inTarget ? 'emerald' : nearTarget ? 'amber' : 'crimson'} />
         <RadialGauge
           value={romAvg}
           min={Math.max(0, targetMin - 40)}
@@ -222,7 +213,7 @@ function RomAchievementTile({ romAvg, targetMin, targetMax }: { romAvg: number; 
           size={168}
         />
       </Card>
-    </Inspectable>
+    </HoverExplain>
   )
 }
 
@@ -231,15 +222,16 @@ function EmgEngagementTile({ emgLeft, emgRight, emgAvg }: { emgLeft: number; emg
     { name: 'Left', value: emgLeft },
     { name: 'Right', value: emgRight },
   ]
-  const description = 'Median peak muscle activation during the concentric phase, by limb.'
   return (
-    <Inspectable title="Neuromuscular Engagement (EMG)" description={description} className="contents">
-      <Card className="flex flex-col p-6 lg:col-span-2">
+    <HoverExplain
+      explanation="Median peak muscle activation during the concentric phase, by limb."
+      className="lg:col-span-2"
+    >
+      <Card className="flex h-full flex-col p-6">
         <TileHeader
           label="Neuromuscular Engagement (EMG)"
           metric={`${emgAvg}% MVC`}
           metricTone={emgAvg >= 75 ? 'emerald' : emgAvg >= 55 ? 'amber' : 'crimson'}
-          description={description}
         />
         <ResponsiveContainer width="100%" height={140}>
           <BarChart data={emgLimbData} margin={{ top: 4, right: 8, bottom: 0, left: -16 }} barSize={44}>
@@ -262,21 +254,18 @@ function EmgEngagementTile({ emgLeft, emgRight, emgAvg }: { emgLeft: number; emg
           </BarChart>
         </ResponsiveContainer>
       </Card>
-    </Inspectable>
+    </HoverExplain>
   )
 }
 
 function EccentricTempoTile({ tempoData, tempoAvg }: { tempoData: { session: string; tempo: number }[]; tempoAvg: number }) {
-  const description = 'Average duration of the eccentric (lowering) phase over the last 10 logged sessions (target: >2.0s).'
   return (
-    <Inspectable title="Eccentric Tempo Control" description={description} className="contents">
-      <Card className="flex flex-col p-6 lg:col-span-3">
-        <TileHeader
-          label="Eccentric Tempo Control"
-          metric={`${tempoAvg}s avg`}
-          metricTone={tempoAvg >= 2.0 ? 'emerald' : tempoAvg >= 1.5 ? 'amber' : 'crimson'}
-          description={description}
-        />
+    <HoverExplain
+      explanation="Average duration of the eccentric (lowering) phase over the last 10 logged sessions (target: >2.0s)."
+      className="lg:col-span-3"
+    >
+      <Card className="flex h-full flex-col p-6">
+        <TileHeader label="Eccentric Tempo Control" metric={`${tempoAvg}s avg`} metricTone={tempoAvg >= 2.0 ? 'emerald' : tempoAvg >= 1.5 ? 'amber' : 'crimson'} />
         <ResponsiveContainer width="100%" height={140}>
           <LineChart data={tempoData} margin={{ top: 8, right: 16, bottom: 0, left: -16 }}>
             <CartesianGrid stroke="var(--color-border)" vertical={false} />
@@ -308,21 +297,18 @@ function EccentricTempoTile({ tempoData, tempoAvg }: { tempoData: { session: str
           </LineChart>
         </ResponsiveContainer>
       </Card>
-    </Inspectable>
+    </HoverExplain>
   )
 }
 
 function FatigueOnsetTile({ onsetRep, tremorData }: { onsetRep: number; tremorData: { rep: number; deviation: number }[] }) {
-  const description = 'Average repetition where high-frequency IMU micro-tremors or EMG drops are detected.'
   return (
-    <Inspectable title="Fatigue Onset / Tremor Detection" description={description} className="contents">
-      <Card className="flex flex-col p-6 lg:col-span-3">
-        <TileHeader
-          label="Fatigue Onset / Tremor Detection"
-          metric={`Rep ${onsetRep}`}
-          metricTone={onsetRep >= 10 ? 'emerald' : onsetRep >= 7 ? 'amber' : 'crimson'}
-          description={description}
-        />
+    <HoverExplain
+      explanation="Average repetition where high-frequency IMU micro-tremors or EMG drops are detected."
+      className="lg:col-span-3"
+    >
+      <Card className="flex h-full flex-col p-6">
+        <TileHeader label="Fatigue Onset / Tremor Detection" metric={`Rep ${onsetRep}`} metricTone={onsetRep >= 10 ? 'emerald' : onsetRep >= 7 ? 'amber' : 'crimson'} />
         <ResponsiveContainer width="100%" height={140}>
           <ScatterChart margin={{ top: 8, right: 16, bottom: 0, left: -16 }}>
             <CartesianGrid stroke="var(--color-border)" />
@@ -352,7 +338,7 @@ function FatigueOnsetTile({ onsetRep, tremorData }: { onsetRep: number; tremorDa
           </ScatterChart>
         </ResponsiveContainer>
       </Card>
-    </Inspectable>
+    </HoverExplain>
   )
 }
 

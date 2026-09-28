@@ -1,15 +1,16 @@
 import { Users, Dumbbell, Settings, LogOut, Menu, X } from 'lucide-react'
 import { Logo } from './Logo'
 import { ThemeToggle } from '@/components/ui/ThemeToggle'
+import { HoverExplain } from '@/components/ui/HoverExplain'
 import { useAuth } from '@/lib/AuthContext'
 import { useNavigate } from 'react-router-dom'
 import { clsx } from 'clsx'
 import { useState } from 'react'
 
 const NAV_ITEMS = [
-  { key: 'roster', label: 'Patient Roster', icon: Users },
-  { key: 'creator', label: 'Exercise Creator', icon: Dumbbell },
-  { key: 'settings', label: 'Settings', icon: Settings },
+  { key: 'roster', label: 'Patient Roster', icon: Users, explanation: 'View every patient who has signed in and drill into their session history.' },
+  { key: 'creator', label: 'Exercise Creator', icon: Dumbbell, explanation: 'Build new exercise protocols and review existing ones.' },
+  { key: 'settings', label: 'Settings', icon: Settings, explanation: 'Practice preferences and account configuration.' },
 ] as const
 
 function SidebarNav({ active, onSelect }: { active: string; onSelect: (key: string) => void }) {
@@ -17,26 +18,27 @@ function SidebarNav({ active, onSelect }: { active: string; onSelect: (key: stri
 
   return (
     <nav className="mt-8 flex flex-1 flex-col gap-1">
-      {NAV_ITEMS.map(({ key, label, icon: Icon }) => {
+      {NAV_ITEMS.map(({ key, label, icon: Icon, explanation }) => {
         const isActive = active === key
         return (
-          <button
-            key={key}
-            onClick={() => onSelect(key)}
-            onMouseEnter={() => setHover(key)}
-            onMouseLeave={() => setHover(null)}
-            className={clsx(
-              'flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors duration-200',
-              isActive
-                ? 'bg-accent/10 text-accent'
-                : hover === key
-                  ? 'bg-surface-secondary text-ink'
-                  : 'text-ink-muted',
-            )}
-          >
-            <Icon className="h-[18px] w-[18px]" strokeWidth={2} />
-            {label}
-          </button>
+          <HoverExplain key={key} explanation={explanation}>
+            <button
+              onClick={() => onSelect(key)}
+              onMouseEnter={() => setHover(key)}
+              onMouseLeave={() => setHover(null)}
+              className={clsx(
+                'flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors duration-200',
+                isActive
+                  ? 'bg-accent/10 text-accent'
+                  : hover === key
+                    ? 'bg-surface-secondary text-ink'
+                    : 'text-ink-muted',
+              )}
+            >
+              <Icon className="h-[18px] w-[18px]" strokeWidth={2} />
+              {label}
+            </button>
+          </HoverExplain>
         )
       })}
     </nav>
@@ -56,17 +58,18 @@ function SidebarFooter() {
         <p className="truncate font-semibold text-ink">{user?.name ?? 'Dr. Physio'}</p>
         <p className="truncate text-xs text-ink-faint">{user?.email ?? 'physio@clinic.com'}</p>
       </div>
-      <button
-        onClick={() => {
-          signOut()
-          navigate('/login')
-        }}
-        className="flex-shrink-0 rounded-full p-1.5 text-ink-faint transition-colors duration-200 hover:bg-surface-hover hover:text-crimson"
-        aria-label="Sign out"
-        title="Sign out"
-      >
-        <LogOut className="h-4 w-4" />
-      </button>
+      <HoverExplain explanation="Sign out of the Physiotherapist Portal and return to the login screen.">
+        <button
+          onClick={() => {
+            signOut()
+            navigate('/login')
+          }}
+          className="flex-shrink-0 rounded-full p-1.5 text-ink-faint transition-colors duration-200 hover:bg-surface-hover hover:text-crimson"
+          aria-label="Sign out"
+        >
+          <LogOut className="h-4 w-4" />
+        </button>
+      </HoverExplain>
     </div>
   )
 }

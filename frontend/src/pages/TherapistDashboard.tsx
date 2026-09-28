@@ -8,6 +8,7 @@ import { TelemetrySection } from '@/components/dashboard/TelemetrySection'
 import { PatientRosterGrid } from '@/components/dashboard/PatientRosterGrid'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
+import { HoverExplain } from '@/components/ui/HoverExplain'
 import { useAppData } from '@/lib/data/AppDataContext'
 import { ArrowLeft, Pencil, Settings, Trash2 } from 'lucide-react'
 
@@ -74,10 +75,12 @@ export function TherapistDashboard() {
 
         {tab === 'exercise-analytics' && selectedExerciseId && (
           <>
-            <Button variant="ghost" size="sm" className="mb-6" onClick={() => setTab('creator')}>
-              <ArrowLeft className="h-3.5 w-3.5" />
-              Back to Exercise Creator
-            </Button>
+            <HoverExplain explanation="Return to the Exercise Protocols list." className="mb-6">
+              <Button variant="ghost" size="sm" onClick={() => setTab('creator')}>
+                <ArrowLeft className="h-3.5 w-3.5" />
+                Back to Exercise Creator
+              </Button>
+            </HoverExplain>
             <div className="mb-10 flex flex-wrap items-start justify-between gap-4">
               <div>
                 <h1 className="text-[28px] font-semibold tracking-tight text-ink">{selectedExercise?.title ?? 'Exercise'}</h1>
@@ -86,24 +89,32 @@ export function TherapistDashboard() {
               {pendingDeleteExercise ? (
                 <div className="flex items-center gap-2">
                   <span className="text-[13px] text-ink-muted">Delete this exercise?</span>
-                  <Button variant="ghost" size="sm" onClick={() => setPendingDeleteExercise(false)}>
-                    Cancel
-                  </Button>
-                  <Button variant="danger" size="sm" onClick={confirmDeleteExercise}>
-                    <Trash2 className="h-3.5 w-3.5" />
-                    Delete
-                  </Button>
+                  <HoverExplain explanation="Keep this exercise — cancels the delete.">
+                    <Button variant="ghost" size="sm" onClick={() => setPendingDeleteExercise(false)}>
+                      Cancel
+                    </Button>
+                  </HoverExplain>
+                  <HoverExplain explanation="Permanently delete this exercise. Patients it's assigned to will no longer see it.">
+                    <Button variant="danger" size="sm" onClick={confirmDeleteExercise}>
+                      <Trash2 className="h-3.5 w-3.5" />
+                      Delete
+                    </Button>
+                  </HoverExplain>
                 </div>
               ) : (
                 <div className="flex items-center gap-2">
-                  <Button size="sm" onClick={() => openExerciseFineTune(selectedExerciseId)}>
-                    <Pencil className="h-3.5 w-3.5" />
-                    Edit Exercise
-                  </Button>
-                  <Button variant="danger" size="sm" onClick={() => setPendingDeleteExercise(true)}>
-                    <Trash2 className="h-3.5 w-3.5" />
-                    Delete Exercise
-                  </Button>
+                  <HoverExplain explanation="Open this exercise's fields to change its thresholds, targets, or assignment.">
+                    <Button size="sm" onClick={() => openExerciseFineTune(selectedExerciseId)}>
+                      <Pencil className="h-3.5 w-3.5" />
+                      Edit Exercise
+                    </Button>
+                  </HoverExplain>
+                  <HoverExplain explanation="Ask for confirmation before permanently deleting this exercise.">
+                    <Button variant="danger" size="sm" onClick={() => setPendingDeleteExercise(true)}>
+                      <Trash2 className="h-3.5 w-3.5" />
+                      Delete Exercise
+                    </Button>
+                  </HoverExplain>
                 </div>
               )}
             </div>
@@ -119,10 +130,12 @@ export function TherapistDashboard() {
 
         {tab === 'exercise-finetune' && selectedExerciseId && (
           <>
-            <Button variant="ghost" size="sm" className="mb-6" onClick={() => setTab('exercise-analytics')}>
-              <ArrowLeft className="h-3.5 w-3.5" />
-              Back to Analytics
-            </Button>
+            <HoverExplain explanation="Return to this exercise's Optimization Analytics without saving further changes." className="mb-6">
+              <Button variant="ghost" size="sm" onClick={() => setTab('exercise-analytics')}>
+                <ArrowLeft className="h-3.5 w-3.5" />
+                Back to Analytics
+              </Button>
+            </HoverExplain>
             <div className="mb-10">
               <h1 className="text-[28px] font-semibold tracking-tight text-ink">{selectedExercise?.title ?? 'Exercise'}</h1>
               <p className="mt-1.5 text-[15px] text-ink-muted">Fine-tune thresholds prescribed for this exercise.</p>
@@ -133,10 +146,12 @@ export function TherapistDashboard() {
 
         {tab === 'analytics' && (
           <>
-            <Button variant="ghost" size="sm" className="mb-6" onClick={() => setTab('roster')}>
-              <ArrowLeft className="h-3.5 w-3.5" />
-              Back to Patient Roster
-            </Button>
+            <HoverExplain explanation="Return to the Patient Roster list." className="mb-6">
+              <Button variant="ghost" size="sm" onClick={() => setTab('roster')}>
+                <ArrowLeft className="h-3.5 w-3.5" />
+                Back to Patient Roster
+              </Button>
+            </HoverExplain>
             <div className="mb-10">
               <h1 className="text-[28px] font-semibold tracking-tight text-ink">Session Analytics</h1>
               <p className="mt-1.5 text-[15px] text-ink-muted">Deep-dive into a single patient's telemetry history.</p>
