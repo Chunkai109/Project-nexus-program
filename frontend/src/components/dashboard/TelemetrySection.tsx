@@ -3,6 +3,7 @@ import { ChevronDown, LineChart } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
 import { TrendChart } from '@/components/charts/TrendChart'
 import { SymmetryBarChart } from '@/components/charts/SymmetryBarChart'
+import { Inspectable } from '@/components/inspector/Inspectable'
 import { useAppData } from '@/lib/data/AppDataContext'
 import { formatRelativeTime } from '@/lib/formatRelativeTime'
 import type { SymmetryPoint, TelemetryPoint } from '@/types'
@@ -84,16 +85,28 @@ export function TelemetrySection({ initialPatientId }: { initialPatientId?: stri
             {formatRelativeTime(latestSession.completedAt)} · {latestSession.reps.length} reps recorded
           </p>
           <div className="grid grid-cols-1 gap-8 xl:grid-cols-2">
-            <div>
-              <p className="mb-3 text-[13px] font-medium text-ink-muted">Joint Angle Trajectory — {patient?.name}</p>
-              <TrendChart data={trendData} />
-            </div>
-            <div>
-              <p className="mb-3 text-[13px] font-medium text-ink-muted">
-                Bilateral Muscle Symmetry (% MVC, last {symmetryData.length} session{symmetryData.length === 1 ? '' : 's'})
-              </p>
-              <SymmetryBarChart data={symmetryData} />
-            </div>
+            <Inspectable
+              title="Joint Angle Trajectory"
+              description="Peak flexion angle on every rep of the most recent session, plotted against the prescribed target corridor (shaded band). Points outside the band mean that rep under- or over-shot the protocol's ROM target."
+              className="contents"
+            >
+              <div>
+                <p className="mb-3 text-[13px] font-medium text-ink-muted">Joint Angle Trajectory — {patient?.name}</p>
+                <TrendChart data={trendData} />
+              </div>
+            </Inspectable>
+            <Inspectable
+              title="Bilateral Muscle Symmetry"
+              description="Average EMG activation (% MVC) per side across recent sessions. A left/right gap that persists or widens over time can signal compensation or unilateral weakness."
+              className="contents"
+            >
+              <div>
+                <p className="mb-3 text-[13px] font-medium text-ink-muted">
+                  Bilateral Muscle Symmetry (% MVC, last {symmetryData.length} session{symmetryData.length === 1 ? '' : 's'})
+                </p>
+                <SymmetryBarChart data={symmetryData} />
+              </div>
+            </Inspectable>
           </div>
         </>
       )}

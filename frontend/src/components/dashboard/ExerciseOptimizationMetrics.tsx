@@ -18,6 +18,7 @@ import {
 } from 'recharts'
 import { Card } from '@/components/ui/Card'
 import { RadialGauge } from '@/components/charts/RadialGauge'
+import { Inspectable } from '@/components/inspector/Inspectable'
 import type { Exercise } from '@/types'
 
 const FAILURE_COLORS = ['var(--color-emerald)', 'var(--color-crimson)']
@@ -150,72 +151,78 @@ function FormFailureTile({ failureRate }: { failureRate: number }) {
     { name: 'Successful Reps', value: successRate },
     { name: 'Fault Reps', value: failureRate },
   ]
+  const description = 'Percentage of total reps triggering a MediaPipe/IMU form fault (e.g., knee valgus).'
   return (
-    <Card className="flex flex-col p-6 lg:col-span-2">
-      <TileHeader
-        label="Form Failure Rate"
-        metric={`${failureRate}%`}
-        metricTone={failureRate > 20 ? 'crimson' : failureRate > 12 ? 'amber' : 'emerald'}
-        description="Percentage of total reps triggering a MediaPipe/IMU form fault (e.g., knee valgus)."
-      />
-      <div className="flex flex-1 items-center gap-4">
-        <ResponsiveContainer width="55%" height={120}>
-          <PieChart>
-            <Pie
-              data={failureBreakdown}
-              dataKey="value"
-              nameKey="name"
-              innerRadius={38}
-              outerRadius={54}
-              paddingAngle={3}
-              isAnimationActive={false}
-            >
-              {failureBreakdown.map((entry, i) => (
-                <Cell key={entry.name} fill={FAILURE_COLORS[i]} stroke="none" />
-              ))}
-            </Pie>
-            <Tooltip {...tooltipStyle} formatter={(v) => `${Number(v).toFixed(1)}%`} />
-          </PieChart>
-        </ResponsiveContainer>
-        <div className="flex flex-1 flex-col gap-2 text-[12px]">
-          <div className="flex items-center gap-2">
-            <span className="h-2.5 w-2.5 flex-shrink-0 rounded-full" style={{ background: FAILURE_COLORS[0] }} />
-            <span className="text-ink-muted">Successful</span>
-            <span className="ml-auto font-medium text-ink">{successRate.toFixed(1)}%</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="h-2.5 w-2.5 flex-shrink-0 rounded-full" style={{ background: FAILURE_COLORS[1] }} />
-            <span className="text-ink-muted">Fault</span>
-            <span className="ml-auto font-medium text-ink">{failureRate.toFixed(1)}%</span>
+    <Inspectable title="Form Failure Rate" description={description} className="contents">
+      <Card className="flex flex-col p-6 lg:col-span-2">
+        <TileHeader
+          label="Form Failure Rate"
+          metric={`${failureRate}%`}
+          metricTone={failureRate > 20 ? 'crimson' : failureRate > 12 ? 'amber' : 'emerald'}
+          description={description}
+        />
+        <div className="flex flex-1 items-center gap-4">
+          <ResponsiveContainer width="55%" height={120}>
+            <PieChart>
+              <Pie
+                data={failureBreakdown}
+                dataKey="value"
+                nameKey="name"
+                innerRadius={38}
+                outerRadius={54}
+                paddingAngle={3}
+                isAnimationActive={false}
+              >
+                {failureBreakdown.map((entry, i) => (
+                  <Cell key={entry.name} fill={FAILURE_COLORS[i]} stroke="none" />
+                ))}
+              </Pie>
+              <Tooltip {...tooltipStyle} formatter={(v) => `${Number(v).toFixed(1)}%`} />
+            </PieChart>
+          </ResponsiveContainer>
+          <div className="flex flex-1 flex-col gap-2 text-[12px]">
+            <div className="flex items-center gap-2">
+              <span className="h-2.5 w-2.5 flex-shrink-0 rounded-full" style={{ background: FAILURE_COLORS[0] }} />
+              <span className="text-ink-muted">Successful</span>
+              <span className="ml-auto font-medium text-ink">{successRate.toFixed(1)}%</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="h-2.5 w-2.5 flex-shrink-0 rounded-full" style={{ background: FAILURE_COLORS[1] }} />
+              <span className="text-ink-muted">Fault</span>
+              <span className="ml-auto font-medium text-ink">{failureRate.toFixed(1)}%</span>
+            </div>
           </div>
         </div>
-      </div>
-    </Card>
+      </Card>
+    </Inspectable>
   )
 }
 
 function RomAchievementTile({ romAvg, targetMin, targetMax }: { romAvg: number; targetMin: number; targetMax: number }) {
   const inTarget = romAvg >= targetMin && romAvg <= targetMax
   const nearTarget = romAvg >= targetMin - 10 && romAvg <= targetMax + 10
+  const description = `Average maximum flexion achieved across all patient sessions, vs. ${targetMax}° prescribed.`
   return (
-    <Card className="flex flex-col items-center p-6 lg:col-span-2">
-      <TileHeader
-        label="Target ROM Achievement"
-        metric={`${romAvg}° avg`}
-        metricTone={inTarget ? 'emerald' : nearTarget ? 'amber' : 'crimson'}
-        description={`Average maximum flexion achieved across all patient sessions, vs. ${targetMax}° prescribed.`}
-      />
-      <RadialGauge
-        value={romAvg}
-        min={Math.max(0, targetMin - 40)}
-        max={targetMax + 40}
-        targetMin={targetMin}
-        targetMax={targetMax}
-        unit="°"
-        label="Avg. max flexion"
-        size={168}
-      />
-    </Card>
+    <Inspectable title="Target ROM Achievement" description={description} className="contents">
+      <Card className="flex flex-col items-center p-6 lg:col-span-2">
+        <TileHeader
+          label="Target ROM Achievement"
+          metric={`${romAvg}° avg`}
+          metricTone={inTarget ? 'emerald' : nearTarget ? 'amber' : 'crimson'}
+          description={description}
+        />
+        <RadialGauge
+          value={romAvg}
+          min={Math.max(0, targetMin - 40)}
+          max={targetMax + 40}
+          targetMin={targetMin}
+          targetMax={targetMax}
+          unit="°"
+          label="Avg. max flexion"
+          size={168}
+        />
+      </Card>
+    </Inspectable>
   )
 }
 
@@ -224,119 +231,128 @@ function EmgEngagementTile({ emgLeft, emgRight, emgAvg }: { emgLeft: number; emg
     { name: 'Left', value: emgLeft },
     { name: 'Right', value: emgRight },
   ]
+  const description = 'Median peak muscle activation during the concentric phase, by limb.'
   return (
-    <Card className="flex flex-col p-6 lg:col-span-2">
-      <TileHeader
-        label="Neuromuscular Engagement (EMG)"
-        metric={`${emgAvg}% MVC`}
-        metricTone={emgAvg >= 75 ? 'emerald' : emgAvg >= 55 ? 'amber' : 'crimson'}
-        description="Median peak muscle activation during the concentric phase, by limb."
-      />
-      <ResponsiveContainer width="100%" height={140}>
-        <BarChart data={emgLimbData} margin={{ top: 4, right: 8, bottom: 0, left: -16 }} barSize={44}>
-          <CartesianGrid stroke="var(--color-border)" vertical={false} />
-          <XAxis dataKey="name" tick={axisTick} axisLine={axisLine} tickLine={false} />
-          <YAxis
-            domain={[0, 100]}
-            ticks={[0, 25, 50, 75, 100]}
-            tick={axisTick}
-            axisLine={axisLine}
-            tickLine={false}
-            width={34}
-            tickFormatter={(v) => `${v}%`}
-          />
-          <Tooltip {...tooltipStyle} formatter={(v) => `${v}% MVC`} />
-          <Bar dataKey="value" radius={[4, 4, 0, 0]} isAnimationActive={false}>
-            <Cell fill="var(--color-accent)" />
-            <Cell fill="var(--color-emerald)" />
-          </Bar>
-        </BarChart>
-      </ResponsiveContainer>
-    </Card>
+    <Inspectable title="Neuromuscular Engagement (EMG)" description={description} className="contents">
+      <Card className="flex flex-col p-6 lg:col-span-2">
+        <TileHeader
+          label="Neuromuscular Engagement (EMG)"
+          metric={`${emgAvg}% MVC`}
+          metricTone={emgAvg >= 75 ? 'emerald' : emgAvg >= 55 ? 'amber' : 'crimson'}
+          description={description}
+        />
+        <ResponsiveContainer width="100%" height={140}>
+          <BarChart data={emgLimbData} margin={{ top: 4, right: 8, bottom: 0, left: -16 }} barSize={44}>
+            <CartesianGrid stroke="var(--color-border)" vertical={false} />
+            <XAxis dataKey="name" tick={axisTick} axisLine={axisLine} tickLine={false} />
+            <YAxis
+              domain={[0, 100]}
+              ticks={[0, 25, 50, 75, 100]}
+              tick={axisTick}
+              axisLine={axisLine}
+              tickLine={false}
+              width={34}
+              tickFormatter={(v) => `${v}%`}
+            />
+            <Tooltip {...tooltipStyle} formatter={(v) => `${v}% MVC`} />
+            <Bar dataKey="value" radius={[4, 4, 0, 0]} isAnimationActive={false}>
+              <Cell fill="var(--color-accent)" />
+              <Cell fill="var(--color-emerald)" />
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      </Card>
+    </Inspectable>
   )
 }
 
 function EccentricTempoTile({ tempoData, tempoAvg }: { tempoData: { session: string; tempo: number }[]; tempoAvg: number }) {
+  const description = 'Average duration of the eccentric (lowering) phase over the last 10 logged sessions (target: >2.0s).'
   return (
-    <Card className="flex flex-col p-6 lg:col-span-3">
-      <TileHeader
-        label="Eccentric Tempo Control"
-        metric={`${tempoAvg}s avg`}
-        metricTone={tempoAvg >= 2.0 ? 'emerald' : tempoAvg >= 1.5 ? 'amber' : 'crimson'}
-        description="Average duration of the eccentric (lowering) phase over the last 10 logged sessions (target: >2.0s)."
-      />
-      <ResponsiveContainer width="100%" height={140}>
-        <LineChart data={tempoData} margin={{ top: 8, right: 16, bottom: 0, left: -16 }}>
-          <CartesianGrid stroke="var(--color-border)" vertical={false} />
-          <XAxis dataKey="session" tick={axisTick} axisLine={axisLine} tickLine={false} />
-          <YAxis
-            domain={[0, 2.4]}
-            ticks={[0, 1, 2]}
-            tick={axisTick}
-            axisLine={axisLine}
-            tickLine={false}
-            width={30}
-            tickFormatter={(v) => `${v}s`}
-          />
-          <Tooltip {...tooltipStyle} formatter={(v) => `${Number(v).toFixed(1)}s`} />
-          <ReferenceLine
-            y={2.0}
-            stroke="var(--color-ink-faint)"
-            strokeDasharray="4 4"
-            label={{ value: 'Target 2.0s', position: 'insideTopRight', fill: 'var(--color-ink-faint)', fontSize: 10 }}
-          />
-          <Line
-            type="monotone"
-            dataKey="tempo"
-            stroke="var(--color-crimson)"
-            strokeWidth={2.5}
-            dot={{ r: 3, fill: 'var(--color-crimson)', strokeWidth: 0 }}
-            isAnimationActive={false}
-          />
-        </LineChart>
-      </ResponsiveContainer>
-    </Card>
+    <Inspectable title="Eccentric Tempo Control" description={description} className="contents">
+      <Card className="flex flex-col p-6 lg:col-span-3">
+        <TileHeader
+          label="Eccentric Tempo Control"
+          metric={`${tempoAvg}s avg`}
+          metricTone={tempoAvg >= 2.0 ? 'emerald' : tempoAvg >= 1.5 ? 'amber' : 'crimson'}
+          description={description}
+        />
+        <ResponsiveContainer width="100%" height={140}>
+          <LineChart data={tempoData} margin={{ top: 8, right: 16, bottom: 0, left: -16 }}>
+            <CartesianGrid stroke="var(--color-border)" vertical={false} />
+            <XAxis dataKey="session" tick={axisTick} axisLine={axisLine} tickLine={false} />
+            <YAxis
+              domain={[0, 2.4]}
+              ticks={[0, 1, 2]}
+              tick={axisTick}
+              axisLine={axisLine}
+              tickLine={false}
+              width={30}
+              tickFormatter={(v) => `${v}s`}
+            />
+            <Tooltip {...tooltipStyle} formatter={(v) => `${Number(v).toFixed(1)}s`} />
+            <ReferenceLine
+              y={2.0}
+              stroke="var(--color-ink-faint)"
+              strokeDasharray="4 4"
+              label={{ value: 'Target 2.0s', position: 'insideTopRight', fill: 'var(--color-ink-faint)', fontSize: 10 }}
+            />
+            <Line
+              type="monotone"
+              dataKey="tempo"
+              stroke="var(--color-crimson)"
+              strokeWidth={2.5}
+              dot={{ r: 3, fill: 'var(--color-crimson)', strokeWidth: 0 }}
+              isAnimationActive={false}
+            />
+          </LineChart>
+        </ResponsiveContainer>
+      </Card>
+    </Inspectable>
   )
 }
 
 function FatigueOnsetTile({ onsetRep, tremorData }: { onsetRep: number; tremorData: { rep: number; deviation: number }[] }) {
+  const description = 'Average repetition where high-frequency IMU micro-tremors or EMG drops are detected.'
   return (
-    <Card className="flex flex-col p-6 lg:col-span-3">
-      <TileHeader
-        label="Fatigue Onset / Tremor Detection"
-        metric={`Rep ${onsetRep}`}
-        metricTone={onsetRep >= 10 ? 'emerald' : onsetRep >= 7 ? 'amber' : 'crimson'}
-        description="Average repetition where high-frequency IMU micro-tremors or EMG drops are detected."
-      />
-      <ResponsiveContainer width="100%" height={140}>
-        <ScatterChart margin={{ top: 8, right: 16, bottom: 0, left: -16 }}>
-          <CartesianGrid stroke="var(--color-border)" />
-          <XAxis
-            type="number"
-            dataKey="rep"
-            domain={[3, 13]}
-            ticks={[4, 6, 8, 10, 12]}
-            tick={axisTick}
-            axisLine={axisLine}
-            tickLine={false}
-            name="Rep"
-            label={{ value: 'Rep number', position: 'insideBottom', offset: -2, fill: 'var(--color-ink-faint)', fontSize: 10 }}
-          />
-          <YAxis
-            type="number"
-            dataKey="deviation"
-            tick={axisTick}
-            axisLine={axisLine}
-            tickLine={false}
-            width={30}
-            name="Deviation"
-            tickFormatter={(v) => `${v}%`}
-          />
-          <Tooltip {...tooltipStyle} formatter={(v, name) => (name === 'Rep' ? v : `${v}% deviation`)} />
-          <Scatter data={tremorData} fill="var(--color-crimson)" fillOpacity={0.65} isAnimationActive={false} />
-        </ScatterChart>
-      </ResponsiveContainer>
-    </Card>
+    <Inspectable title="Fatigue Onset / Tremor Detection" description={description} className="contents">
+      <Card className="flex flex-col p-6 lg:col-span-3">
+        <TileHeader
+          label="Fatigue Onset / Tremor Detection"
+          metric={`Rep ${onsetRep}`}
+          metricTone={onsetRep >= 10 ? 'emerald' : onsetRep >= 7 ? 'amber' : 'crimson'}
+          description={description}
+        />
+        <ResponsiveContainer width="100%" height={140}>
+          <ScatterChart margin={{ top: 8, right: 16, bottom: 0, left: -16 }}>
+            <CartesianGrid stroke="var(--color-border)" />
+            <XAxis
+              type="number"
+              dataKey="rep"
+              domain={[3, 13]}
+              ticks={[4, 6, 8, 10, 12]}
+              tick={axisTick}
+              axisLine={axisLine}
+              tickLine={false}
+              name="Rep"
+              label={{ value: 'Rep number', position: 'insideBottom', offset: -2, fill: 'var(--color-ink-faint)', fontSize: 10 }}
+            />
+            <YAxis
+              type="number"
+              dataKey="deviation"
+              tick={axisTick}
+              axisLine={axisLine}
+              tickLine={false}
+              width={30}
+              name="Deviation"
+              tickFormatter={(v) => `${v}%`}
+            />
+            <Tooltip {...tooltipStyle} formatter={(v, name) => (name === 'Rep' ? v : `${v}% deviation`)} />
+            <Scatter data={tremorData} fill="var(--color-crimson)" fillOpacity={0.65} isAnimationActive={false} />
+          </ScatterChart>
+        </ResponsiveContainer>
+      </Card>
+    </Inspectable>
   )
 }
 
