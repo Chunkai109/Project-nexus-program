@@ -71,6 +71,7 @@ so nothing is hidden behind the fused number.
 ```bash
 python -m ensemble.scripts.demo_fusion                                    # logic tests only
 python -m ensemble.scripts.demo_fusion --csv /path/to/bicep_with_incomplete.csv  # + real-data smoke test
+python -m ensemble.scripts.verify_live_client_parsing                     # IMU WebSocket message-format parser checks
 ```
 
 `demo_fusion.py` has two parts:
@@ -85,10 +86,38 @@ python -m ensemble.scripts.demo_fusion --csv /path/to/bicep_with_incomplete.csv 
    unrelated real-world events -- and proves only that the code runs
    cleanly against real outputs, not that the fused answer means anything.
 
+## Live demo + how to actually collect that synchronized data
+
+`ensemble/scripts/live_ensemble_demo.py` runs the vision model, the IMU
+model, and this fusion layer together on a real, live bicep curl --
+webcam + wearable device simultaneously (the IMU device connects over
+WiFi via WebSocket; see `ensemble/src/imu_live_client.py`, which tries
+JSON then falls back to the same plain-text log format the offline
+`ml_imu/data/imu_raw/Test N.txt` files use, since the device's exact
+message format wasn't confirmed when this was built). Like
+`ml/scripts/webcam_demo.py`, this runs on **your own machine**, not a
+cloud session -- it needs a real camera and real access to the IMU
+device's WiFi network.
+
+```bash
+python -m ensemble.scripts.live_ensemble_demo \
+    --model pose_landmarker_lite.task --ws-url ws://<device-ip>:<port>/ \
+    --save-session ensemble/data/synchronized_sessions/
+```
+
+Pass `--save-session <dir>` and every rep you run through this script
+saves its raw vision keypoints + raw IMU arrays to disk, **unlabeled** --
+consistent with this project's standing refusal to auto-generate labels;
+label each saved session yourself afterward based on what was actually
+performed, the same discipline already applied to `ml_imu/`'s original 35
+sessions. This is the concrete mechanism for finally building the
+synchronized dataset the validation plan below depends on.
+
 ## Future validation plan (not done yet)
 
 Once synchronized recordings exist (camera + wearable device running
-simultaneously on the same real reps, with ground-truth labels):
+simultaneously on the same real reps, with ground-truth labels --
+`live_ensemble_demo.py --save-session` above is how to collect them):
 1. Run both models on each synchronized rep, fuse the results, and compare
    fused-output macro-F1 against vision-alone macro-F1 on those same reps.
 2. **Only adopt the ensemble over vision-alone if it clearly beats it** --

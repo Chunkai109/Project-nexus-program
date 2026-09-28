@@ -5,6 +5,14 @@ ml/data/raw/*
 ml_imu/data/imu_raw/*
 !ml_imu/data/imu_raw/.gitkeep
 
+# Raw synchronized dual-sensor captures from ensemble/scripts/live_ensemble_demo.py
+# --save-session: unlabeled personal capture data, not committed by default --
+# same "raw data stays out of git" convention as ml/data/raw and ml_imu/data/imu_raw.
+# Once a session is reviewed and labeled, move/copy the labeled result into a
+# committed location deliberately (mirroring ml_imu/data/imu_labels.csv's pattern).
+ensemble/data/synchronized_sessions/*
+!ensemble/data/synchronized_sessions/.gitkeep
+
 # Tagged experiment artifacts (see --tag in prepare_dataset.py/train.py/evaluate.py):
 # disposable scratch output for one-off comparisons against the committed
 # baseline in ml/data/processed, ml/models/best_model, ml/results. Only a
