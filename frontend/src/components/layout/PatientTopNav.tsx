@@ -1,4 +1,4 @@
-import { Bluetooth, BatteryMedium, LogOut } from 'lucide-react'
+import { Wifi, BatteryMedium, LogOut } from 'lucide-react'
 import { Logo } from './Logo'
 import { ProgressBar } from '@/components/ui/ProgressBar'
 import { ThemeToggle } from '@/components/ui/ThemeToggle'
@@ -9,12 +9,12 @@ export function PatientTopNav({
   weeklyDone,
   weeklyTotal,
   battery = 92,
-  bleConnected = true,
+  hubConnected = true,
 }: {
   weeklyDone: number
   weeklyTotal: number
   battery?: number
-  bleConnected?: boolean
+  hubConnected?: boolean
 }) {
   const { user, signOut } = useAuth()
   const navigate = useNavigate()
@@ -25,14 +25,14 @@ export function PatientTopNav({
 
       <div className="flex items-center gap-1 rounded-full bg-surface-secondary px-2 py-1.5 sm:gap-3 sm:px-4 sm:py-2">
         <div className="flex items-center gap-1 text-sm sm:gap-2">
-          <span className={bleConnected ? 'relative flex h-2 w-2' : 'flex h-2 w-2'}>
-            {bleConnected && (
+          <span className={hubConnected ? 'relative flex h-2 w-2' : 'flex h-2 w-2'}>
+            {hubConnected && (
               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald opacity-75" />
             )}
-            <span className={`relative inline-flex h-2 w-2 rounded-full ${bleConnected ? 'bg-emerald' : 'bg-crimson'}`} />
+            <span className={`relative inline-flex h-2 w-2 rounded-full ${hubConnected ? 'bg-emerald' : 'bg-crimson'}`} />
           </span>
-          <Bluetooth className="h-4 w-4 text-ink-muted" />
-          <span className="hidden text-ink-muted sm:inline">{bleConnected ? 'ESP32 Connected' : 'ESP32 Disconnected'}</span>
+          <Wifi className="h-4 w-4 text-ink-muted" />
+          <span className="hidden text-ink-muted sm:inline">{hubConnected ? 'ESP32 Connected' : 'ESP32 Disconnected'}</span>
         </div>
         <div className="hidden h-4 w-px bg-border-strong sm:block" />
         <div className="flex items-center gap-1 text-sm text-ink-muted">

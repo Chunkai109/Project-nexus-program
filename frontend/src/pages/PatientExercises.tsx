@@ -22,7 +22,7 @@ export function PatientExercises() {
 
   return (
     <PageShell>
-      <PatientTopNav weeklyDone={3} weeklyTotal={4} battery={92} bleConnected />
+      <PatientTopNav weeklyDone={3} weeklyTotal={4} battery={92} hubConnected />
 
       <main className="px-4 py-6 sm:px-6 sm:py-8 lg:px-10 lg:py-12">
         <PatientNavTabs />

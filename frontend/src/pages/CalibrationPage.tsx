@@ -9,7 +9,7 @@ import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { ProgressBar } from '@/components/ui/ProgressBar'
 import { useAppData } from '@/lib/data/AppDataContext'
-import { useBleHub } from '@/lib/ble/BleProvider'
+import { useSensorHub } from '@/lib/hub/HubProvider'
 import { PODS } from '@/lib/mockData'
 import type { PodId } from '@/types'
 
@@ -18,8 +18,8 @@ import type { PodId } from '@/types'
  *   1. Baseline Phase: limb relaxed for 3s, Vbaseline recorded per pod.
  *   2. MVC Phase: maximum voluntary contraction against resistance, Vmvc recorded per pod.
  *   3. Runtime: %Activation = (Vrms - Vbaseline) / (Vmvc - Vbaseline) * 100
- * The third step is already implemented by emgActivationPercent() in ble/protocol.ts;
- * this page's job is to capture per-patient Vbaseline/Vmvc and hand them to BleProvider.
+ * The third step is already implemented by emgActivationPercent() in hub/protocol.ts;
+ * this page's job is to capture per-patient Vbaseline/Vmvc and hand them to HubProvider.
  */
 
 const PHASE_DURATION_MS = 3000
@@ -41,8 +41,12 @@ export function CalibrationPage() {
   const navigate = useNavigate()
   const { exercises } = useAppData()
   const exercise = useMemo(() => exercises.find((e) => e.id === exerciseId) ?? null, [exercises, exerciseId])
-  const hub = useBleHub()
-  const hubConnected = hub.connectionState === 'connected'
+  const hub = useSensorHub()
+  // The hub itself may be connected (e.g. real IMU hardware) without EMG
+  // hardware wired up on it yet — fall back to the simulator per-pod based
+  // on whether that specific pod has ever reported a real EMG reading,
+  // rather than gating on hub connection as a whole.
+  const emgIsLive = EMG_PODS.some((pod) => hub.pods[pod.id]?.vrmsRaw !== undefined)
 
   const [phase, setPhase] = useState<Phase>('idle')
   const [remainingMs, setRemainingMs] = useState(PHASE_DURATION_MS)
@@ -50,6 +54,15 @@ export function CalibrationPage() {
   const [baselineByPod, setBaselineByPod] = useState<Partial<Record<PodId, number>>>({})
   const [mvcByPod, setMvcByPod] = useState<Partial<Record<PodId, number>>>({})
   const samplesRef = useRef<Partial<Record<PodId, number[]>>>({})
+
+  // A live hub streams pod data continuously, giving `hub.pods` a new object
+  // identity on every message. Reading it through a ref (instead of listing
+  // it as an effect dependency) keeps the sampling interval below from being
+  // torn down and restarted on every single incoming message.
+  const hubPodsRef = useRef(hub.pods)
+  useEffect(() => {
+    hubPodsRef.current = hub.pods
+  }, [hub.pods])
 
   useEffect(() => {
     if (phase !== 'baseline' && phase !== 'mvc') return
@@ -61,9 +74,7 @@ export function CalibrationPage() {
       const elapsedSec = (performance.now() - startedAt) / 1000
       const nextLive: Partial<Record<PodId, number>> = {}
       for (const pod of EMG_PODS) {
-        const raw = hubConnected
-          ? (hub.pods[pod.id]?.vrmsRaw ?? 0)
-          : simulateRawSample(phase, elapsedSec, pod.id)
+        const raw = hubPodsRef.current[pod.id]?.vrmsRaw ?? simulateRawSample(phase, elapsedSec, pod.id)
         samplesRef.current[pod.id]?.push(raw)
         nextLive[pod.id] = raw
       }
@@ -94,7 +105,7 @@ export function CalibrationPage() {
       clearInterval(interval)
       clearTimeout(timeout)
     }
-  }, [phase, hubConnected, hub.pods])
+  }, [phase])
 
   if (!exercise) {
     return (
@@ -160,9 +171,9 @@ export function CalibrationPage() {
           <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
             <h1 className="text-[17px] font-semibold text-ink">EMG Baseline &amp; MVC Calibration</h1>
             <span
-              className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${hubConnected ? 'bg-emerald/10 text-emerald' : 'bg-surface-secondary text-ink-faint'}`}
+              className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${emgIsLive ? 'bg-emerald/10 text-emerald' : 'bg-surface-secondary text-ink-faint'}`}
             >
-              {hubConnected ? 'Source: Live Hub' : 'Source: Wearable Simulation'}
+              {emgIsLive ? 'Source: Live Hub' : 'Source: Wearable Simulation'}
             </span>
           </div>
           <p className="text-[13px] text-ink-faint">{exercise.title}</p>

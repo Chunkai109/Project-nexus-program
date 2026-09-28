@@ -17,12 +17,22 @@ import { useAppData } from '@/lib/data/AppDataContext'
 import { useAuth } from '@/lib/AuthContext'
 import { podSide, kneePodForSide } from '@/lib/podUtils'
 import { muscleEmgTarget } from '@/lib/muscles'
-import { useBleHub } from '@/lib/ble/BleProvider'
+import { useSensorHub } from '@/lib/hub/HubProvider'
+import { CURL_DRIFT_POD_ID, CURL_FLEX_POD_ID } from '@/lib/hub/bicepCurlCounter'
 import { PODS } from '@/lib/mockData'
 import type { RepSample } from '@/types'
 
-const HAPTIC_PULSE_MS = 400
-const HAPTIC_RETRIGGER_COOLDOWN_MS = 1500
+// The motor pulses for exactly 1 second the instant flexion enters the
+// exercise's target corridor (see the corridor-entry effect below) — no
+// periodic retrigger, since it's an edge-triggered "you reached it" cue,
+// not a sustained correction signal.
+const HAPTIC_PULSE_MS = 1000
+
+// Testing flag: disable MediaPipe camera-based pose detection entirely so
+// the hub's real MPU flex/drift data (via hub.curl, computed in HubProvider)
+// is the only input driving the rep counter, instead of it being masked by
+// vision whenever someone's in frame. Flip back to true to restore camera-based detection.
+const ENABLE_MEDIAPIPE_VISION = false
 
 export function LiveSession() {
   const { exerciseId } = useParams()
@@ -32,7 +42,7 @@ export function LiveSession() {
   const exercise = useMemo(() => exercises.find((e) => e.id === exerciseId) ?? null, [exercises, exerciseId])
   const [ending, setEnding] = useState(false)
   const [vision, setVision] = useState<VisionReading | null>(null)
-  const hub = useBleHub()
+  const hub = useSensorHub()
   const hubConnected = hub.connectionState === 'connected'
 
   const primaryAngle = exercise?.angleConfigs[0] ?? null
@@ -42,43 +52,72 @@ export function LiveSession() {
   const simulated = useSensorStream(!ending, primaryAngle?.targetMin ?? null, primaryAngle?.targetMax ?? null)
   const squatDepth = Math.max(0, Math.min(1, 1 - (simulated.kneeFlexionDeg - 70) / 60))
 
+  // Real flex/drift from the hub's two MPU6050 pods (2 = forearm flexion,
+  // 3 = upper-arm drift — see firmware/smartphysio_hub/smartphysio_hub.ino).
+  // The rep-counting/cheat-detection algorithm itself (hub.curl) runs inside
+  // HubProvider, synchronously per incoming message — see bicepCurlCounter.ts
+  // for why it can't be driven from here as a plain rendered-value effect.
+  const flexLive = hub.pods[CURL_FLEX_POD_ID]?.pitchDeg ?? null
+  const driftLive = hub.pods[CURL_DRIFT_POD_ID]?.pitchDeg ?? null
+  const curl = hub.curl
+  const usingHubCurl = flexLive !== null && driftLive !== null
+
   // Hybrid multimodal decision engine: prefer the camera's real joint-angle
-  // reading when a person is in frame, fall back to the wearable simulator
-  // otherwise (no camera, model still loading, or nobody in shot).
+  // reading when a person is in frame, then the hub's real MPU curl
+  // algorithm when connected, falling back to the wearable simulator only
+  // when neither real source is available.
   const usingVision = vision !== null
-  const kneeFlexionDeg = vision?.flexionDeg ?? simulated.kneeFlexionDeg
-  const faultActive = vision?.faultActive ?? simulated.faultActive
-  const faultDeg = vision ? Math.round(vision.valgusDeg) : simulated.faultDeg
+  const kneeFlexionDeg = vision?.flexionDeg ?? (usingHubCurl ? flexLive : simulated.kneeFlexionDeg)
+  const faultActive = vision?.faultActive ?? (usingHubCurl ? curl.formCheatDetected : simulated.faultActive)
+  const faultDeg = vision ? Math.round(vision.valgusDeg) : usingHubCurl ? Math.round(curl.driftError) : simulated.faultDeg
   const faultLabel = faultActive
-    ? `${monitoredSide === 'left' ? 'Left' : 'Right'} Knee Valgus Detected (+${faultDeg}° Fault)`
+    ? usingHubCurl && !usingVision
+      ? `Upper-Arm Drift Detected (+${faultDeg}° Over Baseline)`
+      : `${monitoredSide === 'left' ? 'Left' : 'Right'} Knee Valgus Detected (+${faultDeg}° Fault)`
     : null
-  const activeHapticPod = faultActive ? hapticPod : null
+  const repCount = usingHubCurl ? curl.repCount : simulated.repCount
 
-  // Real EMG pods (1 = left vastus medialis, 2 = right) when a hub is
-  // connected; otherwise the wearable simulator, same as the knee angle above.
-  const usingHubEmg = hubConnected
-  const emgLeft = usingHubEmg ? Math.round(hub.pods[1]?.emgActivationPct ?? 0) : simulated.emgLeft
-  const emgRight = usingHubEmg ? Math.round(hub.pods[2]?.emgActivationPct ?? 0) : simulated.emgRight
+  const targetMin = primaryAngle?.targetMin ?? simulated.targetMin
+  const targetMax = primaryAngle?.targetMax ?? simulated.targetMax
+  const inCorridor = kneeFlexionDeg >= targetMin && kneeFlexionDeg <= targetMax
 
-  // Closed-loop correction: when a real hub is connected, tell it to buzz
-  // the monitored knee pod the instant a fault starts, rather than only
-  // showing it on screen. Edge-triggered with a cooldown so a sustained
-  // fault doesn't flood the link with GATT writes.
-  const lastHapticSentAt = useRef(0)
-  const wasFaultActive = useRef(false)
+  // Real EMG pods (1 = left vastus medialis, 2 = right) once that specific
+  // pod has actually reported an EMG reading; otherwise the wearable
+  // simulator, same as the knee angle above. This is independent of
+  // hubConnected since a real hub (e.g. IMU-only hardware) may not have EMG
+  // wired up at all yet.
+  const emgLeftLive = hub.pods[1]?.emgActivationPct
+  const emgRightLive = hub.pods[2]?.emgActivationPct
+  const usingHubEmg = emgLeftLive !== undefined || emgRightLive !== undefined
+  const emgLeft = emgLeftLive !== undefined ? Math.round(emgLeftLive) : simulated.emgLeft
+  const emgRight = emgRightLive !== undefined ? Math.round(emgRightLive) : simulated.emgRight
+
+  // Target-corridor feedback: pulse the monitored pod for exactly 1 second
+  // the instant flexion enters the exercise's target corridor (150°-180° for
+  // the default Bicep Curl). Purely edge-triggered — holding inside the
+  // corridor doesn't retrigger the buzz — and `pulseActive` (rather than just
+  // `inCorridor`) drives the UI so the "Pod X Active" badge tracks the real
+  // ~1s motor pulse window instead of however long the arm stays in range.
+  const [pulseActive, setPulseActive] = useState(false)
+  const wasInCorridor = useRef(false)
+  const pulseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(() => {
-    if (!hubConnected) {
-      wasFaultActive.current = faultActive
-      return
+    if (inCorridor && !wasInCorridor.current) {
+      setPulseActive(true)
+      if (pulseTimeoutRef.current) clearTimeout(pulseTimeoutRef.current)
+      pulseTimeoutRef.current = setTimeout(() => setPulseActive(false), HAPTIC_PULSE_MS)
+      if (hubConnected) hub.sendHaptic(hapticPod, HAPTIC_PULSE_MS).catch(() => {})
     }
-    const risingEdge = faultActive && !wasFaultActive.current
-    const cooldownElapsed = performance.now() - lastHapticSentAt.current > HAPTIC_RETRIGGER_COOLDOWN_MS
-    if (risingEdge || (faultActive && cooldownElapsed)) {
-      lastHapticSentAt.current = performance.now()
-      hub.sendHaptic(hapticPod, HAPTIC_PULSE_MS).catch(() => {})
+    wasInCorridor.current = inCorridor
+  }, [inCorridor, hubConnected, hub, hapticPod])
+
+  useEffect(() => {
+    return () => {
+      if (pulseTimeoutRef.current) clearTimeout(pulseTimeoutRef.current)
     }
-    wasFaultActive.current = faultActive
-  }, [faultActive, hubConnected, hub, hapticPod])
+  }, [])
+
+  const activeHapticPod = pulseActive ? hapticPod : null
 
   // Rep-by-rep telemetry: sample the effective angle/EMG the instant each
   // rep completes, so a finished session leaves behind real per-rep data
@@ -86,14 +125,11 @@ export function LiveSession() {
   const [repSamples, setRepSamples] = useState<RepSample[]>([])
   const prevRepCount = useRef(0)
   useEffect(() => {
-    if (simulated.repCount > prevRepCount.current) {
-      prevRepCount.current = simulated.repCount
-      setRepSamples((prev) => [
-        ...prev,
-        { rep: simulated.repCount, angle: Math.round(kneeFlexionDeg), emgLeft, emgRight, faultActive },
-      ])
+    if (repCount > prevRepCount.current) {
+      prevRepCount.current = repCount
+      setRepSamples((prev) => [...prev, { rep: repCount, angle: Math.round(kneeFlexionDeg), emgLeft, emgRight, faultActive }])
     }
-  }, [simulated.repCount, kneeFlexionDeg, emgLeft, emgRight, faultActive])
+  }, [repCount, kneeFlexionDeg, emgLeft, emgRight, faultActive])
 
   if (!exercise) {
     return (
@@ -151,7 +187,7 @@ export function LiveSession() {
           </span>
           <span className="flex items-center gap-1.5">
             <Repeat className="h-4 w-4 text-accent" />
-            {simulated.repCount} reps
+            {repCount} reps
           </span>
           <ThemeToggle />
         </div>
@@ -164,6 +200,7 @@ export function LiveSession() {
             monitoredSide={monitoredSide}
             faultThresholdDeg={primaryAngle?.faultThresholdDeg ?? 8}
             onVisionMetrics={setVision}
+            poseDetectionEnabled={ENABLE_MEDIAPIPE_VISION}
             fallbackSkeleton={
               <PoseOverlay squatDepth={squatDepth} faultActive={faultActive} faultDeg={faultDeg} />
             }
@@ -185,7 +222,9 @@ export function LiveSession() {
             <p className="text-[13px] text-ink-faint">
               {usingVision
                 ? 'Knee angle is being measured live from your camera via MediaPipe Pose. Wearable pods still supply EMG and localized limb rotation the camera alone can\'t see.'
-                : 'No live camera reading right now, so the knee angle and fault state below are simulated from the wearable stream, per the hybrid multimodal decision engine.'}
+                : usingHubCurl
+                  ? "MediaPipe is disabled — flexion, drift and rep counting below are computed live from the ESP32's MPU6050 pods, run through the same curl algorithm as the firmware."
+                  : 'No live camera reading right now, so the knee angle and fault state below are simulated from the wearable stream, per the hybrid multimodal decision engine.'}
             </p>
           </Card>
         </div>
@@ -193,19 +232,24 @@ export function LiveSession() {
         {/* Secondary column */}
         <div className="flex flex-col gap-6">
           <Card className="flex flex-col items-center p-6">
+            {/* min/max span the full rep sweep (extended to contracted), not just
+                the target corridor, since kneeFlexionDeg travels across the whole
+                range every rep — clamping tightly around target (as the other two
+                RadialGauge call sites do for their narrower, target-relative
+                stats) made every rep's bottom half collapse to a flat "empty" arc. */}
             <RadialGauge
               value={kneeFlexionDeg}
-              min={40}
-              max={150}
-              targetMin={simulated.targetMin}
-              targetMax={simulated.targetMax}
-              label="Knee Flexion Angle"
+              min={0}
+              max={Math.max(200, targetMax + 20)}
+              targetMin={targetMin}
+              targetMax={targetMax}
+              label="Joint Angle"
               fault={faultActive}
             />
             <span
-              className={`mt-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium ${usingVision ? 'bg-accent/10 text-accent' : 'bg-surface-secondary text-ink-faint'}`}
+              className={`mt-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium ${usingVision || usingHubCurl ? 'bg-accent/10 text-accent' : 'bg-surface-secondary text-ink-faint'}`}
             >
-              {usingVision ? 'Source: Live Camera (MediaPipe)' : 'Source: Wearable Simulation'}
+              {usingVision ? 'Source: Live Camera (MediaPipe)' : usingHubCurl ? 'Source: Live Hub (MPU)' : 'Source: Wearable Simulation'}
             </span>
           </Card>
 
@@ -226,7 +270,7 @@ export function LiveSession() {
             <div className="mb-4 flex items-center justify-between">
               <h3 className="text-[15px] font-semibold text-ink">Haptic Biofeedback</h3>
               {activeHapticPod && (
-                <span className="flex items-center gap-1.5 text-[13px] font-semibold text-crimson">
+                <span className="flex items-center gap-1.5 text-[13px] font-semibold text-emerald">
                   <Vibrate className="h-3.5 w-3.5" />
                   Pod {activeHapticPod} Active
                 </span>
@@ -237,8 +281,8 @@ export function LiveSession() {
             </div>
             <p className="mt-3 text-center text-[13px] text-ink-muted">
               {activeHapticPod
-                ? `Vibrotactile Correction Active — realign ${monitoredSide} knee over ankle`
-                : 'Form within target corridor — no correction needed'}
+                ? `Target Corridor Reached — pulsing pod ${activeHapticPod} for 1s`
+                : `Curl into the ${targetMin}°–${targetMax}° corridor to trigger haptic feedback`}
             </p>
           </Card>
 

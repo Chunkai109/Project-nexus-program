@@ -2,7 +2,7 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import { AuthProvider, useAuth } from '@/lib/AuthContext'
 import { ThemeProvider } from '@/lib/ThemeContext'
 import { AppDataProvider } from '@/lib/data/AppDataContext'
-import { BleProvider } from '@/lib/ble/BleProvider'
+import { HubProvider } from '@/lib/hub/HubProvider'
 import { LoginPage } from '@/pages/LoginPage'
 import { PatientExercises } from '@/pages/PatientExercises'
 import { PastSessions } from '@/pages/PastSessions'
@@ -91,9 +91,9 @@ function App() {
     <ThemeProvider>
       <AuthProvider>
         <AppDataProvider>
-          <BleProvider>
+          <HubProvider>
             <AppRoutes />
-          </BleProvider>
+          </HubProvider>
         </AppDataProvider>
       </AuthProvider>
     </ThemeProvider>

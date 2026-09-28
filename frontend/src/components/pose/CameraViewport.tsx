@@ -18,6 +18,7 @@ export function CameraViewport({
   monitoredSide = 'right',
   faultThresholdDeg = 8,
   onVisionMetrics,
+  poseDetectionEnabled = true,
 }: {
   /** Always-rendered overlay content (fault badge, exercise title chip, …). */
   children?: ReactNode
@@ -26,15 +27,18 @@ export function CameraViewport({
   monitoredSide?: Side
   faultThresholdDeg?: number
   onVisionMetrics?: (reading: VisionReading | null) => void
+  /** False skips camera access and MediaPipe entirely — used to test other input sources (e.g. a real wearable) in isolation. */
+  poseDetectionEnabled?: boolean
 }) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const [cameraOk, setCameraOk] = useState<boolean | null>(null)
   const [personDetected, setPersonDetected] = useState(false)
-  const { status: poseStatus, detectForVideo } = usePoseLandmarker()
+  const { status: poseStatus, detectForVideo } = usePoseLandmarker(poseDetectionEnabled)
 
   useEffect(() => {
+    if (!poseDetectionEnabled) return
     let stream: MediaStream | null = null
     let cancelled = false
 
@@ -62,7 +66,7 @@ export function CameraViewport({
       cancelled = true
       stream?.getTracks().forEach((t) => t.stop())
     }
-  }, [])
+  }, [poseDetectionEnabled])
 
   // Real detection loop: only runs once we have both a live camera frame and
   // a loaded model. Draws directly to canvas (not React state) so a ~30fps
@@ -190,7 +194,11 @@ export function CameraViewport({
           <div className="absolute top-3 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-full bg-black/40 px-3 py-1.5 backdrop-blur-sm">
             <VideoOff className="h-3.5 w-3.5 text-ink-faint" />
             <p className="text-xs text-ink-faint">
-              {cameraOk === null ? 'Requesting camera access…' : 'Camera unavailable — showing simulated feed'}
+              {!poseDetectionEnabled
+                ? 'MediaPipe disabled — testing with wearable sensor data only'
+                : cameraOk === null
+                  ? 'Requesting camera access…'
+                  : 'Camera unavailable — showing simulated feed'}
             </p>
           </div>
           {fallbackSkeleton}
@@ -199,7 +207,11 @@ export function CameraViewport({
 
       <div className="absolute left-4 top-4 flex items-center gap-1.5 rounded-full bg-black/50 px-2.5 py-1 text-[11px] font-medium text-white backdrop-blur-sm">
         <Video className={`h-3 w-3 ${showRealSkeleton ? 'text-crimson' : 'text-ink-faint'}`} />
-        {showRealSkeleton ? 'REC · MediaPipe Pose (live)' : 'REC · MediaPipe Pose (simulated)'}
+        {showRealSkeleton
+          ? 'REC · MediaPipe Pose (live)'
+          : poseDetectionEnabled
+            ? 'REC · MediaPipe Pose (simulated)'
+            : 'MediaPipe disabled'}
       </div>
 
       {children}

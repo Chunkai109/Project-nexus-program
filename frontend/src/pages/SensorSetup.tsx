@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, Bluetooth, BluetoothOff, CircleCheck, Loader2, TriangleAlert, Vibrate, Zap } from 'lucide-react'
+import { ArrowLeft, CircleCheck, Loader2, TriangleAlert, Vibrate, Wifi, WifiOff, Zap } from 'lucide-react'
 import { PageShell } from '@/components/layout/PageShell'
 import { Logo } from '@/components/layout/Logo'
 import { ThemeToggle } from '@/components/ui/ThemeToggle'
@@ -11,8 +11,8 @@ import { BodyMap } from '@/components/body/BodyMap'
 import { PODS } from '@/lib/mockData'
 import { useAppData } from '@/lib/data/AppDataContext'
 import { podLabel } from '@/lib/podUtils'
-import { useBleHub } from '@/lib/ble/BleProvider'
-import type { PodId } from '@/lib/ble/protocol'
+import { useSensorHub } from '@/lib/hub/HubProvider'
+import { DEFAULT_HUB_WS_URL, type PodId } from '@/lib/hub/protocol'
 import { clsx } from 'clsx'
 
 const PLACEMENT_STEPS = [
@@ -56,7 +56,8 @@ export function SensorSetup() {
   const [activePod, setActivePod] = useState<number | null>(null)
   const [vibrating, setVibrating] = useState(false)
   const [hapticSendError, setHapticSendError] = useState<string | null>(null)
-  const hub = useBleHub()
+  const [hubUrl, setHubUrl] = useState(DEFAULT_HUB_WS_URL)
+  const hub = useSensorHub()
   const hubConnected = hub.connectionState === 'connected'
 
   // While a real hub is connected, pod wiring metadata (label/location/kind)
@@ -202,14 +203,14 @@ export function SensorSetup() {
                   {hub.connectionState === 'connecting' ? (
                     <Loader2 className="h-5 w-5 animate-spin text-accent" />
                   ) : !hub.supported ? (
-                    <BluetoothOff className="h-5 w-5 text-ink-faint" />
+                    <WifiOff className="h-5 w-5 text-ink-faint" />
                   ) : (
-                    <Bluetooth className={clsx('h-5 w-5', hubConnected ? 'text-emerald' : 'text-accent')} />
+                    <Wifi className={clsx('h-5 w-5', hubConnected ? 'text-emerald' : 'text-accent')} />
                   )}
                 </div>
                 <div className="text-sm">
                   <p className="font-semibold text-ink">
-                    {!hub.supported && 'Web Bluetooth unavailable'}
+                    {!hub.supported && 'WebSockets unavailable'}
                     {hub.supported && hub.connectionState === 'disconnected' && 'No ESP32 hub connected'}
                     {hub.connectionState === 'connecting' && 'Connecting…'}
                     {hub.connectionState === 'connected' && `Connected — ${hub.deviceName}`}
@@ -217,12 +218,12 @@ export function SensorSetup() {
                   </p>
                   <p className="text-[13px] text-ink-faint">
                     {!hub.supported
-                      ? 'Try Chrome or Edge on desktop or Android to pair real hardware.'
+                      ? 'This browser has no WebSocket support — try a modern desktop or mobile browser.'
                       : hub.connectionState === 'error'
                         ? hub.errorMessage
                         : hubConnected
-                          ? 'Live BLE GATT stream active'
-                          : 'Using simulated demo data until a real hub is paired'}
+                          ? 'Live WebSocket stream active'
+                          : 'Using simulated demo data until a real hub is connected'}
                   </p>
                 </div>
               </div>
@@ -230,13 +231,30 @@ export function SensorSetup() {
                 <Button
                   variant={hubConnected ? 'outline' : 'secondary'}
                   size="sm"
-                  onClick={() => (hubConnected ? hub.disconnect() : hub.connect().catch(() => {}))}
+                  onClick={() => (hubConnected ? hub.disconnect() : hub.connect(hubUrl).catch(() => {}))}
                   disabled={hub.connectionState === 'connecting'}
                 >
                   {hubConnected ? 'Disconnect' : 'Connect ESP32 Hub'}
                 </Button>
               )}
             </div>
+
+            {hub.supported && !hubConnected && (
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="hub-ws-url" className="text-[12px] font-medium text-ink-faint">
+                  ESP32 hub address — join its WiFi network first, then connect here
+                </label>
+                <input
+                  id="hub-ws-url"
+                  type="text"
+                  value={hubUrl}
+                  onChange={(e) => setHubUrl(e.target.value)}
+                  disabled={hub.connectionState === 'connecting'}
+                  placeholder={DEFAULT_HUB_WS_URL}
+                  className="rounded-lg border border-border bg-surface px-3 py-2 text-[13px] text-ink outline-none transition-colors focus:border-accent disabled:opacity-60"
+                />
+              </div>
+            )}
 
             <div className="h-px bg-border" />
 
@@ -246,7 +264,7 @@ export function SensorSetup() {
                   {allConnected ? 'All 6 pods connected' : 'Waiting for full pod connection'}
                 </p>
                 <p className="text-[13px] text-ink-faint">
-                  ESP32-WROOM-32D hub · BLE GATT stream {hubConnected ? '(live)' : '(simulated)'}
+                  ESP32-WROOM-32D hub · WebSocket stream {hubConnected ? '(live)' : '(simulated)'}
                 </p>
                 {hapticSendError && <p className="mt-1 text-[13px] text-crimson">{hapticSendError}</p>}
               </div>
