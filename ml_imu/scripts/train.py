@@ -23,8 +23,11 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import GroupKFold
 from sklearn.metrics import f1_score
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
 
 ML_IMU_ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = ML_IMU_ROOT.parent
@@ -47,7 +50,30 @@ RF_GRID = [
     {"n_estimators": 300, "max_depth": 4, "min_samples_leaf": 2},
 ]
 
+# Logistic Regression comparison, on the SAME labeled data/features/groups
+# as RandomForest above -- requested to see whether a linear model tells
+# the same story as RF's ceiling-effect finding. Wrapped in a Pipeline with
+# StandardScaler since (unlike tree-based RandomForest) logistic regression
+# is sensitive to feature scale, and this dataset's 19 raw features span
+# very different ranges (e.g. emg_mean in the thousands vs vib_on_frac in
+# [0,1]) -- an unscaled fit would be a biased, unfair comparison.
+LR_GRID = [
+    {"C": 0.01}, {"C": 0.1}, {"C": 1.0}, {"C": 10.0},
+]
+
 MODEL_DIR = ML_IMU_ROOT / "models" / "best_model"
+
+
+def make_rf(params):
+    return RandomForestClassifier(random_state=SEED, class_weight="balanced", n_jobs=-1, **params)
+
+
+def make_lr(params):
+    return Pipeline([
+        ("scale", StandardScaler()),
+        ("clf", LogisticRegression(random_state=SEED, class_weight="balanced",
+                                    max_iter=2000, **params)),
+    ])
 
 
 def build_dataset():
@@ -81,7 +107,11 @@ def check_group_integrity(groups: np.ndarray, fold_assignments: np.ndarray) -> b
     return ok
 
 
-def run_cv(X, y, groups, params) -> dict:
+def run_cv(X, y, groups, params, make_estimator) -> dict:
+    """GroupKFold CV for any estimator-building function `make_estimator(params)`.
+    The estimator (and, for the LR pipeline, its StandardScaler) is fit ONLY
+    on each fold's training split -- never on validation data or the full
+    dataset before splitting -- so there's no scaling leakage either."""
     gkf = GroupKFold(n_splits=N_SPLITS)
     fold_f1s = []
     class_dropout_notes = []
@@ -97,7 +127,7 @@ def run_cv(X, y, groups, params) -> dict:
                 f"fold {fold_idx}: training split is missing class(es) {missing_names} entirely"
             )
 
-        clf = RandomForestClassifier(random_state=SEED, class_weight="balanced", n_jobs=-1, **params)
+        clf = make_estimator(params)
         clf.fit(X[train_idx], y[train_idx])
         pred = clf.predict(X[val_idx])
         f1 = f1_score(y[val_idx], pred, average="macro", labels=list(range(len(CLASS_NAMES))), zero_division=0)
@@ -119,13 +149,25 @@ def main():
     print(f"Class counts: { {CLASS_NAMES[i]: int((y == i).sum()) for i in range(len(CLASS_NAMES))} }")
     print(f"Groups per class: { {CLASS_NAMES[i]: int(labels_df[labels_df.label == CLASS_NAMES[i]].test_id.nunique()) for i in range(len(CLASS_NAMES))} }")
 
-    print(f"\n=== GroupKFold (n_splits={N_SPLITS}, group=test_id) regularization search ===")
-    results = []
+    print(f"\n=== RandomForest: GroupKFold (n_splits={N_SPLITS}, group=test_id) regularization search ===")
+    rf_results = []
     for params in RF_GRID:
-        res = run_cv(X, y, groups, params)
-        results.append((params, res))
+        res = run_cv(X, y, groups, params, make_rf)
+        rf_results.append((params, res))
         tag = "[baseline, unregularized]" if params.get("max_depth") is None else ""
         print(f"  {params} {tag}")
+        print(f"    -> CV macro-F1={res['cv_macro_f1_mean']:.4f} (+/-{res['cv_macro_f1_std']:.4f})  "
+              f"per-fold={[round(f,3) for f in res['fold_macro_f1']]}")
+        for note in res["class_dropout_notes"]:
+            print(f"    [WARNING] {note}")
+
+    print(f"\n=== Logistic Regression: GroupKFold (n_splits={N_SPLITS}, group=test_id) "
+          f"comparison, SAME labeled data/features/groups as above ===")
+    lr_results = []
+    for params in LR_GRID:
+        res = run_cv(X, y, groups, params, make_lr)
+        lr_results.append((params, res))
+        print(f"  {params}")
         print(f"    -> CV macro-F1={res['cv_macro_f1_mean']:.4f} (+/-{res['cv_macro_f1_std']:.4f})  "
               f"per-fold={[round(f,3) for f in res['fold_macro_f1']]}")
         for note in res["class_dropout_notes"]:
@@ -135,52 +177,119 @@ def main():
     # discriminate between settings (see the ceiling-effect check below,
     # which is exactly what happens on this dataset), shipping the shallowest
     # tied model is the more honest choice, not the first one listed.
-    best_score = max(res["cv_macro_f1_mean"] for _, res in results)
-    tied = [(p, r) for p, r in results if r["cv_macro_f1_mean"] == best_score]
+    best_score = max(res["cv_macro_f1_mean"] for _, res in rf_results)
+    tied = [(p, r) for p, r in rf_results if r["cv_macro_f1_mean"] == best_score]
     def depth_key(pr):
         d = pr[0].get("max_depth")
         return d if d is not None else float("inf")
-    best_params, best_res = min(tied, key=depth_key)
-    print(f"\nBest config (tie-broken toward more regularization): {best_params}")
+    rf_best_params, rf_best_res = min(tied, key=depth_key)
+
+    best_lr_score = max(res["cv_macro_f1_mean"] for _, res in lr_results)
+    best_lr_params, best_lr_res = min(
+        [(p, r) for p, r in lr_results if r["cv_macro_f1_mean"] == best_lr_score],
+        key=lambda pr: pr[0]["C"],  # tie-break toward smaller C = more regularization
+    )
+
+    print(f"\n=== Model comparison (same data, same CV protocol) ===")
+    print(f"  RandomForest best: {rf_best_params} -> {rf_best_res['cv_macro_f1_mean']:.4f} +/- {rf_best_res['cv_macro_f1_std']:.4f}")
+    print(f"  LogisticRegression best: {best_lr_params} -> {best_lr_res['cv_macro_f1_mean']:.4f} +/- {best_lr_res['cv_macro_f1_std']:.4f}")
+
+    # Decision protocol: keep RandomForest as the deployed model unless
+    # Logistic Regression is CLEARLY better -- not just nominally higher.
+    # Given how small/cleanly-separable this data already is, ties are the
+    # expected outcome; report whatever actually happens.
+    clearly_better = best_lr_res["cv_macro_f1_mean"] > rf_best_res["cv_macro_f1_mean"] + rf_best_res["cv_macro_f1_std"]
+    deployed_model_family = "logistic_regression" if clearly_better else "random_forest"
+    print(f"  Deployed model: {deployed_model_family} "
+          f"({'LR clearly beat RF' if clearly_better else 'RF kept -- LR did not clearly beat it'})")
+
+    best_params, best_res = (best_lr_params, best_lr_res) if clearly_better else (rf_best_params, rf_best_res)
+    print(f"\nBest config: {best_params}")
     print(f"Headline CV macro-F1: {best_res['cv_macro_f1_mean']:.4f} +/- {best_res['cv_macro_f1_std']:.4f}")
 
+    rf_hit_ceiling = best_score >= 0.999
+    lr_hit_ceiling = best_lr_score >= 0.999
     ceiling_effect_warning = None
-    if best_res["cv_macro_f1_mean"] >= 0.999:
+    if rf_hit_ceiling or lr_hit_ceiling:
+        both = "BOTH RandomForest and Logistic Regression" if (rf_hit_ceiling and lr_hit_ceiling) else \
+               ("RandomForest" if rf_hit_ceiling else "Logistic Regression")
         ceiling_effect_warning = (
-            "CV macro-F1 hit ~1.0 across EVERY regularization setting tested, "
-            "including the fully unregularized baseline. This is a red flag, not "
-            "a win -- treated with the same suspicion this project applied to the "
-            "vision model's raw-landmark LSTM hitting 100% test accuracy (flagged "
-            "as shortcut learning, not celebrated). Direct cause, confirmed by "
-            "inspecting the feature distributions: drift_max alone separates Drag "
-            "(21.5-32.7) from every other class (max ~12.7 elsewhere) with a huge "
-            "gap, and flex_range separates Half (53-83) and Heave (101-115) from "
-            "the rest almost as cleanly -- a 2-threshold decision tree already "
-            "gets this perfectly, which is why even max_depth=2 scores 1.0. This "
-            "is a mechanical consequence of the test protocol (one person "
-            "performing deliberately extreme, distinct demonstrations of each "
-            "error type), not evidence the model has learned anything robust or "
-            "generalizable. It says nothing about performance on a different "
-            "person, a genuinely ambiguous rep, or subtler real-world form "
-            "errors -- only that it can tell these 35 staged, exaggerated "
-            "demonstrations apart from each other."
+            f"CV macro-F1 hit ~1.0 for {both} across every setting tested (RF: "
+            f"every regularization strength incl. the unregularized baseline; "
+            f"LR: every C value tested). This is a red flag, not a win -- treated "
+            f"with the same suspicion this project applied to the vision model's "
+            f"raw-landmark LSTM hitting 100% test accuracy (flagged as shortcut "
+            f"learning, not celebrated). Direct cause, confirmed by inspecting the "
+            f"feature distributions: drift_max alone separates Drag (21.5-32.7) "
+            f"from every other class (max ~12.7 elsewhere) with a huge gap, and "
+            f"flex_range separates Half (53-83) and Heave (101-115) from the rest "
+            f"almost as cleanly -- a 2-threshold decision boundary already gets "
+            f"this perfectly, whether that boundary is found by a shallow tree or "
+            f"a linear model. Both model families agreeing (if both hit the "
+            f"ceiling) is actually further evidence for this diagnosis, not "
+            f"against it: it means the classes are cleanly separable in this "
+            f"feature space by essentially any reasonable classifier, which is "
+            f"exactly what a mechanically-constructed, deliberately-exaggerated, "
+            f"single-person test protocol would produce. This is not evidence "
+            f"either model has learned anything robust or generalizable -- it "
+            f"says nothing about performance on a different person, a genuinely "
+            f"ambiguous rep, or subtler real-world form errors, only that both "
+            f"can tell these 35 staged, exaggerated demonstrations apart."
         )
         print(f"\n[WARNING] {ceiling_effect_warning}")
 
     # Refit on ALL data for the saved/deployed model.
-    final_model = RandomForestClassifier(random_state=SEED, class_weight="balanced", n_jobs=-1, **best_params)
+    make_final = make_lr if clearly_better else make_rf
+    final_model = make_final(best_params)
     final_model.fit(X, y)
 
     MODEL_DIR.mkdir(parents=True, exist_ok=True)
     import joblib
     joblib.dump(final_model, MODEL_DIR / "model.joblib")
 
-    feature_importance = dict(zip(FEATURE_NAMES, [float(v) for v in final_model.feature_importances_]))
-    feature_importance = dict(sorted(feature_importance.items(), key=lambda kv: -kv[1]))
+    if deployed_model_family == "random_forest":
+        feature_importance = dict(zip(FEATURE_NAMES, [float(v) for v in final_model.feature_importances_]))
+        feature_importance = dict(sorted(feature_importance.items(), key=lambda kv: -kv[1]))
+    else:
+        # LogisticRegression pipeline: report mean |coefficient| across the
+        # one-vs-rest class coefficients as the closest analog to RF's
+        # feature_importances_ (coefficients are on the STANDARDIZED scale,
+        # since they come from inside the fitted Pipeline's scaler step).
+        coefs = final_model.named_steps["clf"].coef_  # (n_classes, n_features)
+        mean_abs_coef = np.abs(coefs).mean(axis=0)
+        feature_importance = dict(zip(FEATURE_NAMES, [float(v) for v in mean_abs_coef]))
+        feature_importance = dict(sorted(feature_importance.items(), key=lambda kv: -kv[1]))
 
     config = {
         "classes": CLASS_NAMES,
         "feature_names": FEATURE_NAMES,
+        "deployed_model_family": deployed_model_family,
+        "model_comparison": {
+            "random_forest": {
+                "grid": [{"params": p, "cv_macro_f1_mean": r["cv_macro_f1_mean"],
+                          "cv_macro_f1_std": r["cv_macro_f1_std"], "fold_macro_f1": r["fold_macro_f1"]}
+                         for p, r in rf_results],
+                "best_params": rf_best_params,
+                "best_cv_macro_f1": best_score,
+                "hit_ceiling": rf_hit_ceiling,
+            },
+            "logistic_regression": {
+                "grid": [{"params": p, "cv_macro_f1_mean": r["cv_macro_f1_mean"],
+                          "cv_macro_f1_std": r["cv_macro_f1_std"], "fold_macro_f1": r["fold_macro_f1"]}
+                         for p, r in lr_results],
+                "best_params": best_lr_params,
+                "best_cv_macro_f1": best_lr_score,
+                "hit_ceiling": lr_hit_ceiling,
+            },
+            "decision_protocol": (
+                "Deployed model stays RandomForest unless Logistic Regression's "
+                "best CV macro-F1 clearly exceeds RandomForest's best + 1 std -- "
+                "not just a nominally higher number. "
+                + ("Logistic Regression cleared that bar." if clearly_better else
+                   "Logistic Regression did not clear that bar, so RandomForest "
+                   "was kept.")
+            ),
+        },
         "best_params": best_params,
         "headline_generalization_metric": {
             "name": f"{N_SPLITS}-fold GroupKFold macro-F1 (group=test_id, all 35 raw sessions)",

@@ -120,6 +120,23 @@ headline number over its own tiny test split, taken further: at only 35
 raw sessions (as few as 5 for Heave), carving out a held-out split would
 leave too few groups for either side to mean anything.
 
+**Logistic Regression comparison** (same labeled data, same features, same
+GroupKFold protocol, `sklearn.linear_model.LogisticRegression` inside a
+`Pipeline` with `StandardScaler` since -- unlike RandomForest -- a linear
+model is sensitive to feature scale): **also hits exactly 1.0 CV macro-F1
+across every `C` value tested (0.01, 0.1, 1.0, 10.0)**, with no leakage
+(the scaler is fit only on each fold's training split). This is not a
+contradiction of the ceiling-effect finding above -- it's further evidence
+for it. Both a shallow tree and a linear decision boundary separating this
+data perfectly means the classes are cleanly separable in this feature
+space by essentially any reasonable classifier, exactly what a
+mechanically-constructed, single-person, deliberately-exaggerated test
+protocol produces. Since Logistic Regression didn't *clearly* beat
+RandomForest (the decision protocol requires beating RF's best by more
+than 1 std, not just tying it), **RandomForest stays the deployed model**
+-- full comparison (both grids, every fold) is saved in
+`training_config.json`'s `model_comparison` block.
+
 **How to test it** -- no IMU hardware needed, exactly like the vision
 model's `ml/scripts/predict.py`:
 
