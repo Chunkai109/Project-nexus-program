@@ -117,6 +117,69 @@ function buildDefaultBicepCurlExercise(): NewExercise {
   }
 }
 
+/**
+ * Dummy protocols seeded alongside the Bicep Curl default so the Exercise
+ * Creator list (and downstream screens like Session Analytics) has more
+ * than one exercise to demo against. Angle configs use the same left/right
+ * node pairs the Angle Configuration step's Joint Picker offers for these
+ * joints (see JOINT_PRESETS in lib/joints.ts), tracking both limbs since
+ * these are bilateral, symmetric movements — unlike the single-motor Bicep
+ * Curl rig this app was originally built against.
+ */
+function buildDefaultSquatsExercise(): NewExercise {
+  return {
+    title: 'Squats',
+    muscleGroups: ['Upper Leg', 'Lower Leg'],
+    sets: 3,
+    reps: 15,
+    muscleEmgTargets: [],
+    therapistNote: 'Keep weight in the heels and knees tracking over the toes.',
+    setupInstructions: '',
+    estMinutes: 8,
+    angleConfigs: [
+      { id: crypto.randomUUID(), nodeA: 1, nodeB: 3, targetMin: 90, targetMax: 110, faultThresholdDeg: 15 },
+      { id: crypto.randomUUID(), nodeA: 2, nodeB: 4, targetMin: 90, targetMax: 110, faultThresholdDeg: 15 },
+    ],
+    assignedPatientId: null,
+  }
+}
+
+function buildDefaultPushUpExercise(): NewExercise {
+  return {
+    title: 'Push Up',
+    muscleGroups: ['Chest', 'Arm'],
+    sets: 3,
+    reps: 12,
+    muscleEmgTargets: [],
+    therapistNote: 'Keep a straight line from shoulders to ankles throughout the movement.',
+    setupInstructions: '',
+    estMinutes: 6,
+    angleConfigs: [
+      { id: crypto.randomUUID(), nodeA: 9, nodeB: 11, targetMin: 20, targetMax: 145, faultThresholdDeg: 15 },
+      { id: crypto.randomUUID(), nodeA: 10, nodeB: 12, targetMin: 20, targetMax: 145, faultThresholdDeg: 15 },
+    ],
+    assignedPatientId: null,
+  }
+}
+
+function buildDefaultShoulderPressExercise(): NewExercise {
+  return {
+    title: 'Shoulder Press',
+    muscleGroups: ['Shoulder', 'Arm'],
+    sets: 3,
+    reps: 10,
+    muscleEmgTargets: [],
+    therapistNote: 'Press straight overhead without arching the lower back.',
+    setupInstructions: '',
+    estMinutes: 7,
+    angleConfigs: [
+      { id: crypto.randomUUID(), nodeA: 7, nodeB: 9, targetMin: 30, targetMax: 150, faultThresholdDeg: 15 },
+      { id: crypto.randomUUID(), nodeA: 8, nodeB: 10, targetMin: 30, targetMax: 150, faultThresholdDeg: 15 },
+    ],
+    assignedPatientId: null,
+  }
+}
+
 export type { NewExercise, NewSessionRecord }
 
 interface AppDataValue {
@@ -261,7 +324,14 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (seededDefaultRef.current || loading || exercises.length > 0) return
     seededDefaultRef.current = true
-    addExercise(buildDefaultBicepCurlExercise())
+    for (const build of [
+      buildDefaultBicepCurlExercise,
+      buildDefaultSquatsExercise,
+      buildDefaultPushUpExercise,
+      buildDefaultShoulderPressExercise,
+    ]) {
+      addExercise(build())
+    }
   }, [loading, exercises.length, addExercise])
 
   const updateExercise = useCallback((id: string, patch: NewExercise) => {
