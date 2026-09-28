@@ -6,8 +6,8 @@ import { ExerciseOptimizationMetrics } from '@/components/dashboard/ExerciseOpti
 import { ExerciseFineTune } from '@/components/dashboard/ExerciseFineTune'
 import { TelemetrySection } from '@/components/dashboard/TelemetrySection'
 import { PatientRosterGrid } from '@/components/dashboard/PatientRosterGrid'
-import { Button } from '@/components/ui/Button'
-import { Card } from '@/components/ui/Card'
+import { Button } from '@/components/ui/shadcn/button'
+import { Card } from '@/components/ui/shadcn/card'
 import { useAppData } from '@/lib/data/AppDataContext'
 import { ArrowLeft, Pencil, Settings, Trash2 } from 'lucide-react'
 
@@ -89,7 +89,7 @@ export function TherapistDashboard() {
                   <Button variant="ghost" size="sm" onClick={() => setPendingDeleteExercise(false)}>
                     Cancel
                   </Button>
-                  <Button variant="danger" size="sm" onClick={confirmDeleteExercise}>
+                  <Button variant="destructive" size="sm" onClick={confirmDeleteExercise}>
                     <Trash2 className="h-3.5 w-3.5" />
                     Delete
                   </Button>
@@ -100,7 +100,7 @@ export function TherapistDashboard() {
                     <Pencil className="h-3.5 w-3.5" />
                     Edit Exercise
                   </Button>
-                  <Button variant="danger" size="sm" onClick={() => setPendingDeleteExercise(true)}>
+                  <Button variant="destructive" size="sm" onClick={() => setPendingDeleteExercise(true)}>
                     <Trash2 className="h-3.5 w-3.5" />
                     Delete Exercise
                   </Button>
