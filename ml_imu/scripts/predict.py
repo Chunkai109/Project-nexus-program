@@ -52,6 +52,7 @@ def main():
     print(f"Replaying {len(labels_df)} recorded rep(s) through the trained model "
           f"(NOT a held-out test -- see this script's docstring)...\n")
     correct = 0
+    rejected = 0
     for _, row in labels_df.iterrows():
         sess = sessions_df[sessions_df.test_id == row.test_id]
         sess = sess[(sess.frame_idx >= row.start_frame) & (sess.frame_idx <= row.end_frame)]
@@ -63,14 +64,22 @@ def main():
         result["true_label"] = row.label
         result["test_id"] = int(row.test_id)
         result["rep_index"] = int(row.rep_index)
-        match = result["prediction"] == row.label
-        correct += int(match)
         print(json.dumps(result, indent=2))
-        print(f"  -> {'CORRECT' if match else 'WRONG'} "
-              f"(test_id={row.test_id} rep={row.rep_index}, true label: {row.label})\n")
+        if result["prediction"] == "unrecognized_input":
+            rejected += 1
+            print(f"  -> REJECTED by novelty gate (test_id={row.test_id} rep={row.rep_index}, "
+                  f"true label was: {row.label} -- expected for the ~2% most extreme real "
+                  f"examples, see novelty_detector_config.json)\n")
+        else:
+            match = result["prediction"] == row.label
+            correct += int(match)
+            print(f"  -> {'CORRECT' if match else 'WRONG'} "
+                  f"(test_id={row.test_id} rep={row.rep_index}, true label: {row.label})\n")
 
-    print(f"{correct}/{len(labels_df)} correct on this replay "
-          f"(illustrative only -- not a held-out accuracy, see docstring above).")
+    classified = len(labels_df) - rejected
+    print(f"{correct}/{classified} correct among classified reps, {rejected} rejected by the "
+          f"novelty gate, out of {len(labels_df)} total (illustrative only -- not a held-out "
+          f"accuracy, see docstring above).")
 
 
 if __name__ == "__main__":

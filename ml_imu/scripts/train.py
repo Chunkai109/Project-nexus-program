@@ -22,7 +22,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from sklearn.ensemble import RandomForestClassifier
+from sklearn.ensemble import IsolationForest, RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import GroupKFold
 from sklearn.metrics import f1_score
@@ -94,6 +94,80 @@ def build_dataset():
         groups.append(row.test_id)
 
     return np.stack(X), np.array(y), np.array(groups), labels_df
+
+
+def build_novelty_detector(X: np.ndarray, false_reject_rate: float = 0.02):
+    """Fit an IsolationForest on all 52 labeled reps' features (any of the
+    4 known classes counts as "in-distribution" -- novelty detection is
+    about recognizing a curl at all, not judging its quality). Mirrors
+    ml/scripts/train.py's build_novelty_detector() exactly in method and
+    default false_reject_rate.
+
+    IMPORTANT DIFFERENCE FROM THE VISION MODEL: the vision model's
+    threshold was picked from a dev-pool score distribution and then
+    checked against genuinely held-out real test data (see ml/README.md's
+    empirical false-reject-rate table). This IMU classifier has no
+    held-out data at all -- every one of the 52 rows was used to fit both
+    the classifier and this detector. So while the METHOD is identical, the
+    threshold here is honestly a rougher estimate: at n=52, the 2nd
+    percentile is close to "the single most extreme point on record" and
+    cannot be validated against anything the detector hasn't already seen.
+    Treat it as a coarse floor, not a precisely-tuned boundary.
+    """
+    detector = IsolationForest(n_estimators=200, contamination="auto", random_state=SEED)
+    detector.fit(X)
+
+    scores = detector.decision_function(X)
+    threshold = float(np.percentile(scores, false_reject_rate * 100))
+
+    import joblib
+    joblib.dump(detector, MODEL_DIR / "novelty_detector.joblib")
+    config = {
+        "feature_names": FEATURE_NAMES,
+        "false_reject_rate": false_reject_rate,
+        "threshold": threshold,
+        "training_score_stats": {
+            "min": float(scores.min()), "max": float(scores.max()),
+            "mean": float(scores.mean()), "threshold_percentile": f"{false_reject_rate:.0%}",
+        },
+        "caveat": (
+            "Unlike ml/'s novelty detector, this threshold was NOT validated "
+            "against held-out data -- there is none at this data scale (only "
+            "35 raw sessions total, all used to fit both the classifier and "
+            "this detector). It is a coarse floor derived from the most "
+            "extreme examples on record, not an empirically-tuned tradeoff. "
+            "It will reliably catch inputs wildly outside anything recorded "
+            "(wrong device fit, different exercise entirely) but cannot "
+            "distinguish a genuinely different person's normal signal from "
+            "an anomaly, since the training data itself only covers one "
+            "person's narrow range."
+        ),
+        "rule": (
+            "Reject as 'unrecognized_input' if "
+            "detector.decision_function(features) < threshold. Fit on all 4 "
+            "known classes' engineered features (any of Perfect/Drag/Half/"
+            "Heave counts as in-distribution) -- this detects whether the "
+            "input resembles ANYTHING this dataset has seen at all, not "
+            "which class it belongs to."
+        ),
+    }
+    with open(MODEL_DIR / "novelty_detector_config.json", "w") as f:
+        json.dump(config, f, indent=2)
+    print(f"\nNovelty detector: threshold={threshold:.4f} "
+          f"(training scores range {scores.min():.4f} to {scores.max():.4f})")
+    return detector, config
+
+
+def build_feature_reference_stats(X: np.ndarray):
+    stats = {}
+    for i, name in enumerate(FEATURE_NAMES):
+        vals = X[:, i]
+        stats[name] = {"mean": float(vals.mean()), "std": float(vals.std()),
+                        "min": float(vals.min()), "max": float(vals.max())}
+    with open(MODEL_DIR / "feature_reference_stats.json", "w") as f:
+        json.dump(stats, f, indent=2)
+    print(f"Saved feature reference stats (all 52 labeled reps) for live diagnostics")
+    return stats
 
 
 def check_group_integrity(groups: np.ndarray, fold_assignments: np.ndarray) -> bool:
@@ -246,6 +320,9 @@ def main():
     MODEL_DIR.mkdir(parents=True, exist_ok=True)
     import joblib
     joblib.dump(final_model, MODEL_DIR / "model.joblib")
+
+    build_novelty_detector(X)
+    build_feature_reference_stats(X)
 
     if deployed_model_family == "random_forest":
         feature_importance = dict(zip(FEATURE_NAMES, [float(v) for v in final_model.feature_importances_]))

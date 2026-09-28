@@ -137,6 +137,40 @@ than 1 std, not just tying it), **RandomForest stays the deployed model**
 -- full comparison (both grids, every fold) is saved in
 `training_config.json`'s `model_comparison` block.
 
+## Novelty gate (out-of-distribution detection)
+
+Since this classifier's "knowledge" is really just one person's narrow
+sensor range (see the ceiling-effect finding above), it had no way to
+recognize input that doesn't resemble anything it was trained on -- it
+would always confidently force a guess among the 4 known classes, even for
+a different person's device fit or an unrelated signal. Fixed the same way
+`ml/`'s vision model handles this: an `IsolationForest` fit on all 52
+labeled reps' features (`src/predictor.py::ImuCurlPredictor`,
+`scripts/train.py::build_novelty_detector`), gating classification behind
+a `decision_function` threshold, plus per-feature z-score diagnostics
+(`feature_reference_stats.json`) that show exactly which signal was
+anomalous when something gets rejected.
+
+**One honest difference from the vision model's version**: `ml/`'s
+threshold was validated against genuinely held-out real test data (an
+empirical false-reject-rate table). This dataset has no held-out data at
+all -- every one of the 52 rows was used to fit both the classifier and
+this detector, so the 2%-percentile threshold is a coarser, unvalidated
+floor, not a tuned tradeoff. A direct consequence, confirmed by running it:
+**replaying all 52 real training reps rejects 2 of them** (the single most
+extreme "Perfect" and "Drag" examples) as `unrecognized_input` -- expected
+behavior given the 2% design target, not a bug, but a concrete illustration
+of how rough this floor is at this data scale. Tested against a genuinely
+synthetic out-of-distribution input (flex/drift values far outside anything
+recorded), it correctly rejected it with a large negative novelty score and
+feature z-scores in the hundreds, confirming the mechanism works for real
+anomalies, not just training-data edge cases.
+
+This doesn't fix the underlying small-single-person-dataset limitation --
+it contains the risk: instead of confidently misclassifying an
+unrecognized input as one of the 4 known classes, the classifier now says
+so explicitly.
+
 **How to test it** -- no IMU hardware needed, exactly like the vision
 model's `ml/scripts/predict.py`:
 
@@ -162,6 +196,7 @@ data/processed/imu_sessions.csv  # long-format per-frame parse of all 35 session
 data/imu_labels.csv       # test_id, rep_index, start_frame, end_frame, label, label_source, notes
 data/dataset_report.json  # class counts + the two note_on_* provenance disclosures above
 models/best_model/        # model.joblib + training_config.json (CV metric, ceiling-effect warning, feature importance)
+                          # + novelty_detector.joblib/_config.json + feature_reference_stats.json (novelty gate)
 src/parse_log.py          # raw log -> ImuSession (per-frame arrays)
 src/segment.py            # peak-detection rep segmentation (tests 31-35 only)
 src/features.py           # per-rep aggregate feature engineering
