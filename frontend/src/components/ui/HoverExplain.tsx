@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom'
 const GAP = 8
 const MARGIN = 12
 const WIDTH = 280
+const HOVER_DELAY = 3000
 
 interface Position {
   top: number
@@ -36,6 +37,7 @@ export function HoverExplain({
 }) {
   const [position, setPosition] = useState<Position | null>(null)
   const ref = useRef<HTMLDivElement>(null)
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
   function measure() {
     const rect = ref.current?.getBoundingClientRect()
@@ -45,11 +47,14 @@ export function HoverExplain({
   }
 
   function handleEnter() {
-    measure()
-    window.addEventListener('scroll', measure, true)
+    timeoutRef.current = setTimeout(() => {
+      measure()
+      window.addEventListener('scroll', measure, true)
+    }, HOVER_DELAY)
   }
 
   function handleLeave() {
+    clearTimeout(timeoutRef.current)
     setPosition(null)
     window.removeEventListener('scroll', measure, true)
   }
