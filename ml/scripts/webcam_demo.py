@@ -1,0 +1,202 @@
+#!/usr/bin/env python3
+"""Live webcam test of the bicep-curl form classifier.
+
+Setup (run on your own machine, with a webcam -- this needs a camera device
+and a display, so it cannot run inside a headless cloud session):
+
+  pip install mediapipe opencv-python joblib scikit-learn xgboost numpy pandas
+  curl -L -o pose_landmarker_lite.task \
+    https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/latest/pose_landmarker_lite.task
+
+Then, from the repo root:
+
+  python -m ml.scripts.webcam_demo --model pose_landmarker_lite.task
+
+Controls (focus the video window first):
+  s   - start a rep: begin buffering frames
+  e   - end the rep: search everything buffered since 's' for the best-
+        looking repetition-length segment and show its predicted class +
+        confidence on screen
+  q   - quit
+
+How long you take between 's' and 'e' doesn't matter -- do one or more
+curl attempts, take as long as you want, and press 'e' when done. Instead
+of scoring the whole buffered capture as a single repetition (which used to
+make total capture duration itself a dominant, misleading signal), the
+predictor searches sub-windows of the capture spanning the training data's
+own repetition-length range and reports whichever one looks most like a
+good repetition (see BicepCurlPredictor._end_session_with_window_search()).
+
+This uses MediaPipe's newer Tasks API (PoseLandmarker), verified to work
+in this project's dev environment; it reads `pose_world_landmarks` (NOT the
+default `pose_landmarks`) because that's what the training data was built
+from (see src/preprocessing/landmarks.py's module docstring) -- world
+landmarks are metric, hip-centered 3D positions.
+"""
+from __future__ import annotations
+
+import argparse
+import sys
+import time
+from pathlib import Path
+
+import cv2
+import mediapipe as mp
+from mediapipe.tasks import python as mp_python
+from mediapipe.tasks.python import vision
+
+ML_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = ML_ROOT.parent
+sys.path.insert(0, str(REPO_ROOT))
+
+from ml.src.inference.predictor import BicepCurlPredictor
+
+# MediaPipe Pose connections relevant to drawing the arm/torso skeleton
+# (avoids needing the deprecated `mp.solutions.drawing_utils`).
+SKELETON_EDGES = [
+    (11, 12), (11, 13), (13, 15), (12, 14), (14, 16),
+    (11, 23), (12, 24), (23, 24),
+]
+
+
+def draw_skeleton(frame, pose_landmarks, w, h):
+    pts = [(int(lm.x * w), int(lm.y * h)) for lm in pose_landmarks]
+    for a, b in SKELETON_EDGES:
+        cv2.line(frame, pts[a], pts[b], (0, 255, 0), 2)
+    for x, y in pts:
+        cv2.circle(frame, (x, y), 3, (0, 0, 255), -1)
+
+
+def print_diagnostics(result_dict):
+    """Prints whether this session's features actually resemble training
+    data. If confidence/good_form_score looks wrong, this is the first
+    thing to check -- and the first thing to paste back for further
+    diagnosis: a low/negative novelty_score or large |z| values here point
+    to a live-capture/training data mismatch, not a model/architecture
+    problem (see feature_reference_stats.json, built from the training
+    dev pool, and novelty_detector.joblib).
+    """
+    total_capture = result_dict.get("total_capture_seconds")
+    window_start = result_dict.get("best_window_start_seconds")
+    window_end = result_dict.get("best_window_end_seconds")
+    if total_capture is not None and window_start is not None and window_end is not None:
+        print(f"  [diagnostic] best segment: {window_start:.1f}s-{window_end:.1f}s "
+              f"of your {total_capture:.1f}s capture "
+              f"({result_dict.get('num_windows_evaluated', '?')} windows evaluated)")
+
+    novelty_score = result_dict.get("novelty_score")
+    novelty_threshold = result_dict.get("novelty_threshold")
+    if novelty_score is not None:
+        margin = novelty_score - novelty_threshold
+        flag = "" if margin > 0.03 else " <-- CLOSE TO or PAST the reject threshold"
+        print(f"  [diagnostic] novelty_score={novelty_score:.4f} "
+              f"(reject threshold={novelty_threshold:.4f}, margin={margin:.4f}){flag}")
+    diagnostics = result_dict.get("feature_diagnostics") or []
+    if diagnostics:
+        print("  [diagnostic] most unusual features vs training data (|z-score| > 2 is notable):")
+        for row in diagnostics:
+            flag = " <-- FAR from training data" if abs(row["z_score"]) > 2 else ""
+            print(f"    {row['feature']:30s} value={row['value']:.3f}  "
+                  f"training_mean={row['training_mean']:.3f}  z={row['z_score']:+.2f}{flag}")
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--model", required=True, help="path to pose_landmarker_lite.task")
+    ap.add_argument("--camera", type=int, default=0)
+    args = ap.parse_args()
+
+    base_options = mp_python.BaseOptions(model_asset_path=args.model)
+    options = vision.PoseLandmarkerOptions(
+        base_options=base_options,
+        running_mode=vision.RunningMode.VIDEO,
+        output_segmentation_masks=False,
+    )
+    landmarker = vision.PoseLandmarker.create_from_options(options)
+    predictor = BicepCurlPredictor()
+
+    cap = cv2.VideoCapture(args.camera)
+    if not cap.isOpened():
+        raise SystemExit(f"Could not open camera index {args.camera}")
+
+    recording = False
+    last_result_text = "Press 's' to start a rep"
+    start_time = time.time()
+    last_timestamp_ms = -1
+
+    print("Webcam demo running. Focus the video window: 's' start rep, 'e' end rep, 'q' quit.")
+    while True:
+        ok, frame = cap.read()
+        if not ok:
+            break
+        h, w = frame.shape[:2]
+
+        try:
+            rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
+            # detect_for_video() requires a STRICTLY increasing timestamp on
+            # every call. Wall-clock milliseconds can repeat on a fast
+            # machine/camera and MediaPipe raises on that -- guard against it
+            # rather than letting one repeated millisecond kill the whole loop
+            # (this is what silently froze the window mid-recording).
+            timestamp_ms = int((time.time() - start_time) * 1000)
+            if timestamp_ms <= last_timestamp_ms:
+                timestamp_ms = last_timestamp_ms + 1
+            last_timestamp_ms = timestamp_ms
+            result = landmarker.detect_for_video(mp_image, timestamp_ms)
+
+            if result.pose_landmarks:
+                draw_skeleton(frame, result.pose_landmarks[0], w, h)
+                if recording and result.pose_world_landmarks:
+                    predictor.add_frame_from_world_landmarks(result.pose_world_landmarks[0])
+        except Exception as exc:  # noqa: BLE001 -- keep the demo alive on any bad frame
+            print(f"[frame error, skipped] {exc}")
+
+        key = cv2.waitKey(1) & 0xFF
+        if key == ord("s") and not recording:
+            print("[s] starting rep...")
+            predictor.start_session()
+            recording = True
+            last_result_text = "Recording rep..."
+        elif key == ord("e") and recording:
+            print("[e] ending rep, evaluating...")
+            recording = False
+            try:
+                result_dict = predictor.end_session()
+            except Exception as exc:  # noqa: BLE001
+                print(f"[end_session error] {exc}")
+                last_result_text = f"error: {exc}"
+                result_dict = {}
+            if result_dict.get("good_form_score") is not None:
+                score = result_dict["good_form_score"]
+                if result_dict["prediction"] == "Perfect":
+                    last_result_text = f"{score:.0%} good form"
+                else:
+                    last_result_text = f"{score:.0%} good form (likely issue: {result_dict['prediction']})"
+                print(result_dict)
+                print_diagnostics(result_dict)
+            elif result_dict.get("prediction") == "no_exercise_detected":
+                last_result_text = "No exercise detected (not enough arm movement)"
+                print(result_dict)
+            elif result_dict.get("prediction") == "unrecognized_movement":
+                last_result_text = "Movement detected, but doesn't look like a bicep curl"
+                print(result_dict)
+                print_diagnostics(result_dict)
+            elif result_dict:
+                last_result_text = result_dict.get("error", "no prediction")
+                print(last_result_text)
+        elif key == ord("q"):
+            print("[q] quitting")
+            break
+
+        status = f"REC ({predictor.num_frames_buffered()} frames)" if recording else "idle"
+        cv2.putText(frame, f"[{status}] {last_result_text}", (10, 30),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+        cv2.imshow("bicep curl form classifier", frame)
+
+    cap.release()
+    cv2.destroyAllWindows()
+
+
+if __name__ == "__main__":
+    main()

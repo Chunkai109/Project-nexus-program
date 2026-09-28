@@ -1,0 +1,143 @@
+{
+  "num_video_ids_total": 726,
+  "num_independent_source_recordings": 49,
+  "note_on_augmentation": "Each of the 49 independent source recordings appears 11 times in the CSV (1 '_orig' + 10 pre-generated '_aug_*' copies). All splitting is done on the 49 base_ids so augmented copies of a training recording never appear in val/test.",
+  "note_on_incomplete_class": "17 of the 49 recordings (all with primary label 'Perfect') are ALSO truncated to a randomized fraction of their length (observed ~19%-83%) and relabeled 'Incomplete', as 'incomplete_vid_00NN_*' rows. These are byte-identical prefixes of the untruncated recording, not independent performances -- stratification uses each base_id's primary (non-Incomplete) label, and because splitting is by base_id, a recording's Incomplete truncations always land in the same split as the recording itself, never separated across train/val/test.",
+  "truncated_base_ids": [
+    "vid_0025",
+    "vid_0026",
+    "vid_0027",
+    "vid_0028",
+    "vid_0029",
+    "vid_0030",
+    "vid_0031",
+    "vid_0032",
+    "vid_0033",
+    "vid_0034",
+    "vid_0035",
+    "vid_0036",
+    "vid_0037",
+    "vid_0038",
+    "vid_0039",
+    "vid_0040",
+    "vid_0041"
+  ],
+  "num_total_frames": 43674,
+  "sequence_length_frames": {
+    "min": 11,
+    "max": 86,
+    "mean": 60.15702479338843
+  },
+  "num_classes": 6,
+  "class_names": [
+    "Perfect",
+    "Drag",
+    "Swing",
+    "Half",
+    "Heave",
+    "Incomplete"
+  ],
+  "class_counts_source_recordings_by_primary_label": {
+    "Perfect": 17,
+    "Drag": 8,
+    "Half": 8,
+    "Heave": 8,
+    "Swing": 8
+  },
+  "class_counts_all_video_ids_incl_augmented": {
+    "Incomplete": 187,
+    "Perfect": 187,
+    "Drag": 88,
+    "Half": 88,
+    "Heave": 88,
+    "Swing": 88
+  },
+  "class_counts_orig_only": {
+    "Incomplete": 17,
+    "Perfect": 17,
+    "Drag": 8,
+    "Half": 8,
+    "Heave": 8,
+    "Swing": 8
+  },
+  "landmarks_used_engineered": [
+    "elbow_angle_active",
+    "elbow_angle_other",
+    "wrist_height_active",
+    "torso_lean_angle",
+    "elbow_forward_drift_active",
+    "elbow_angle_active_vel",
+    "wrist_height_active_vel",
+    "torso_lean_vel"
+  ],
+  "landmarks_used_raw_channel": [
+    "nose",
+    "left_shoulder",
+    "right_shoulder",
+    "left_elbow",
+    "right_elbow",
+    "left_wrist",
+    "right_wrist",
+    "left_hip",
+    "right_hip"
+  ],
+  "data_format": "CSV: video_id, class_label, frame_number, x0..x32/y0..y32/z0..z32 (MediaPipe Pose world landmarks, hip-centered, metric)",
+  "missing_values": 0,
+  "subject_identifiers": "Not provided. No person/subject id exists in this dataset -- video_id / base_id identifies a *recording*, not a verified unique human subject. Splitting by base_id prevents augmentation-copy leakage (the only leakage we can concretely detect and prevent from the data given), but cannot guarantee two different base_ids never show the same physical person. This is disclosed as a limitation, not claimed as true subject-independence.",
+  "split": {
+    "train": {
+      "num_source_recordings": 34,
+      "primary_label_counts": {
+        "Perfect": 12,
+        "Half": 6,
+        "Swing": 6,
+        "Drag": 5,
+        "Heave": 5
+      },
+      "all_sequence_class_counts": {
+        "Incomplete": 132,
+        "Perfect": 132,
+        "Half": 66,
+        "Swing": 66,
+        "Drag": 55,
+        "Heave": 55
+      }
+    },
+    "val": {
+      "num_source_recordings": 7,
+      "primary_label_counts": {
+        "Drag": 2,
+        "Perfect": 2,
+        "Half": 1,
+        "Heave": 1,
+        "Swing": 1
+      },
+      "all_sequence_class_counts": {
+        "Incomplete": 22,
+        "Drag": 22,
+        "Perfect": 22,
+        "Half": 11,
+        "Heave": 11,
+        "Swing": 11
+      }
+    },
+    "test": {
+      "num_source_recordings": 8,
+      "primary_label_counts": {
+        "Perfect": 3,
+        "Heave": 2,
+        "Drag": 1,
+        "Half": 1,
+        "Swing": 1
+      },
+      "all_sequence_class_counts": {
+        "Incomplete": 33,
+        "Perfect": 33,
+        "Heave": 22,
+        "Drag": 11,
+        "Half": 11,
+        "Swing": 11
+      }
+    }
+  }
+}

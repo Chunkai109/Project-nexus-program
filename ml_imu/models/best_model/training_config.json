@@ -1,0 +1,245 @@
+{
+  "classes": [
+    "Perfect",
+    "Drag",
+    "Half",
+    "Heave"
+  ],
+  "feature_names": [
+    "flex_mean",
+    "flex_std",
+    "flex_min",
+    "flex_max",
+    "flex_range",
+    "drift_mean",
+    "drift_std",
+    "drift_min",
+    "drift_max",
+    "drift_range",
+    "emg_mean",
+    "emg_std",
+    "emg_max",
+    "vib_on_frac",
+    "flex_vel_mean",
+    "flex_vel_std",
+    "drift_vel_mean",
+    "drift_vel_std",
+    "num_frames"
+  ],
+  "deployed_model_family": "random_forest",
+  "model_comparison": {
+    "random_forest": {
+      "grid": [
+        {
+          "params": {
+            "n_estimators": 300,
+            "max_depth": null,
+            "min_samples_leaf": 1
+          },
+          "cv_macro_f1_mean": 1.0,
+          "cv_macro_f1_std": 0.0,
+          "fold_macro_f1": [
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        {
+          "params": {
+            "n_estimators": 100,
+            "max_depth": 2,
+            "min_samples_leaf": 2
+          },
+          "cv_macro_f1_mean": 1.0,
+          "cv_macro_f1_std": 0.0,
+          "fold_macro_f1": [
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        {
+          "params": {
+            "n_estimators": 200,
+            "max_depth": 3,
+            "min_samples_leaf": 2
+          },
+          "cv_macro_f1_mean": 1.0,
+          "cv_macro_f1_std": 0.0,
+          "fold_macro_f1": [
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        {
+          "params": {
+            "n_estimators": 200,
+            "max_depth": 3,
+            "min_samples_leaf": 3,
+            "max_features": "sqrt"
+          },
+          "cv_macro_f1_mean": 1.0,
+          "cv_macro_f1_std": 0.0,
+          "fold_macro_f1": [
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        {
+          "params": {
+            "n_estimators": 300,
+            "max_depth": 4,
+            "min_samples_leaf": 2
+          },
+          "cv_macro_f1_mean": 1.0,
+          "cv_macro_f1_std": 0.0,
+          "fold_macro_f1": [
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ]
+        }
+      ],
+      "best_params": {
+        "n_estimators": 100,
+        "max_depth": 2,
+        "min_samples_leaf": 2
+      },
+      "best_cv_macro_f1": 1.0,
+      "hit_ceiling": true
+    },
+    "logistic_regression": {
+      "grid": [
+        {
+          "params": {
+            "C": 0.01
+          },
+          "cv_macro_f1_mean": 1.0,
+          "cv_macro_f1_std": 0.0,
+          "fold_macro_f1": [
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        {
+          "params": {
+            "C": 0.1
+          },
+          "cv_macro_f1_mean": 1.0,
+          "cv_macro_f1_std": 0.0,
+          "fold_macro_f1": [
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        {
+          "params": {
+            "C": 1.0
+          },
+          "cv_macro_f1_mean": 1.0,
+          "cv_macro_f1_std": 0.0,
+          "fold_macro_f1": [
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        {
+          "params": {
+            "C": 10.0
+          },
+          "cv_macro_f1_mean": 1.0,
+          "cv_macro_f1_std": 0.0,
+          "fold_macro_f1": [
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ]
+        }
+      ],
+      "best_params": {
+        "C": 0.01
+      },
+      "best_cv_macro_f1": 1.0,
+      "hit_ceiling": true
+    },
+    "decision_protocol": "Deployed model stays RandomForest unless Logistic Regression's best CV macro-F1 clearly exceeds RandomForest's best + 1 std -- not just a nominally higher number. Logistic Regression did not clear that bar, so RandomForest was kept."
+  },
+  "best_params": {
+    "n_estimators": 100,
+    "max_depth": 2,
+    "min_samples_leaf": 2
+  },
+  "headline_generalization_metric": {
+    "name": "5-fold GroupKFold macro-F1 (group=test_id, all 35 raw sessions)",
+    "value": 1.0,
+    "std": 0.0,
+    "fold_macro_f1": [
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ],
+    "note": "Report THIS number, not any single-split test accuracy, as this model's expected performance. No held-out test set is used at all for this classifier -- with only 35 raw sessions and as few as 5 groups for the rarest class (Heave), carving out a separate held-out split the way ml/'s vision model does would leave too few groups for either the CV estimate or the held-out set to mean anything. This CV number itself should also be read with real caution given how few groups back up each class."
+  },
+  "class_dropout_notes": [],
+  "ceiling_effect_warning": "CV macro-F1 hit ~1.0 for BOTH RandomForest and Logistic Regression across every setting tested (RF: every regularization strength incl. the unregularized baseline; LR: every C value tested). This is a red flag, not a win -- treated with the same suspicion this project applied to the vision model's raw-landmark LSTM hitting 100% test accuracy (flagged as shortcut learning, not celebrated). Direct cause, confirmed by inspecting the feature distributions: drift_max alone separates Drag (21.5-32.7) from every other class (max ~12.7 elsewhere) with a huge gap, and flex_range separates Half (53-83) and Heave (101-115) from the rest almost as cleanly -- a 2-threshold decision boundary already gets this perfectly, whether that boundary is found by a shallow tree or a linear model. Both model families agreeing (if both hit the ceiling) is actually further evidence for this diagnosis, not against it: it means the classes are cleanly separable in this feature space by essentially any reasonable classifier, which is exactly what a mechanically-constructed, deliberately-exaggerated, single-person test protocol would produce. This is not evidence either model has learned anything robust or generalizable -- it says nothing about performance on a different person, a genuinely ambiguous rep, or subtler real-world form errors, only that both can tell these 35 staged, exaggerated demonstrations apart.",
+  "class_counts": {
+    "Perfect": 15,
+    "Drag": 7,
+    "Half": 25,
+    "Heave": 5
+  },
+  "groups_per_class": {
+    "Perfect": 15,
+    "Drag": 7,
+    "Half": 13,
+    "Heave": 5
+  },
+  "feature_importance": {
+    "flex_range": 0.12748206452338207,
+    "drift_range": 0.11140404981296755,
+    "flex_std": 0.1104607611294383,
+    "drift_vel_std": 0.1098348164665306,
+    "drift_std": 0.0999064680583889,
+    "drift_mean": 0.07805299509449667,
+    "drift_max": 0.07751512227630254,
+    "flex_vel_std": 0.05890337445982361,
+    "flex_min": 0.05068432616971807,
+    "flex_max": 0.04898162033972448,
+    "num_frames": 0.048975562479829114,
+    "flex_mean": 0.044025677400491514,
+    "vib_on_frac": 0.0242026268175922,
+    "flex_vel_mean": 0.007848318755380609,
+    "drift_vel_mean": 0.0010096939967297366,
+    "emg_std": 0.0007125222192040737,
+    "drift_min": 0.0,
+    "emg_mean": 0.0,
+    "emg_max": 0.0
+  },
+  "no_lstm_comparison_note": "No LSTM was trained or compared for this dataset. ml/'s vision model already established, with 34 training recordings, that a raw-landmark LSTM shows shortcut-learning symptoms and loses to RandomForest on engineered features. This dataset has fewer independent groups (35 total, several classes with only 5-8 groups), so training an LSTM here would be an even more foregone conclusion than it already was for the vision model -- skipped explicitly, not silently.",
+  "seed": 42
+}

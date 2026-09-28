@@ -1,0 +1,309 @@
+{
+  "overall_winner": "classical",
+  "lstm_variants": {
+    "raw": {
+      "best_val_f1": 0.9145027380321498,
+      "best_epoch": 19
+    },
+    "engineered": {
+      "best_val_f1": 0.26419459877197693,
+      "best_epoch": 5
+    },
+    "combo": {
+      "best_val_f1": 0.30750083154755087,
+      "best_epoch": 7
+    }
+  },
+  "raw_lstm_excluded_from_selection": true,
+  "raw_lstm_exclusion_reason": "The 'raw' landmark-channel LSTM reached the highest validation (and, per _diagnose_candidates.py, test) macro-F1, but a purely static, non-temporal feature (mean-pooled raw landmark position over the whole clip) already reaches ~0.82 GroupKFold CV macro-F1 on its own, and its test accuracy exceeded its train accuracy -- the opposite of normal generalization. This points to the model picking up recording/session-level pose or setup artifacts rather than genuine curl-quality signal, which the project explicitly requires the model not to rely on. Excluded from final selection on that basis; kept and reported for transparency.",
+  "best_lstm_mode": "combo",
+  "classical_candidates": [
+    {
+      "model_type": "random_forest",
+      "params": {
+        "n_estimators": 200,
+        "max_depth": 4,
+        "min_samples_leaf": 2
+      },
+      "feature_set": "reduced",
+      "cv_macro_f1_mean": 0.8849984884685108,
+      "cv_macro_f1_std": 0.04868702875804919
+    },
+    {
+      "model_type": "random_forest",
+      "params": {
+        "n_estimators": 300,
+        "max_depth": 6,
+        "min_samples_leaf": 1
+      },
+      "feature_set": "reduced",
+      "cv_macro_f1_mean": 0.8839549030311055,
+      "cv_macro_f1_std": 0.04468347234364828
+    },
+    {
+      "model_type": "random_forest",
+      "params": {
+        "n_estimators": 300,
+        "max_depth": 4,
+        "min_samples_leaf": 4,
+        "max_features": "log2"
+      },
+      "feature_set": "reduced",
+      "cv_macro_f1_mean": 0.8693748967668871,
+      "cv_macro_f1_std": 0.06005225918925183
+    },
+    {
+      "model_type": "random_forest",
+      "params": {
+        "n_estimators": 300,
+        "max_depth": 6,
+        "min_samples_leaf": 1
+      },
+      "feature_set": "full",
+      "cv_macro_f1_mean": 0.866059664456101,
+      "cv_macro_f1_std": 0.049882534231522314
+    },
+    {
+      "model_type": "random_forest",
+      "params": {
+        "n_estimators": 400,
+        "max_depth": 3,
+        "min_samples_leaf": 3,
+        "max_features": "sqrt"
+      },
+      "feature_set": "reduced",
+      "cv_macro_f1_mean": 0.8640553830580224,
+      "cv_macro_f1_std": 0.0626322350951874
+    },
+    {
+      "model_type": "random_forest",
+      "params": {
+        "n_estimators": 300,
+        "max_depth": 3,
+        "min_samples_leaf": 5,
+        "max_features": "sqrt"
+      },
+      "feature_set": "reduced",
+      "cv_macro_f1_mean": 0.8605093993212936,
+      "cv_macro_f1_std": 0.06810493413583706
+    },
+    {
+      "model_type": "random_forest",
+      "params": {
+        "n_estimators": 200,
+        "max_depth": 4,
+        "min_samples_leaf": 2
+      },
+      "feature_set": "full",
+      "cv_macro_f1_mean": 0.8552618535873989,
+      "cv_macro_f1_std": 0.06613790692545762
+    },
+    {
+      "model_type": "random_forest",
+      "params": {
+        "n_estimators": 300,
+        "max_depth": 4,
+        "min_samples_leaf": 4,
+        "max_features": "log2"
+      },
+      "feature_set": "full",
+      "cv_macro_f1_mean": 0.8484261763567865,
+      "cv_macro_f1_std": 0.05842115488738098
+    },
+    {
+      "model_type": "random_forest",
+      "params": {
+        "n_estimators": 400,
+        "max_depth": 3,
+        "min_samples_leaf": 3,
+        "max_features": "sqrt"
+      },
+      "feature_set": "full",
+      "cv_macro_f1_mean": 0.8384644911579275,
+      "cv_macro_f1_std": 0.08060087730307584
+    },
+    {
+      "model_type": "random_forest",
+      "params": {
+        "n_estimators": 300,
+        "max_depth": 3,
+        "min_samples_leaf": 5,
+        "max_features": "sqrt"
+      },
+      "feature_set": "full",
+      "cv_macro_f1_mean": 0.8261831906569169,
+      "cv_macro_f1_std": 0.09908794827467468
+    },
+    {
+      "model_type": "random_forest",
+      "params": {
+        "n_estimators": 200,
+        "max_depth": 2,
+        "min_samples_leaf": 4
+      },
+      "feature_set": "reduced",
+      "cv_macro_f1_mean": 0.793521280222345,
+      "cv_macro_f1_std": 0.06270619395100166
+    },
+    {
+      "model_type": "xgboost",
+      "params": {
+        "n_estimators": 250,
+        "max_depth": 4,
+        "learning_rate": 0.05,
+        "reg_lambda": 3.0
+      },
+      "feature_set": "full",
+      "cv_macro_f1_mean": 0.7797829551759925,
+      "cv_macro_f1_std": 0.09034549420314107
+    },
+    {
+      "model_type": "xgboost",
+      "params": {
+        "n_estimators": 150,
+        "max_depth": 2,
+        "learning_rate": 0.05,
+        "reg_lambda": 5.0
+      },
+      "feature_set": "reduced",
+      "cv_macro_f1_mean": 0.7792600286792437,
+      "cv_macro_f1_std": 0.09885808754737803
+    },
+    {
+      "model_type": "xgboost",
+      "params": {
+        "n_estimators": 250,
+        "max_depth": 4,
+        "learning_rate": 0.05,
+        "reg_lambda": 3.0
+      },
+      "feature_set": "reduced",
+      "cv_macro_f1_mean": 0.7790923846421045,
+      "cv_macro_f1_std": 0.08956846384680948
+    },
+    {
+      "model_type": "xgboost",
+      "params": {
+        "n_estimators": 100,
+        "max_depth": 2,
+        "learning_rate": 0.05,
+        "reg_lambda": 8.0
+      },
+      "feature_set": "reduced",
+      "cv_macro_f1_mean": 0.7783571292299227,
+      "cv_macro_f1_std": 0.10205129177980465
+    },
+    {
+      "model_type": "xgboost",
+      "params": {
+        "n_estimators": 150,
+        "max_depth": 3,
+        "learning_rate": 0.1,
+        "reg_lambda": 2.0
+      },
+      "feature_set": "reduced",
+      "cv_macro_f1_mean": 0.7776361172269701,
+      "cv_macro_f1_std": 0.08701378935977605
+    },
+    {
+      "model_type": "xgboost",
+      "params": {
+        "n_estimators": 100,
+        "max_depth": 2,
+        "learning_rate": 0.05,
+        "reg_lambda": 8.0
+      },
+      "feature_set": "full",
+      "cv_macro_f1_mean": 0.7760099915542972,
+      "cv_macro_f1_std": 0.10783747361282663
+    },
+    {
+      "model_type": "xgboost",
+      "params": {
+        "n_estimators": 150,
+        "max_depth": 3,
+        "learning_rate": 0.1,
+        "reg_lambda": 2.0
+      },
+      "feature_set": "full",
+      "cv_macro_f1_mean": 0.7736591381888456,
+      "cv_macro_f1_std": 0.08615807744375209
+    },
+    {
+      "model_type": "xgboost",
+      "params": {
+        "n_estimators": 150,
+        "max_depth": 2,
+        "learning_rate": 0.05,
+        "reg_lambda": 5.0
+      },
+      "feature_set": "full",
+      "cv_macro_f1_mean": 0.7617405605252342,
+      "cv_macro_f1_std": 0.11657630436972509
+    },
+    {
+      "model_type": "random_forest",
+      "params": {
+        "n_estimators": 200,
+        "max_depth": 2,
+        "min_samples_leaf": 4
+      },
+      "feature_set": "full",
+      "cv_macro_f1_mean": 0.7573200209916664,
+      "cv_macro_f1_std": 0.0864359615468456
+    }
+  ],
+  "regularization_search_note": "Re-run after diagnosis found train macro-F1 (0.995) sitting ~0.145 above the original setting's 5-fold GroupKFold CV macro-F1 (0.851) -- evidence of mild overfitting on only 34 independent training recordings. This search tried more conservative RF/XGB hyperparameters (shallower trees, larger leaf minimums, feature subsampling) AND a reduced feature set (top 20 of 41 by dev-pool importance) against the original grid, all under the same GroupKFold protocol. Whichever setting actually won on CV is recorded below -- this was a real search, not a foregone conclusion.",
+  "best_classical_type": "random_forest",
+  "best_classical_params": {
+    "n_estimators": 200,
+    "max_depth": 4,
+    "min_samples_leaf": 2
+  },
+  "best_classical_feature_set": "reduced",
+  "best_classical_cv_macro_f1": 0.8849984884685108,
+  "best_classical_cv_macro_f1_std": 0.04868702875804919,
+  "original_setting_cv_macro_f1_for_comparison": 0.8552618535873989,
+  "classical_literal_train_macro_f1": 0.9860018196938957,
+  "classical_literal_train_accuracy": 0.9822134387351779,
+  "classical_literal_val_macro_f1": 0.9688190664687447,
+  "classical_literal_val_accuracy": 0.9696969696969697,
+  "classical_train_vs_cv_gap": 0.10100333122538485,
+  "selected_features": [
+    "sequence_length",
+    "wrist_height_active_max",
+    "elbow_forward_drift_active_std",
+    "elbow_forward_drift_active_mean",
+    "wrist_height_active_range",
+    "elbow_angle_other_min",
+    "wrist_height_active_mean",
+    "elbow_forward_drift_active_range",
+    "elbow_angle_active_min",
+    "torso_lean_angle_std",
+    "elbow_forward_drift_active_min",
+    "elbow_angle_other_range",
+    "elbow_angle_active_mean",
+    "elbow_angle_other_std",
+    "wrist_height_active_vel_std",
+    "elbow_angle_other_mean",
+    "elbow_angle_active_vel_std",
+    "wrist_height_active_vel_range",
+    "wrist_height_active_vel_mean",
+    "torso_lean_angle_mean"
+  ],
+  "headline_generalization_metric": {
+    "name": "5-fold GroupKFold CV macro-F1 (dev pool, 34 recordings)",
+    "value": 0.8849984884685108,
+    "std": 0.04868702875804919,
+    "note": "Report THIS number, not the held-out test accuracy, as the model's expected real-world performance. The test split is only 8 independent recordings, so a single point estimate there (even 100%) is not a reliable indicator on its own -- see ml/results/classification_report/test_*classification_report.json for the test numbers with that caveat attached."
+  },
+  "classes": [
+    "Perfect",
+    "Drag",
+    "Swing",
+    "Half",
+    "Heave",
+    "Incomplete"
+  ],
+  "seed": 42
+}

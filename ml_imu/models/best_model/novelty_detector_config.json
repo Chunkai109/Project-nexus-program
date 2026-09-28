@@ -1,0 +1,33 @@
+{
+  "feature_names": [
+    "flex_mean",
+    "flex_std",
+    "flex_min",
+    "flex_max",
+    "flex_range",
+    "drift_mean",
+    "drift_std",
+    "drift_min",
+    "drift_max",
+    "drift_range",
+    "emg_mean",
+    "emg_std",
+    "emg_max",
+    "vib_on_frac",
+    "flex_vel_mean",
+    "flex_vel_std",
+    "drift_vel_mean",
+    "drift_vel_std",
+    "num_frames"
+  ],
+  "false_reject_rate": 0.02,
+  "threshold": -0.061298141753628445,
+  "training_score_stats": {
+    "min": -0.09784430907932751,
+    "max": 0.08584918016970222,
+    "mean": 0.025816761282874915,
+    "threshold_percentile": "2%"
+  },
+  "caveat": "Unlike ml/'s novelty detector, this threshold was NOT validated against held-out data -- there is none at this data scale (only 35 raw sessions total, all used to fit both the classifier and this detector). It is a coarse floor derived from the most extreme examples on record, not an empirically-tuned tradeoff. It will reliably catch inputs wildly outside anything recorded (wrong device fit, different exercise entirely) but cannot distinguish a genuinely different person's normal signal from an anomaly, since the training data itself only covers one person's narrow range.",
+  "rule": "Reject as 'unrecognized_input' if detector.decision_function(features) < threshold. Fit on all 4 known classes' engineered features (any of Perfect/Drag/Half/Heave counts as in-distribution) -- this detects whether the input resembles ANYTHING this dataset has seen at all, not which class it belongs to."
+}

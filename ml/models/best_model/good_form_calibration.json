@@ -1,0 +1,4 @@
+{
+  "anchor_p_perfect": 0.6143503244752173,
+  "rule": "displayed_good_form_score = min(1.0, raw_p_perfect / anchor_p_perfect). anchor_p_perfect is the highest P(Perfect) ever produced for a genuinely 'Perfect'-labeled dev-pool example -- i.e. the best real rep on record reads as ~100%, not ~61%. Monotonic rescale for display only; does not change which class is predicted or any evaluation metric."
+}

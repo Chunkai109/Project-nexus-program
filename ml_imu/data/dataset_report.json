@@ -1,0 +1,18 @@
+{
+  "num_raw_sessions": 35,
+  "num_labeled_rows": 52,
+  "class_counts_by_source": {
+    "manual_full_session": {
+      "Perfect": 10,
+      "Half": 8,
+      "Drag": 7,
+      "Heave": 5
+    },
+    "peak_detection_segmented": {
+      "Half": 17,
+      "Perfect": 5
+    }
+  },
+  "note_on_label_provenance": "Labels for tests 1-30 come from the user's own session notes (independent ground truth describing what was actually performed in each test), not from thresholds on the sensor data itself. The per-group sensor-pattern stats (flex_range, drift range, reached_top) printed by this script and stored in imu_labels.csv are a corroborating consistency check on those independently-provided labels, not their source -- this avoids the circular labeling problem (defining a label from a threshold on the same feature a classifier would later be trained on).",
+  "note_on_segmented_sessions": "Tests 31-35 ('multiple reps without fully putting hands down') have no single whole-file label: the device's own State field transitions DOWN->CURLING->TOP only once per file then stays TOP for the rest of the session while Flex keeps fluctuating, so it cannot locate individual rep boundaries and its Reps counter stays at 0 throughout. Segmented instead via prominence-thresholded peak detection on the raw Flex curve (scipy.signal.find_peaks, prominence=20.0, distance=40) -- NOT naive velocity zero-crossing, which produced noisy spurious crossings during static/settling periods. Within each file, rep_index 0 is labeled 'Perfect' and every later rep 'Half': rep 0 starts from the device's true calibrated hanging-down baseline (before any curling happened) and its flex_range is always ~122-128 across all 5 files, matching the full-ROM Perfect/Heave/Drag groups, while every later rep's flex_range is always ~64-83, matching the Half group's 53-72 -- a clean, non-overlapping split confirmed empirically (not assumed) before this rule was applied. Later reps start from the prior rep's un-reset position -- the compromised ROM the session notes describe. label_source='peak_detection_segmented' marks these rows so they stay distinguishable from directly-recorded single-rep sessions."
+}

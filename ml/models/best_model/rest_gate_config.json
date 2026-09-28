@@ -1,0 +1,16 @@
+{
+  "gate_features": [
+    "elbow_angle_active_range",
+    "wrist_height_active_range"
+  ],
+  "safety_factor": 0.5,
+  "observed_minimums_across_all_49_recordings": {
+    "elbow_angle_active_range": 33.72922111881303,
+    "wrist_height_active_range": 0.2654448894122553
+  },
+  "rejection_thresholds": {
+    "elbow_angle_active_range": 16.864610559406515,
+    "wrist_height_active_range": 0.13272244470612765
+  },
+  "rule": "Reject the session as 'no_exercise_detected' (skip the classifier entirely) if EVERY gate feature's observed value is below its threshold. Using AND across multiple independent motion signals means a session is only rejected when there is really no sign of curling motion in any of them -- the moment any one signal shows real movement, the classifier runs as normal. Thresholds are set at 50% of the weakest real repetition ever recorded in the dataset, so genuine (even very poor-form) reps are not falsely rejected."
+}
