@@ -30,10 +30,10 @@ label it yourself afterward based on what you actually did, the same
 discipline already used for ml_imu/'s 35-session dataset) and you're
 directly building the validation set this project has been missing.
 
-The IMU device's exact WebSocket message format wasn't confirmed when this
-was written -- ensemble/src/imu_live_client.py tries JSON first, then the
-same plain-text log format the offline Test N.txt files use, and prints
-the raw message if neither matches (see its module docstring). Watch the
+The IMU device sends JSON over the WebSocket (confirmed) --
+ensemble/src/imu_live_client.py tries that first, with the same
+plain-text log format the offline Test N.txt files use as a fallback, and
+prints the raw message if neither matches (see its module docstring). Watch the
 console on first connect for a "[imu_live_client] Detected message
 format: ..." line to confirm which one is actually in use.
 """

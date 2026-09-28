@@ -86,6 +86,78 @@ python -m ensemble.scripts.verify_live_client_parsing                     # IMU 
    unrelated real-world events -- and proves only that the code runs
    cleanly against real outputs, not that the fused answer means anything.
 
+## Web API (`ensemble/api/`)
+
+A small FastAPI service exposing the fusion model to a web frontend as
+**one prediction endpoint** -- by design, the caller never sees "vision's
+answer" and "IMU's answer" as two separate things to reconcile. The
+individual per-model results are still computed internally (the fusion
+function needs them) and are only included in the response, under a
+`"details"` key, if you explicitly ask for them (`?debug=true`) -- never
+as the primary response shape.
+
+```bash
+pip install -r ensemble/api/requirements.txt
+uvicorn ensemble.api.server:app --reload --port 8000
+```
+
+`POST /predict`:
+
+```json
+{
+  "vision": {
+    "frames": [[[x, y, z], ... 33 landmarks ...], ... T frames ...],
+    "duration_seconds": 3.2
+  },
+  "imu": {
+    "flex": [2.7, 2.7, ...],
+    "drift": [-1.6, -1.7, ...],
+    "emg": [1967, 2469, ...],
+    "vib_on": [false, false, ...]
+  }
+}
+```
+
+- `vision.frames`: the MediaPipe Pose world landmarks the browser already
+  extracts (`usePoseLandmarker.ts` in `frontend/`), buffered for one rep.
+- `vision.duration_seconds`: the browser's own measured elapsed time
+  between starting and stopping the recording -- **not** derived from the
+  frame count. This matters: the vision model searches sub-windows of the
+  capture for the best-looking rep (see `ml/README.md`'s "Duration-
+  independent live inference" section), and that search needs to know the
+  real recording duration. Measuring it server-side instead (e.g. from
+  when the request arrived) would be wrong -- it would reflect network
+  timing, not how long the rep actually took. Passing the browser's own
+  measurement through to
+  `BicepCurlPredictor.end_session(duration_seconds_override=...)` (added
+  specifically for this) keeps that calculation correct.
+- `imu.*`: the same 4 arrays the IMU device streams over its WiFi
+  WebSocket (JSON, confirmed) -- `flex`/`drift`/`emg`/`vib_on`, one value
+  per sample, all the same length.
+
+Response (default): the single fused result --
+`prediction`/`confidence`/`good_form_score`/`class_probabilities`/
+`source`/`message` -- exactly the shape `fuse_predictions()` already
+returns, minus the raw `vision_result`/`imu_result`. Add `?debug=true` to
+get those back too, under `"details"`, for inspecting *why* the fused
+answer came out the way it did without changing what a normal frontend
+request receives.
+
+Malformed input (wrong landmark shape, too few frames, empty or
+mismatched-length IMU arrays) gets a `400` with a specific message
+instead of a stack trace -- verified in
+`ensemble/scripts/verify_api.py`, which also confirms the response never
+leaks `vision_result`/`imu_result` unless `debug=true` was requested.
+
+```bash
+python -m ensemble.scripts.verify_api                                     # validation checks only
+python -m ensemble.scripts.verify_api --csv /path/to/bicep_with_incomplete.csv  # + a real end-to-end request
+```
+
+**Same accuracy caveat as everywhere else in this document applies to
+every response this API returns** -- wrapping the model in an API makes
+it easier to call, not more validated.
+
 ## Live demo + how to actually collect that synchronized data
 
 `ensemble/scripts/live_ensemble_demo.py` runs the vision model, the IMU

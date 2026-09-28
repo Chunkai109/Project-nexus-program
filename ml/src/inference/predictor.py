@@ -251,7 +251,7 @@ class BicepCurlPredictor:
     def num_frames_buffered(self) -> int:
         return len(self._per_frame_features)
 
-    def end_session(self) -> dict:
+    def end_session(self, duration_seconds_override: float | None = None) -> dict:
         """Finish the buffered repetition and return the prediction.
 
         Live sessions (use_wallclock_duration=True, the default) search for
@@ -261,6 +261,16 @@ class BicepCurlPredictor:
         the result. Recorded-sequence replay (use_wallclock_duration=False,
         e.g. scripts/predict.py) keeps the original single-shot behavior,
         classifying the whole (already-correct-length) sequence as one unit.
+
+        `duration_seconds_override`: use this exact duration instead of
+        measuring time.time() - session_start_time. For a client (e.g. a
+        browser) that buffers frames itself and reports the whole rep to a
+        server in one request well after it was recorded -- an ensemble
+        API server, say -- measuring wall-clock time *at the server* would
+        capture how long the network request took, not how long the rep
+        actually took. Passing the client's own measured duration here
+        keeps the window search correct in that situation. Has no effect
+        when use_wallclock_duration=False.
         """
         if not self._active:
             raise RuntimeError("call start_session() before end_session()")
@@ -279,7 +289,8 @@ class BicepCurlPredictor:
 
         duration_seconds = None
         if self._use_wallclock_duration and self._session_start_time is not None:
-            duration_seconds = time.time() - self._session_start_time
+            duration_seconds = (duration_seconds_override if duration_seconds_override is not None
+                                 else time.time() - self._session_start_time)
 
         if self._use_wallclock_duration and duration_seconds:
             return self._end_session_with_window_search(feature_matrix, n_frames, duration_seconds)

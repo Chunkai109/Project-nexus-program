@@ -103,6 +103,31 @@ def fuse_predictions(vision_result: dict, imu_result: dict,
             "imu_result": imu_result,
         }
 
+    # Neither model produced a real classification (e.g. too few frames/
+    # samples buffered -- BicepCurlPredictor.end_session() and
+    # ImuCurlPredictor.predict_from_arrays() both signal this by leaving
+    # "prediction" as None / absent, not via one of the named gate
+    # rejections above). Without this check, the "fuse" branch below would
+    # KeyError on an empty class_probabilities dict instead of degrading
+    # gracefully -- a real risk once this function is called from
+    # untrusted/malformed input (e.g. an API request), not just from the
+    # two predictors' own well-formed output.
+    if not vision_result.get("class_probabilities") or not imu_result.get("class_probabilities"):
+        return {
+            "exercise": "bicep_curl",
+            "prediction": None,
+            "confidence": None,
+            "source": "insufficient_data",
+            "message": (
+                "At least one model did not produce a real classification "
+                "(too few frames/samples buffered, or an internal error) -- "
+                "see vision_result/imu_result for details. No fused "
+                "prediction was made."
+            ),
+            "vision_result": vision_result,
+            "imu_result": imu_result,
+        }
+
     vision_proba = vision_result.get("class_probabilities", {})
     vision_top_class = max(vision_proba, key=vision_proba.get) if vision_proba else None
 

@@ -103,7 +103,7 @@ same *spirit* as this project's fusion logic, just currently comparing a
 real camera angle against fake wearable data, with simple hand-written
 thresholds instead of trained classifiers.
 
-### Recommended integration architecture
+### Integration architecture -- the backend now exists (`ensemble/api/`)
 
 **Keep pose extraction client-side (it already works); do the
 classification server-side (don't reimplement it in JavaScript).**
@@ -124,23 +124,23 @@ Concretely:
    Buffer them for the duration of a rep (`s`/`e`-style start/stop, same
    as the Python demos).
 2. **Browser -> backend**: on rep end, POST the buffered landmark
-   sequence (a JSON array of `[x,y,z]` triples per frame per landmark) to
-   a small backend endpoint. If the IMU device is also connected (WiFi
-   WebSocket, `ensemble/src/imu_live_client.py`'s parsing logic), the
-   frontend can either connect to it directly (same network, same
-   approach as the Python live demo) or the backend can broker that
-   connection -- either way, send the buffered `(flex, drift, emg,
-   vib_on)` arrays alongside the landmarks.
-3. **Backend** (new, doesn't exist yet -- a small FastAPI/Flask service
-   is enough): wraps the *unmodified* existing Python code --
-   `BicepCurlPredictor.predict_full_sequence()` or the live-session path,
-   `ImuCurlPredictor.predict_from_arrays()`, and
-   `fuse_predictions()`. One endpoint, one request/response cycle per
-   rep. The response is exactly the dict shape `fuse_predictions()`
-   already returns (`prediction`, `confidence`, `good_form_score`,
-   `class_probabilities`, `source`, plus the raw `vision_result`/
-   `imu_result` for a detailed view) -- no new data model to design, it
-   already exists and is documented in `ensemble/README.md`.
+   sequence (a JSON array of `[x,y,z]` triples per frame per landmark),
+   the browser's own measured recording duration, and the buffered IMU
+   `(flex, drift, emg, vib_on)` arrays (same WiFi WebSocket JSON format
+   `ensemble/src/imu_live_client.py` already parses -- the frontend can
+   connect to the device directly, same approach as the Python live demo)
+   to `POST /predict`.
+3. **Backend** (`ensemble/api/server.py`, built): wraps the *unmodified*
+   existing Python code -- `BicepCurlPredictor`, `ImuCurlPredictor`, and
+   `fuse_predictions()` -- behind one FastAPI endpoint. The response is
+   the **single fused result only** (`prediction`, `confidence`,
+   `good_form_score`, `class_probabilities`, `source`) -- the raw
+   `vision_result`/`imu_result` are available under `"details"` only if
+   the request explicitly asks for them (`?debug=true`), never as part of
+   the normal response, so the frontend only ever has one answer to
+   render, per the original request for this fusion model (see
+   `ensemble/README.md`'s "Web API" section for the full request/response
+   shape and how to run it).
 4. **Browser**: render the response. This is where `frontend/`'s existing
    UI patterns (`RadialGauge`, `EmgActivationBar`, the fault/haptic
    feedback cards in `LiveSession.tsx`) are genuinely reusable -- just

@@ -1,13 +1,13 @@
 """Live WebSocket client for the wearable IMU/EMG device.
 
-The device connects over WiFi via WebSocket. The exact message format it
-sends wasn't confirmed at the time this was written, so this client
-handles that as a runtime diagnostic instead of a blocking assumption:
-each incoming message is tried as JSON first, then falls back to the same
-plain-text log-line format the offline `Test N.txt` files use
-(`ml_imu.src.parse_log.LOG_LINE_RE`, reused directly -- not duplicated).
-A message matching neither is printed raw and skipped, so the format can
-be confirmed/fixed from real output rather than guessed at twice.
+The device connects over WiFi via WebSocket and sends **JSON** messages
+(confirmed with the device's own developer). Each incoming message is
+tried as JSON first -- the expected, confirmed path -- and falls back to
+the same plain-text log-line format the offline `Test N.txt` files use
+(`ml_imu.src.parse_log.LOG_LINE_RE`, reused directly -- not duplicated)
+only as a safety net in case a firmware update or a different device ever
+sends the older plain-text format instead. A message matching neither is
+printed raw and skipped rather than crashing the client.
 
 Runs its own asyncio event loop in a background daemon thread, so it can
 be driven from a plain synchronous script (mirroring
