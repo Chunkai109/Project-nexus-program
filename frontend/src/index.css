@@ -2,28 +2,153 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+/*
+ * shadcn/ui theme — preset b7D4CRcLo (style: sera, base: aria, baseColor: mist).
+ * These are the canonical shadcn variable names/values, kept verbatim so any
+ * component added later via `npx shadcn add ...` drops in without edits.
+ * The app's existing --color-canvas/-surface/-ink/etc. names (below, in
+ * @theme inline) are aliased onto these instead of being replaced, so every
+ * screen picks up the new palette without touching each component file.
+ */
+:root {
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.148 0.004 228.8);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.148 0.004 228.8);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.148 0.004 228.8);
+  --primary: oklch(0.218 0.008 223.9);
+  --primary-foreground: oklch(0.987 0.002 197.1);
+  --secondary: oklch(0.963 0.002 197.1);
+  --secondary-foreground: oklch(0.218 0.008 223.9);
+  --muted: oklch(0.963 0.002 197.1);
+  --muted-foreground: oklch(0.56 0.021 213.5);
+  --accent: oklch(0.218 0.008 223.9);
+  --accent-foreground: oklch(0.987 0.002 197.1);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.925 0.005 214.3);
+  --input: oklch(0.925 0.005 214.3);
+  --ring: oklch(0.723 0.014 214.4);
+  --chart-1: oklch(0.872 0.007 219.6);
+  --chart-2: oklch(0.56 0.021 213.5);
+  --chart-3: oklch(0.45 0.017 213.2);
+  --chart-4: oklch(0.378 0.015 216);
+  --chart-5: oklch(0.275 0.011 216.9);
+  --radius: 0px;
+  --sidebar: oklch(0.987 0.002 197.1);
+  --sidebar-foreground: oklch(0.148 0.004 228.8);
+  --sidebar-primary: oklch(0.218 0.008 223.9);
+  --sidebar-primary-foreground: oklch(0.987 0.002 197.1);
+  --sidebar-accent: oklch(0.963 0.002 197.1);
+  --sidebar-accent-foreground: oklch(0.218 0.008 223.9);
+  --sidebar-border: oklch(0.925 0.005 214.3);
+  --sidebar-ring: oklch(0.723 0.014 214.4);
+}
+
+.dark {
+  --background: oklch(0.148 0.004 228.8);
+  --foreground: oklch(0.987 0.002 197.1);
+  --card: oklch(0.218 0.008 223.9);
+  --card-foreground: oklch(0.987 0.002 197.1);
+  --popover: oklch(0.218 0.008 223.9);
+  --popover-foreground: oklch(0.987 0.002 197.1);
+  --primary: oklch(0.925 0.005 214.3);
+  --primary-foreground: oklch(0.218 0.008 223.9);
+  --secondary: oklch(0.275 0.011 216.9);
+  --secondary-foreground: oklch(0.987 0.002 197.1);
+  --muted: oklch(0.275 0.011 216.9);
+  --muted-foreground: oklch(0.723 0.014 214.4);
+  --accent: oklch(0.925 0.005 214.3);
+  --accent-foreground: oklch(0.218 0.008 223.9);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.56 0.021 213.5);
+  --chart-1: oklch(0.872 0.007 219.6);
+  --chart-2: oklch(0.56 0.021 213.5);
+  --chart-3: oklch(0.45 0.017 213.2);
+  --chart-4: oklch(0.378 0.015 216);
+  --chart-5: oklch(0.275 0.011 216.9);
+  --sidebar: oklch(0.218 0.008 223.9);
+  --sidebar-foreground: oklch(0.987 0.002 197.1);
+  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary-foreground: oklch(0.987 0.002 197.1);
+  --sidebar-accent: oklch(0.275 0.011 216.9);
+  --sidebar-accent-foreground: oklch(0.987 0.002 197.1);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.56 0.021 213.5);
+}
+
+@theme inline {
+  /* Canonical shadcn utility names (bg-background, text-primary, etc.) for
+     any component added later via the shadcn CLI. */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-destructive: var(--destructive);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+
+  /* The app's own token names, every existing component already consumes
+     these (bg-canvas, text-ink, bg-accent, ...) — aliased onto the shadcn
+     palette above instead of being renamed everywhere. */
+  --color-canvas: var(--secondary);
+  --color-surface: var(--background);
+  --color-surface-secondary: var(--secondary);
+  --color-surface-hover: color-mix(in oklch, var(--secondary), var(--foreground) 6%);
+  --color-border: var(--border);
+  --color-border-strong: color-mix(in oklch, var(--border), var(--foreground) 20%);
+
+  --color-ink: var(--foreground);
+  --color-ink-muted: var(--muted-foreground);
+  --color-ink-faint: color-mix(in oklch, var(--muted-foreground), var(--background) 25%);
+
+  --color-accent: var(--primary);
+  --color-accent-hover: color-mix(in oklch, var(--primary), var(--background) 12%);
+  --color-accent-ink: var(--primary-foreground);
+  --color-crimson: var(--destructive);
+}
+
+/*
+ * Tokens below are plain (not @theme inline) on purpose: their values are
+ * literal, not var() references into :root/.dark, so Tailwind needs to own
+ * generating the :root-scoped custom property itself for the .dark override
+ * further down to actually take effect at runtime.
+ */
 @theme {
-  --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', system-ui, Roboto, sans-serif;
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, Roboto, sans-serif;
   --font-mono: 'SF Mono', ui-monospace, 'JetBrains Mono', monospace;
-
-  --color-canvas: #fafafa;
-  --color-surface: #ffffff;
-  --color-surface-secondary: #f5f5f7;
-  --color-surface-hover: #ececee;
-  --color-border: rgba(0, 0, 0, 0.08);
-  --color-border-strong: rgba(0, 0, 0, 0.14);
-
-  --color-ink: #1d1d1f;
-  --color-ink-muted: #6e6e73;
-  --color-ink-faint: #86868b;
-
-  --color-accent: #0071e3;
-  --color-accent-hover: #0077ed;
-  --color-accent-ink: #ffffff;
 
   --color-emerald: #248a3d;
   --color-amber: #c26900;
-  --color-crimson: #d70015;
   --color-violet: #5e5ce6;
 
   --shadow-ambient: 0 4px 20px -2px rgba(0, 0, 0, 0.05);
@@ -31,24 +156,8 @@
 }
 
 .dark {
-  --color-canvas: #000000;
-  --color-surface: #1c1c1e;
-  --color-surface-secondary: #2c2c2e;
-  --color-surface-hover: #3a3a3c;
-  --color-border: rgba(255, 255, 255, 0.09);
-  --color-border-strong: rgba(255, 255, 255, 0.16);
-
-  --color-ink: #f5f5f7;
-  --color-ink-muted: #a1a1a6;
-  --color-ink-faint: #86868b;
-
-  --color-accent: #0a84ff;
-  --color-accent-hover: #3aa0ff;
-  --color-accent-ink: #ffffff;
-
   --color-emerald: #32d74b;
   --color-amber: #ff9f0a;
-  --color-crimson: #ff453a;
   --color-violet: #7d7aff;
 
   --shadow-ambient: 0 4px 20px -2px rgba(0, 0, 0, 0.4);
