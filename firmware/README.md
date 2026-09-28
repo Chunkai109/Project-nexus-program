@@ -13,18 +13,23 @@ and the target-corridor haptic trigger all live entirely on the dashboard**
 board just streams raw flexion/drift and has no rep-counting or vibration
 decision logic of its own; see [Protocol](#protocol) below.
 
-**EMG is currently disabled** (`EMG_ENABLED = false` near the top of the
-sketch) since no EMG hardware is wired up yet — the two MPU6050s,
-WiFi/WebSocket link and vibration motor all work fully without it. Flip
-that constant back to `true` once the EMG sensor is connected.
+**EMG is enabled** (`EMG_ENABLED = true` near the top of the sketch). Raw
+ADC readings above `EMG_NOISE_THRESHOLD` (1000, out of the ESP32's 12-bit
+0-4095 range) are treated as motion/contact noise rather than muscle
+activation and are filtered out in `processEmgSample()` before the value is
+sent to the dashboard — that function holds the last accepted reading
+instead of letting a spike through, so the processed value is always
+`<= EMG_NOISE_THRESHOLD`. Set `EMG_ENABLED` back to `false` if you're running
+without the EMG sensor wired up — the two MPU6050s, WiFi/WebSocket link and
+vibration motor all work fully without it.
 
 ## What you need
 
 - An ESP32 dev board (written against an ESP32-WROOM-32D)
 - Two MPU6050 IMU breakouts, wired over the same I2C bus at different
   addresses (via the AD0 pin)
-- An EMG sensor module with an analog envelope output (optional while
-  `EMG_ENABLED` is `false`)
+- An EMG sensor module with an analog envelope output (required while
+  `EMG_ENABLED` is `true`, the default)
 - A vibration motor for haptic feedback, driven through a transistor
 
 ## Wiring
@@ -37,7 +42,7 @@ that constant back to `true` once the EMG sensor is connected.
 | MPU6050 #2 (upper arm)| VCC / GND       | 3V3 / GND |
 |                        | SDA / SCL       | GPIO 21 / GPIO 22 (shared bus) |
 |                        | AD0             | 3.3V (address `0x69`) |
-| EMG sensor (optional while `EMG_ENABLED` is `false`) | Signal / envelope out | GPIO 35 (ADC1) |
+| EMG sensor (required while `EMG_ENABLED` is `true`) | Signal / envelope out | GPIO 35 (ADC1) |
 | Vibration motor       | Control         | GPIO 25, through an NPN transistor |
 
 Both MPU6050s share the same I2C bus (SDA/SCL) — tying one's `AD0` pin to
@@ -84,7 +89,7 @@ that's expected.
 
 | Pod ID | Sensor                          |
 |--------|----------------------------------|
-| 1      | EMG envelope (bicep) — not reported while `EMG_ENABLED` is `false` |
+| 1      | EMG envelope (bicep) — not reported if `EMG_ENABLED` is set back to `false` |
 | 2      | MPU6050 #1 — forearm flexion     |
 | 3      | MPU6050 #2 — upper-arm drift     |
 
@@ -121,9 +126,11 @@ In short:
 
 - Hub → app, roughly 50 times a second: `{"type":"imu","podId":2,"pitch":12.3}`
   (flexion) and `{"type":"imu","podId":3,"pitch":1.8}` (drift) — no roll/yaw,
-  since only these two values feed anything on either end. Once
-  `EMG_ENABLED` is `true`, also `{"type":"emg","podId":1,"vrms":0.34}`; plus
-  `{"type":"status", ...}` battery/signal messages every 2 seconds.
+  since only these two values feed anything on either end. Also
+  `{"type":"emg","podId":1,"vrms":0.34}` — `vrms` is the noise-filtered
+  envelope (raw ADC reading, spikes over `EMG_NOISE_THRESHOLD` rejected)
+  normalized to 0.0-1.0 against that threshold; plus `{"type":"status", ...}`
+  battery/signal messages every 2 seconds.
 - App → hub: `{"type":"haptic","podId":2,"durationMs":400}` to pulse the
   vibration motor.
 

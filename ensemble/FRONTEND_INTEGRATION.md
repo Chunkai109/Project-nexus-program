@@ -85,29 +85,31 @@ tradeoff to make.
 |---|---|
 | `flex`: one continuous array, one sample per timestep | `{type:"imu", podId:2, pitch:<flexion>}` — a separate WebSocket message per sample, one pod |
 | `drift`: same, aligned to the same timestep as `flex` | `{type:"imu", podId:3, pitch:<drift>}` — separate message, separate pod |
-| `emg`: one continuous array | **Not sent at all.** `EMG_ENABLED = false` in the firmware — no EMG hardware is wired up yet. No `"emg"` messages exist right now. |
+| `emg`: one continuous array | `{type:"emg", podId:1, vrms:<0.0-1.0>}` — a separate WebSocket message per sample, one pod. `vrms` is a noise-filtered envelope: raw ADC readings over `EMG_NOISE_THRESHOLD` (1000, out of the ESP32's 12-bit 0-4095 range) are rejected as motion/contact artifacts rather than counted, then normalized against that threshold. |
 | `vib_on`: one continuous array, sensed on-device | **Never sent by the hub in either direction that matters.** Vibration is *commanded* app→hub (`{"type":"haptic",...}`), the hub never reports back whether the motor is on. There's no sensed vibration state to read. |
 
 Concretely: `flex` maps to `hub.pods[2].pitchDeg`, `drift` maps to
 `hub.pods[3].pitchDeg` (pod IDs per `CURL_FLEX_POD_ID`/`CURL_DRIFT_POD_ID` in
-`bicepCurlCounter.ts`) — those two are real and available. `emg` and
-`vib_on` are not available from this hardware today, full stop.
+`bicepCurlCounter.ts`), and `emg` maps to `hub.pods[1].vrmsNormalized` — those
+three are real and available. `vib_on` is not available from this hardware
+today, full stop.
 
 **What this means practically**: you cannot feed the real device's live
 stream into the `ml_imu` model (or the fusion API's `imu` field) and get a
-meaningful answer. Options, none of them free:
+meaningful answer, since `vib_on` still has no real sensed source even with
+`emg` now real. Options, none of them free:
 
-1. **Send placeholder values for `emg`/`vib_on`** (e.g. `emg: 0` for every
-   sample, `vib_on` from the app's own known haptic-pulse state — see
-   `pulseActive` in `LiveSession.tsx`, which the app already tracks locally
-   since it's the one commanding the motor). This is honest about being an
-   approximation, not a fix — the model will very likely see this as
-   out-of-distribution and its own novelty gate should reject it
-   (`"unrecognized_input"`). That's the gate working correctly, not a bug to
-   route around.
-2. **Wire up the EMG hardware and set `EMG_ENABLED = true`** in the
-   firmware — this gets a real `emg` signal, but `vib_on` still has no real
-   sensed source; same caveat as above for that one field.
+1. **Send a placeholder value for `vib_on`** — the app's own known
+   haptic-pulse state (see `pulseActive` in `LiveSession.tsx`, which the app
+   already tracks locally since it's the one commanding the motor) is the
+   closest honest proxy. This is honest about being an approximation, not a
+   fix — the model will very likely see this as out-of-distribution and its
+   own novelty gate should reject it (`"unrecognized_input"`). That's the
+   gate working correctly, not a bug to route around.
+2. **Add a sensed vibration-state readback to the firmware** (e.g. an
+   always-on flag the ESP32 reports back over WebSocket while the motor is
+   driven) so `vib_on` stops being a client-side guess — no such readback
+   exists today.
 3. **Don't wire the IMU model into this specific hub at all**, and treat
    `ml_imu` as validated-but-not-yet-deployable until either the hardware or
    the model is revisited. Given `ml_imu`'s own accuracy caveats (100% CV is
@@ -232,9 +234,8 @@ Given Section 2's gap, this is the realistic version, not a drop-in:
    e.g. a small sibling recorder class alongside `BicepCurlCounter`,
    started/stopped the same way, exposed through `HubValue` the same way
    `curl` already is.
-2. `emg`: no real source today (Section 2, option 1) — send `0` for every
-   sample unless you've done option 2 (wire up the hardware, flip
-   `EMG_ENABLED`).
+2. `emg`: now a real source — buffer `hub.pods[1].vrmsNormalized` over the
+   same rep window, the same way as `flex`/`drift` above.
 3. `vib_on`: no sensed source at all — the closest honest proxy is the app's
    own `pulseActive` boolean from `LiveSession.tsx` (it already knows when
    *it* commanded the haptic pulse), sampled at each flex/drift timestep.
@@ -242,7 +243,7 @@ Given Section 2's gap, this is the realistic version, not a drop-in:
    on-device sensed state — say so if this ships, don't present it as
    equivalent.
 4. Expect `"unrecognized_input"` (the IMU novelty gate rejecting) to show up
-   often with placeholder `emg`, and route that in the UI as "no wearable
+   often with placeholder `vib_on`, and route that in the UI as "no wearable
    reading available for this rep," not as an error.
 
 ---

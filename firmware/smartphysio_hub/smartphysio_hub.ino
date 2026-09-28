@@ -115,11 +115,25 @@ const float ALPHA = 0.96;
 
 unsigned long prevTime = 0;
 
-// EMG sensor disabled for now (no hardware wired) — flip back to true once
-// it's connected. While false, no "emg"/pod-1-"status" WebSocket messages
-// are sent; this board has no on-device vibration logic to affect either
-// way — see the vibration motor comment in loop() below.
-constexpr bool EMG_ENABLED = false;
+// EMG sensor is wired to EMG_PIN. Raw ADC readings spike well above real
+// muscle activation on motion/contact artifacts, so processEmgSample()
+// below rejects any raw sample over EMG_NOISE_THRESHOLD — those readings
+// don't count towards the envelope sent to the dashboard.
+constexpr bool EMG_ENABLED = true;
+constexpr int EMG_NOISE_THRESHOLD = 1000; // ESP32 ADC is 12-bit (0-4095); readings above this are noise, not signal
+
+int lastValidEmgRaw = 0;
+
+// Filters the EMG envelope: a raw sample over EMG_NOISE_THRESHOLD is treated
+// as a noise spike and discarded by holding the last accepted reading
+// instead of letting it through, so the processed value is always
+// <= EMG_NOISE_THRESHOLD.
+int processEmgSample(int rawSample) {
+  if (rawSample <= EMG_NOISE_THRESHOLD) {
+    lastValidEmgRaw = rawSample;
+  }
+  return lastValidEmgRaw;
+}
 
 bool initSensor(uint8_t addr) {
   Wire.beginTransmission(addr);
@@ -238,8 +252,9 @@ void loop() {
   float flexion = 90-roll1; // Sensor 1
   float drift   = roll2-90;            // Sensor 2
 
-  // 4. Sample EMG Sensor (skipped while disabled — see EMG_ENABLED above)
+  // 4. Sample and filter the EMG sensor (skipped while disabled — see EMG_ENABLED above)
   int emgRaw = EMG_ENABLED ? analogRead(EMG_PIN) : 0;
+  int emgProcessed = EMG_ENABLED ? processEmgSample(emgRaw) : 0;
 
   // 5. Vibration Motor Trigger Condition:
   // This board has no autonomous vibration trigger of its own — the target
@@ -281,7 +296,7 @@ void loop() {
       JsonDocument emgDoc;
       emgDoc["type"] = "emg";
       emgDoc["podId"] = POD_EMG;
-      emgDoc["vrms"] = emgRaw / 4095.0; // 12-bit ADC full scale
+      emgDoc["vrms"] = emgProcessed / (float)EMG_NOISE_THRESHOLD; // normalized against the filtered full-scale
       broadcastJson(emgDoc);
     }
 
@@ -313,7 +328,7 @@ void loop() {
   // Serial Monitor Output
   if (EMG_ENABLED) {
     Serial.printf("Flex: %5.1f | Drift: %5.1f | EMG: %4d | Vib: %s\n",
-                  flexion, drift, emgRaw, motorActive ? "ON " : "OFF");
+                  flexion, drift, emgProcessed, motorActive ? "ON " : "OFF");
   } else {
     Serial.printf("Flex: %5.1f | Drift: %5.1f | Vib: %s\n", flexion, drift, motorActive ? "ON " : "OFF");
   }
