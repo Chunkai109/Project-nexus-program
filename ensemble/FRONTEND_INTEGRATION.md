@@ -1,10 +1,10 @@
 # Frontend Integration Guide
 
-How to connect a web frontend to the bicep-curl fusion model, with the API
-contract as the centerpiece. Written to hand off to whoever builds the
-frontend side -- everything here is already built and tested on the
-model/API side; nothing here has been tested against an actual browser
-yet (see the "What's tested vs. not" note at the end).
+Head-to-toe guide for connecting a web frontend to the bicep-curl fusion
+model -- from pulling the code through calling the API. Written to hand
+off to whoever builds the frontend side. Everything here is already built
+and tested on the model/API side; nothing here has been tested against an
+actual browser yet (see the "What's tested vs. not" section).
 
 For the full picture (what the model has, its accuracy, why the design
 decisions were made) see `ensemble/README.md` and
@@ -13,17 +13,64 @@ copy-pasteable on purpose.
 
 ---
 
-## 1. Run the API
+## 1. Get the code
 
 ```bash
+git clone https://github.com/Chunkai109/Project-nexus-program.git
 cd Project-nexus-program
+git checkout BicepAI_MediaPipePose
+```
+
+There's no separate "model file" to hand over outside of this -- the
+model is code + trained artifacts together (a `.joblib` file alone is
+useless without the feature-engineering code that turns raw input into
+what it expects), and everything needed is already committed on this
+branch. For reference, this is what actually matters once you have the
+repo:
+
+```
+ensemble/
+  __init__.py
+  api/            (server.py, requirements.txt)  <- the API itself
+  src/            (fusion.py)                    <- combines the two models
+
+ml/                                    <- vision (MediaPipe Pose) model
+  __init__.py
+  src/            (inference/predictor.py, preprocessing/, features/, models/labels.py)
+  models/best_model/   (model_classical.joblib, training_config.json, rest_gate_config.json,
+                         novelty_detector.joblib, novelty_detector_config.json,
+                         good_form_calibration.json, feature_reference_stats.json)
+
+ml_imu/                                <- IMU/EMG wearable model
+  __init__.py
+  src/            (predictor.py, features.py, labels.py)
+  models/best_model/   (model.joblib, training_config.json, novelty_detector.joblib,
+                         novelty_detector_config.json, feature_reference_stats.json)
+```
+
+(A few files sit alongside these but aren't needed just to *run* the API
+-- `ml/models/best_model/candidates/*`, `ml/src/models/dataset.py`/
+`lstm_model.py`, `ml_imu/src/parse_log.py`/`segment.py` are training-time
+artifacts, safe to ignore for this purpose.) None of this needs manual
+setup beyond the clone -- the trained models are already in the repo,
+already trained, ready to load.
+
+**Keeping up to date**: if more commits land on this branch later,
+`git pull origin BicepAI_MediaPipePose` picks them up -- no different from
+pulling any other update.
+
+---
+
+## 2. Set up and run the API
+
+```bash
 pip install -r ensemble/api/requirements.txt
 uvicorn ensemble.api.server:app --reload --port 8000
 ```
 
-That's the whole setup -- it loads the already-trained model files
-committed in `ml/models/best_model/` and `ml_imu/models/best_model/`, no
-camera or IMU device needed to just run the server. Confirm it's up:
+That's the whole setup -- it loads the already-trained model files from
+step 1, no camera or IMU device needed to just run the server. Confirm
+it's up:
 
 ```bash
 curl http://localhost:8000/health
@@ -36,7 +83,7 @@ in `ensemble/api/server.py`'s `CORSMiddleware` config.
 
 ---
 
-## 2. The API contract
+## 3. The API contract
 
 One endpoint. `POST /predict`.
 
@@ -122,7 +169,7 @@ bug worth reporting with the request payload that triggered it).
 
 ---
 
-## 3. Minimal example (TypeScript / fetch)
+## 4. Minimal example (TypeScript / fetch)
 
 ```ts
 async function predictRep(
@@ -173,7 +220,7 @@ async function stopRecordingAndPredict(imu: ImuBuffer) {
 
 ---
 
-## 4. Connecting to the IMU device from the browser
+## 5. Connecting to the IMU device from the browser
 
 The device streams JSON over a WiFi WebSocket. In the browser:
 
@@ -205,7 +252,7 @@ vib_on: vibBuf }` as the `imu` argument to `predictRep()`.
 
 ---
 
-## 5. What's tested vs. not
+## 6. What's tested vs. not
 
 **Tested, confirmed working:**
 - The API server, run live and hit with a real HTTP request over an
@@ -229,7 +276,7 @@ vib_on: vibBuf }` as the `imu` argument to `predictRep()`.
   expect identical landmark output, but this hasn't been directly
   diffed frame-for-frame between the two runtimes.
 
-## 6. Don't forget
+## 7. Don't forget
 
 Whatever UI ends up showing `good_form_score` or `prediction` to a real
 user, the accuracy caveats from `ensemble/FUSION_MODEL_SUMMARY.md` still
