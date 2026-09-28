@@ -124,9 +124,12 @@ The exact JSON message shapes this firmware sends and accepts are documented
 in [`frontend/src/lib/hub/protocol.ts`](../frontend/src/lib/hub/protocol.ts).
 In short:
 
-- Hub → app, roughly 50 times a second: `{"type":"imu","podId":2,"pitch":12.3}`
-  (flexion) and `{"type":"imu","podId":3,"pitch":1.8}` (drift) — no roll/yaw,
-  since only these two values feed anything on either end. Also
+- Hub → app, at a fixed 50 Hz (`SAMPLE_INTERVAL_MS` = 20ms — the same
+  interval both IMU pods and the EMG pod are sampled and broadcast on, so
+  the three stay aligned to the same instant rather than drifting apart):
+  `{"type":"imu","podId":2,"pitch":12.3}` (flexion) and
+  `{"type":"imu","podId":3,"pitch":1.8}` (drift) — no roll/yaw, since only
+  these two values feed anything on either end. Also
   `{"type":"emg","podId":1,"vrms":0.34}` — `vrms` is the noise-filtered
   envelope (raw ADC reading, spikes over `EMG_NOISE_THRESHOLD` rejected)
   normalized to 0.0-1.0 against that threshold; plus `{"type":"status", ...}`

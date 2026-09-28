@@ -52,6 +52,14 @@ constexpr uint8_t POD_UPPERARM  = 3;  // Sensor 2 — drift
 
 constexpr unsigned long STATUS_INTERVAL_MS = 2000;
 
+// Both IMU sensors and the EMG sensor are sampled and broadcast together,
+// once per SAMPLE_INTERVAL_MS — see the millis()-gated check at the top of
+// loop(). Driving all three off one shared, explicit interval (rather than
+// each drifting with however long the previous loop iteration happened to
+// take) is what keeps their readings aligned to the same instant.
+constexpr unsigned long SAMPLE_INTERVAL_MS = 20; // 50 Hz
+unsigned long lastSampleAt = 0;
+
 WebSocketsServer webSocket(WS_PORT);
 uint8_t connectedClientCount = 0;
 unsigned long lastStatusSentAt = 0;
@@ -226,6 +234,16 @@ void setup() {
 void loop() {
   webSocket.loop();
 
+  // Gate sensor sampling to a fixed wall-clock interval instead of a
+  // blocking delay() at the bottom of loop() — that way webSocket.loop()
+  // (haptic commands, client connect/disconnect) keeps getting serviced
+  // every pass, and the IMU/EMG sampling below only fires once per
+  // SAMPLE_INTERVAL_MS regardless of how long I2C reads or the previous
+  // broadcast happened to take.
+  unsigned long nowMs = millis();
+  if (nowMs - lastSampleAt < SAMPLE_INTERVAL_MS) return;
+  lastSampleAt = nowMs;
+
   unsigned long curTime = micros();
   float dt = (curTime - prevTime) / 1000000.0;
   prevTime = curTime;
@@ -332,6 +350,4 @@ void loop() {
   } else {
     Serial.printf("Flex: %5.1f | Drift: %5.1f | Vib: %s\n", flexion, drift, motorActive ? "ON " : "OFF");
   }
-
-  delay(20); // 50 Hz loop
 }
