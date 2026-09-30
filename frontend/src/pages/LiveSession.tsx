@@ -19,7 +19,7 @@ import { podSide, kneePodForSide } from '@/lib/podUtils'
 import { muscleEmgTarget } from '@/lib/muscles'
 import { useSensorHub } from '@/lib/hub/HubProvider'
 import { CURL_DRIFT_POD_ID, CURL_FLEX_POD_ID } from '@/lib/hub/bicepCurlCounter'
-import { predictVisionForm, MIN_VISION_FRAMES, type VisionPrediction } from '@/lib/visionModel'
+import { predictVisionForm, predictFusedForm, MIN_VISION_FRAMES, type VisionPrediction, type FusedPrediction } from '@/lib/visionModel'
 import { PODS } from '@/lib/mockData'
 import type { RepSample } from '@/types'
 
@@ -39,7 +39,7 @@ const ENABLE_MEDIAPIPE_VISION = true
 type FormCheckState =
   | { status: 'idle' }
   | { status: 'checking' }
-  | { status: 'result'; result: VisionPrediction }
+  | { status: 'result'; result: VisionPrediction | FusedPrediction }
   | { status: 'unavailable' }
   | { status: 'insufficient_frames'; frameCount: number }
 
@@ -161,24 +161,36 @@ export function LiveSession() {
       const bufferStart = visionBufferStartRef.current
       visionFramesRef.current = []
       visionBufferStartRef.current = null
+      // Always drained, even on the vision-only path below, so a hub that's
+      // connected but idle this rep doesn't leak samples into the next one.
+      const flexDrift = hub.drainFlexDriftSamples()
       if (bufferStart !== null) {
-        // Checked here, before calling predictVisionForm, so a too-short
-        // buffer (a quick rep, or MediaPipe briefly losing the person
-        // mid-movement) shows its own accurate state instead of falling
-        // into the same catch as a genuinely unreachable API and being
-        // mislabeled "Model Offline" when the API was fine all along.
+        // Checked here, before calling predict*, so a too-short buffer (a
+        // quick rep, or MediaPipe briefly losing the person mid-movement)
+        // shows its own accurate state instead of falling into the same
+        // catch as a genuinely unreachable API and being mislabeled "Model
+        // Offline" when the API was fine all along.
         if (frames.length < MIN_VISION_FRAMES) {
           setFormCheck({ status: 'insufficient_frames', frameCount: frames.length })
         } else {
           const durationSeconds = (performance.now() - bufferStart) / 1000
           setFormCheck({ status: 'checking' })
-          predictVisionForm(frames, durationSeconds)
+          // Real flex/drift from the hub feeds the fused model when
+          // connected; otherwise fall back to vision-only, the same as
+          // before — see visionModel.ts's module doc for what "fused"
+          // actually sends for emg/vib_on (fixed placeholders, not real
+          // signals).
+          const prediction =
+            usingHubCurl && flexDrift.length > 0
+              ? predictFusedForm(frames, durationSeconds, flexDrift)
+              : predictVisionForm(frames, durationSeconds)
+          prediction
             .then((result) => setFormCheck({ status: 'result', result }))
             .catch(() => setFormCheck({ status: 'unavailable' }))
         }
       }
     }
-  }, [repCount, kneeFlexionDeg, emgLeft, emgRight, faultActive])
+  }, [repCount, kneeFlexionDeg, emgLeft, emgRight, faultActive, hub, usingHubCurl])
 
   if (!exercise) {
     return (
@@ -311,7 +323,7 @@ export function LiveSession() {
                   formCheck.status === 'result' ? 'bg-accent/10 text-accent' : 'bg-surface-secondary text-ink-faint'
                 }`}
               >
-                {formCheck.status === 'unavailable' ? 'Model Offline' : 'Vision Classifier'}
+                {formCheck.status === 'unavailable' ? 'Model Offline' : usingHubCurl ? 'Vision + Hub' : 'Vision Only'}
               </span>
             </div>
 
@@ -345,7 +357,10 @@ export function LiveSession() {
               (() => {
                 const { result } = formCheck
                 const isGoodForm = result.prediction === 'Perfect'
-                const isGate = result.prediction === 'no_exercise_detected' || result.prediction === 'unrecognized_movement'
+                const isGate =
+                  result.prediction === 'no_exercise_detected' ||
+                  result.prediction === 'unrecognized_movement' ||
+                  result.prediction === 'unrecognized_input'
                 return (
                   <>
                     <div className="flex items-center justify-between">
@@ -361,6 +376,9 @@ export function LiveSession() {
                       )}
                     </div>
                     {result.message && <p className="text-[12px] text-ink-faint">{result.message}</p>}
+                    {'source' in result && (
+                      <p className="text-[11px] text-ink-faint">source: {result.source}</p>
+                    )}
                   </>
                 )
               })()}

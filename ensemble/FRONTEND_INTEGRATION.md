@@ -254,12 +254,12 @@ This is now built, not a plan. What actually shipped, for anyone extending it:
    `hub.curl.repState` specifically, since vision mode works standalone with
    no hub/wearable connected at all — a real, common case this project
    supports elsewhere).
-4. The buffered frames + measured `duration_seconds` are POSTed to a new
-   **vision-only** endpoint (see Section 4) via
-   `frontend/src/lib/visionModel.ts`'s `predictVisionForm()`. Not the fused
-   `/predict` endpoint — that would require fabricating `imu.flex/drift/emg/
-   vib_on` arrays for a camera-only session, which this project has a
-   standing rule against (see `ensemble/README.md`).
+4. The buffered frames + measured `duration_seconds` are POSTed to the
+   vision-only endpoint (see Section 4) via
+   `frontend/src/lib/visionModel.ts`'s `predictVisionForm()` — used whenever
+   no hub is connected, so there's no real IMU data to send at all. When a
+   hub *is* connected, `predictFusedForm()` is used instead — see Section 6,
+   now also built.
 5. The result renders in an "AI Form Check" card in `LiveSession.tsx`
    (idle / checking / result / unavailable states) — `unavailable` is the
    normal state whenever the API process (Section 3) isn't running; the UI
@@ -267,32 +267,37 @@ This is now built, not a plan. What actually shipped, for anyone extending it:
 
 ---
 
-## 6. Wiring in the IMU side (the honest-approximation path)
+## 6. Wiring in the IMU side — DONE, deliberately partial
 
-Given Section 2's gap, this is the realistic version, not a drop-in:
+This is now built too, but not as a full "approximate all four fields"
+attempt — a product call was made to keep only `flex`/`drift` real and treat
+`emg`/`vib_on` as fixed, inert placeholders rather than trying to approximate
+them from other signals. What actually shipped:
 
-1. `flex`/`drift` arrays: buffer `hub.pods[2].pitchDeg` and
-   `hub.pods[3].pitchDeg` over the same rep window as the vision frames.
-   **Don't read these from `hub.pods` in a React effect** — `HubProvider`
-   already has a documented reason its own rep counter avoids that pattern
-   (`bicepCurlCounter.ts`'s class-doc: batched React state updates can
-   silently drop samples that land in the same tick). Buffer inside
-   `HubProvider`'s existing `onImu` handler instead, the same way
-   `curlCounterRef.current.updateFlex/updateDrift` is already called there —
-   e.g. a small sibling recorder class alongside `BicepCurlCounter`,
-   started/stopped the same way, exposed through `HubValue` the same way
-   `curl` already is.
-2. `emg`: now a real source — buffer `hub.pods[1].vrmsNormalized` over the
-   same rep window, the same way as `flex`/`drift` above.
-3. `vib_on`: no sensed source at all — the closest honest proxy is the app's
-   own `pulseActive` boolean from `LiveSession.tsx` (it already knows when
-   *it* commanded the haptic pulse), sampled at each flex/drift timestep.
-   This reflects app-commanded state, not the original training signal's
-   on-device sensed state — say so if this ships, don't present it as
-   equivalent.
-4. Expect `"unrecognized_input"` (the IMU novelty gate rejecting) to show up
-   often with placeholder `vib_on`, and route that in the UI as "no wearable
-   reading available for this rep," not as an error.
+1. `flex`/`drift`: real, from `hub.pods[2].pitchDeg`/`hub.pods[3].pitchDeg`.
+   Per this section's original warning, these are **not** read from
+   `hub.pods` in a React effect — `frontend/src/lib/hub/imuFlexDriftRecorder.ts`'s
+   `ImuFlexDriftRecorder` buffers them synchronously inside `HubProvider`'s
+   `onImu` handler, the same way `BicepCurlCounter` already does, and exposes
+   the buffer via `hub.drainFlexDriftSamples()` — called once per completed
+   rep from `LiveSession.tsx`, mirroring exactly how vision frames are
+   buffered and drained.
+2. `emg`: **not** wired into this call, despite now being a real, available
+   signal (`hub.pods[1].vrmsNormalized`) — sent as `0` for every sample
+   instead. This was an explicit choice: only flex/drift should influence
+   this particular prediction; EMG continues to feed Session Analytics /
+   patient-report metrics exactly as it already did before this model
+   existed (`repSamples` in `LiveSession.tsx`), untouched by this change.
+3. `vib_on`: sent as `false` for every sample — no attempt at an
+   app-commanded-state proxy (`pulseActive`) was made here, again by
+   explicit choice, to keep every non-flex/drift field a plain, inert
+   placeholder rather than a signal that could be mistaken for real.
+4. Practical result: expect `"unrecognized_input"` (the IMU novelty gate
+   rejecting) to show up often, since `emg`/`vib_on` are always degenerate
+   constants and even real flex/drift comes from different hardware than
+   the model was trained on. Surfaced in the UI as the `source` field on
+   the result (`"rejected_by_imu_gate"`), not as an error — see the "AI Form
+   Check" card in `LiveSession.tsx`.
 
 ---
 
@@ -315,11 +320,17 @@ is also unverified inside network-restricted sandboxes specifically — it
 works from a normal machine with normal internet access, which is the only
 environment this ships to.
 
-**Not tested — and still needs real work, not just wiring:**
-- The IMU integration path (Section 6) is a genuine open question, not a
-  solved problem — the placeholder-value approach will produce results, but
-  "produces a response" and "produces a meaningful one" are different
-  claims. Don't let a 200 response be read as validation.
+**Tested (fused integration, Section 6):** a real Chromium browser calling
+`predictFusedForm()` against a live local API instance — confirmed the
+request body carries real flex/drift values, `emg` as all-zero and `vib_on`
+as all-`false` placeholders, all four arrays the same length, and that it
+throws before any network call for an empty flex/drift buffer. **Not**
+tested with a real hub attached mid-curl, and — this is the important
+caveat, not a testing gap — **not validated as meaningful**: the
+placeholder-only `emg`/`vib_on` approach will produce responses, but
+"produces a response" and "produces a meaningful one" are different claims.
+Frequent `"rejected_by_imu_gate"` results are the expected outcome, not
+evidence something is broken.
 
 ---
 
