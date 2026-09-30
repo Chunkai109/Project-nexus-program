@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, TriangleAlert, Vibrate, Timer, Repeat, ScanEye } from 'lucide-react'
+import { ArrowLeft, TriangleAlert, Vibrate, Timer, Repeat, ScanEye, Loader2 } from 'lucide-react'
 import { PageShell } from '@/components/layout/PageShell'
 import { Logo } from '@/components/layout/Logo'
 import { ThemeToggle } from '@/components/ui/ThemeToggle'
@@ -19,6 +19,7 @@ import { podSide, kneePodForSide } from '@/lib/podUtils'
 import { muscleEmgTarget } from '@/lib/muscles'
 import { useSensorHub } from '@/lib/hub/HubProvider'
 import { CURL_DRIFT_POD_ID, CURL_FLEX_POD_ID } from '@/lib/hub/bicepCurlCounter'
+import { predictVisionForm, type VisionPrediction } from '@/lib/visionModel'
 import { PODS } from '@/lib/mockData'
 import type { RepSample } from '@/types'
 
@@ -28,11 +29,18 @@ import type { RepSample } from '@/types'
 // not a sustained correction signal.
 const HAPTIC_PULSE_MS = 1000
 
-// Testing flag: disable MediaPipe camera-based pose detection entirely so
-// the hub's real MPU flex/drift data (via hub.curl, computed in HubProvider)
-// is the only input driving the rep counter, instead of it being masked by
-// vision whenever someone's in frame. Flip back to true to restore camera-based detection.
-const ENABLE_MEDIAPIPE_VISION = false
+// MediaPipe camera-based pose detection — was a hardcoded-off testing flag
+// to isolate the hub's MPU-only rep counter; now on by default so the
+// camera actually feeds the trained vision model (see the world-landmarks
+// buffering below and ensemble/FRONTEND_INTEGRATION.md Section 5). Flip
+// back to false to go back to testing MPU-only, camera-disabled.
+const ENABLE_MEDIAPIPE_VISION = true
+
+type FormCheckState =
+  | { status: 'idle' }
+  | { status: 'checking' }
+  | { status: 'result'; result: VisionPrediction }
+  | { status: 'unavailable' }
 
 export function LiveSession() {
   const { exerciseId } = useParams()
@@ -119,6 +127,25 @@ export function LiveSession() {
 
   const activeHapticPod = pulseActive ? hapticPod : null
 
+  // AI form check (ml/'s trained bicep-curl classifier, via the ensemble
+  // API's vision-only endpoint — see ensemble/FRONTEND_INTEGRATION.md
+  // Section 5): buffer every camera frame's MediaPipe Pose WORLD landmarks
+  // while a person is in view, then flush and classify the buffer the
+  // instant a rep completes (same repCount-increment boundary repSamples
+  // below already uses). Frames buffered here are the same shape the model
+  // was trained on regardless of whether the buffer spans one clean rep or
+  // some MPU-timed slice of one — the model's own best-window search (see
+  // BicepCurlPredictor) handles pacing/tempo variance on the server side.
+  const visionFramesRef = useRef<number[][][]>([])
+  const visionBufferStartRef = useRef<number | null>(null)
+  const [formCheck, setFormCheck] = useState<FormCheckState>({ status: 'idle' })
+
+  function handleWorldLandmarks(landmarks: number[][] | null) {
+    if (!landmarks) return
+    if (visionBufferStartRef.current === null) visionBufferStartRef.current = performance.now()
+    visionFramesRef.current.push(landmarks)
+  }
+
   // Rep-by-rep telemetry: sample the effective angle/EMG the instant each
   // rep completes, so a finished session leaves behind real per-rep data
   // instead of nothing — this is what Session Analytics reads back later.
@@ -128,6 +155,18 @@ export function LiveSession() {
     if (repCount > prevRepCount.current) {
       prevRepCount.current = repCount
       setRepSamples((prev) => [...prev, { rep: repCount, angle: Math.round(kneeFlexionDeg), emgLeft, emgRight, faultActive }])
+
+      const frames = visionFramesRef.current
+      const bufferStart = visionBufferStartRef.current
+      visionFramesRef.current = []
+      visionBufferStartRef.current = null
+      if (frames.length > 0 && bufferStart !== null) {
+        const durationSeconds = (performance.now() - bufferStart) / 1000
+        setFormCheck({ status: 'checking' })
+        predictVisionForm(frames, durationSeconds)
+          .then((result) => setFormCheck({ status: 'result', result }))
+          .catch(() => setFormCheck({ status: 'unavailable' }))
+      }
     }
   }, [repCount, kneeFlexionDeg, emgLeft, emgRight, faultActive])
 
@@ -200,6 +239,7 @@ export function LiveSession() {
             monitoredSide={monitoredSide}
             faultThresholdDeg={primaryAngle?.faultThresholdDeg ?? 8}
             onVisionMetrics={setVision}
+            onWorldLandmarks={handleWorldLandmarks}
             poseDetectionEnabled={ENABLE_MEDIAPIPE_VISION}
             fallbackSkeleton={
               <PoseOverlay squatDepth={squatDepth} faultActive={faultActive} faultDeg={faultDeg} />
@@ -251,6 +291,63 @@ export function LiveSession() {
             >
               {usingVision ? 'Source: Live Camera (MediaPipe)' : usingHubCurl ? 'Source: Live Hub (MPU)' : 'Source: Wearable Simulation'}
             </span>
+          </Card>
+
+          <Card className="flex flex-col gap-2.5 p-6">
+            <div className="flex items-center justify-between">
+              <h3 className="text-[15px] font-semibold text-ink">AI Form Check</h3>
+              <span
+                className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${
+                  formCheck.status === 'result' ? 'bg-accent/10 text-accent' : 'bg-surface-secondary text-ink-faint'
+                }`}
+              >
+                {formCheck.status === 'unavailable' ? 'Model Offline' : 'Vision Classifier'}
+              </span>
+            </div>
+
+            {formCheck.status === 'idle' && (
+              <p className="text-[13px] text-ink-faint">
+                Complete a rep in view of the camera to get an AI-scored form check.
+              </p>
+            )}
+            {formCheck.status === 'checking' && (
+              <p className="flex items-center gap-2 text-[13px] text-ink-faint">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                Scoring your last rep…
+              </p>
+            )}
+            {formCheck.status === 'unavailable' && (
+              <p className="text-[13px] text-ink-faint">
+                Couldn't reach the vision model API — start it with{' '}
+                <code className="rounded bg-surface-secondary px-1 py-0.5 text-[12px]">
+                  uvicorn ensemble.api.server:app --port 8000
+                </code>{' '}
+                (see ensemble/README.md).
+              </p>
+            )}
+            {formCheck.status === 'result' &&
+              (() => {
+                const { result } = formCheck
+                const isGoodForm = result.prediction === 'Perfect'
+                const isGate = result.prediction === 'no_exercise_detected' || result.prediction === 'unrecognized_movement'
+                return (
+                  <>
+                    <div className="flex items-center justify-between">
+                      <span
+                        className={`text-[17px] font-semibold ${isGoodForm ? 'text-emerald' : isGate ? 'text-ink-faint' : 'text-crimson'}`}
+                      >
+                        {result.prediction ?? 'No result'}
+                      </span>
+                      {result.good_form_score != null && (
+                        <span className="text-[13px] text-ink-faint">
+                          {Math.round(result.good_form_score * 100)}% good form
+                        </span>
+                      )}
+                    </div>
+                    {result.message && <p className="text-[12px] text-ink-faint">{result.message}</p>}
+                  </>
+                )
+              })()}
           </Card>
 
           <Card className="flex flex-col gap-5 p-6">

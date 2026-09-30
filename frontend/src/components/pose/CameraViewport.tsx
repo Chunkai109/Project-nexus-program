@@ -18,6 +18,7 @@ export function CameraViewport({
   monitoredSide = 'right',
   faultThresholdDeg = 8,
   onVisionMetrics,
+  onWorldLandmarks,
   poseDetectionEnabled = true,
 }: {
   /** Always-rendered overlay content (fault badge, exercise title chip, …). */
@@ -27,6 +28,16 @@ export function CameraViewport({
   monitoredSide?: Side
   faultThresholdDeg?: number
   onVisionMetrics?: (reading: VisionReading | null) => void
+  /**
+   * Fired every detected frame (unthrottled, unlike onVisionMetrics) with
+   * the raw MediaPipe Pose WORLD landmarks — `.worldLandmarks[0]`, not the
+   * image-space `.landmarks[0]` used for the on-screen skeleton/angle math —
+   * as a plain [x, y, z] array per landmark, or null while no person is
+   * detected. This is the exact input shape the trained bicep-curl
+   * classifier expects (see ml/src/preprocessing/landmarks.py); a caller
+   * buffers these per-rep and posts them to the vision model API.
+   */
+  onWorldLandmarks?: (landmarks: number[][] | null) => void
   /** False skips camera access and MediaPipe entirely — used to test other input sources (e.g. a real wearable) in isolation. */
   poseDetectionEnabled?: boolean
 }) {
@@ -75,6 +86,7 @@ export function CameraViewport({
   useEffect(() => {
     if (!cameraOk || poseStatus !== 'ready') {
       onVisionMetrics?.(null)
+      onWorldLandmarks?.(null)
       return
     }
 
@@ -118,6 +130,9 @@ export function CameraViewport({
           const reading = computeKneeReading(landmarks, monitoredSide)
           setPersonDetected(!!reading)
 
+          const worldLandmarks = result?.worldLandmarks?.[0] ?? null
+          onWorldLandmarks?.(worldLandmarks ? worldLandmarks.map((lm) => [lm.x, lm.y, lm.z]) : null)
+
           const now = performance.now()
           if (reading && now - lastEmit > METRICS_EMIT_INTERVAL_MS) {
             lastEmit = now
@@ -132,6 +147,7 @@ export function CameraViewport({
           ctx!.clearRect(0, 0, cssWidth, cssHeight)
           setPersonDetected(false)
           onVisionMetrics?.(null)
+          onWorldLandmarks?.(null)
         }
       }
       rafId = requestAnimationFrame(loop)
@@ -142,6 +158,7 @@ export function CameraViewport({
       cancelAnimationFrame(rafId)
       resizeObserver.disconnect()
       onVisionMetrics?.(null)
+      onWorldLandmarks?.(null)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cameraOk, poseStatus, monitoredSide, faultThresholdDeg])

@@ -88,13 +88,18 @@ python -m ensemble.scripts.verify_live_client_parsing                     # IMU 
 
 ## Web API (`ensemble/api/`)
 
-A small FastAPI service exposing the fusion model to a web frontend as
-**one prediction endpoint** -- by design, the caller never sees "vision's
-answer" and "IMU's answer" as two separate things to reconcile. The
-individual per-model results are still computed internally (the fusion
-function needs them) and are only included in the response, under a
-`"details"` key, if you explicitly ask for them (`?debug=true`) -- never
-as the primary response shape.
+A small FastAPI service exposing both the fusion model and the vision model
+alone to a web frontend. `POST /predict` is **one fused prediction
+endpoint** -- by design, the caller never sees "vision's answer" and "IMU's
+answer" as two separate things to reconcile. The individual per-model
+results are still computed internally (the fusion function needs them) and
+are only included in the response, under a `"details"` key, if you
+explicitly ask for them (`?debug=true`) -- never as the primary response
+shape. `POST /predict/vision` runs the vision model alone, for a
+camera-only integration with no wearable connected (this project's frontend
+uses this one, not the fused endpoint -- see
+`ensemble/FRONTEND_INTEGRATION.md` Section 5 for why: fusing would mean
+inventing IMU arrays for a session with no real wearable data).
 
 ```bash
 pip install -r ensemble/api/requirements.txt

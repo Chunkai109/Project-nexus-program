@@ -150,14 +150,43 @@ real.
 
 ## 4. The API contract
 
-Unchanged from the model side — one endpoint, one fused answer:
+Two endpoints now, not one — see Section 5 for why a vision-only one was
+added rather than routing the frontend's camera-only integration through the
+fused endpoint with fabricated IMU arrays.
+
+### `POST /predict/vision` — vision only, no IMU data needed
+
+This is what `frontend/src/lib/visionModel.ts` actually calls.
+
+```ts
+interface VisionInput {
+  frames: number[][][]     // [T][33][3] MediaPipe Pose WORLD landmarks, one rep
+  duration_seconds: number // browser-measured real elapsed time, NOT derived from frame count
+}
+
+interface VisionPredictResponse {
+  exercise: "bicep_curl"
+  prediction: "Perfect" | "Drag" | "Swing" | "Half" | "Heave" | "Incomplete"
+            | "no_exercise_detected" | "unrecognized_movement" | null
+  confidence: number | null
+  good_form_score?: number   // 0-1, the headline number — absent on a gate rejection or null prediction
+  good_form_score_raw?: number
+  class_probabilities?: Record<string, number>
+  message?: string
+  num_frames?: number
+}
+```
+
+`400` errors, each with a specific message: wrong `frames` shape, fewer than
+10 vision frames.
+
+### `POST /predict` — fused vision + IMU, one answer
+
+Unchanged from the model side:
 
 ```ts
 interface PredictRequest {
-  vision: {
-    frames: number[][][]     // [T][33][3] MediaPipe Pose WORLD landmarks, one rep
-    duration_seconds: number // browser-measured real elapsed time, NOT derived from frame count
-  }
+  vision: VisionInput
   imu: {
     flex: number[]
     drift: number[]
@@ -189,33 +218,34 @@ Add `?debug=true` to get the raw per-model results back too, under
 
 ---
 
-## 5. Wiring in the vision side (the clean path)
+## 5. Wiring in the vision side (the clean path) — DONE
 
-1. Re-enable MediaPipe in the live flow — flip `ENABLE_MEDIAPIPE_VISION` to
-   `true` in `LiveSession.tsx` (or make it a real prop/setting rather than a
-   hardcoded testing flag).
-2. Buffer **world** landmarks (not the `landmarks` field `CameraViewport.tsx`
-   currently reads for its own on-screen angle math — both are on the same
-   `PoseLandmarkerResult`, just read `.worldLandmarks[0]` instead of
-   `.landmarks[0]`) for the duration of a rep:
+This is now built, not a plan. What actually shipped, for anyone extending it:
 
-```ts
-const framesRef = useRef<number[][][]>([])
-const startTimeRef = useRef<number>(0)
-
-function onFrame(video: HTMLVideoElement, timestampMs: number) {
-  const result = detectForVideo(video, timestampMs)
-  if (result?.worldLandmarks?.[0]) {
-    framesRef.current.push(result.worldLandmarks[0].map((lm) => [lm.x, lm.y, lm.z]))
-  }
-}
-```
-
-3. Pick a rep boundary to start/stop buffering. The natural hook is the same
-   one `LiveSession.tsx` already uses for `repSamples` —
-   `hub.curl.repCount` incrementing marks a completed rep (see the
-   `prevRepCount` effect in `LiveSession.tsx`). Start the buffer when
-   `repState` leaves `'down'`, stop and send when `repCount` increments.
+1. `ENABLE_MEDIAPIPE_VISION` is `true` by default in `LiveSession.tsx` — the
+   camera pipeline runs unconditionally now rather than needing a manual flip.
+2. `CameraViewport.tsx` gained an `onWorldLandmarks` prop, fired every
+   detected frame (unthrottled, unlike the existing `onVisionMetrics`) with
+   `.worldLandmarks[0]` mapped to plain `[x, y, z]` arrays — the exact input
+   shape the trained classifier expects, with no reordering needed (MediaPipe's
+   standard 33-landmark order is the same on both the JS Tasks Vision API and
+   Python `mediapipe.solutions.pose` sides).
+3. `LiveSession.tsx` buffers those frames into a ref for as long as a person
+   is in view, and flushes + classifies the buffer at the same `repCount`
+   -incrementing boundary `repSamples` already uses (not gated on
+   `hub.curl.repState` specifically, since vision mode works standalone with
+   no hub/wearable connected at all — a real, common case this project
+   supports elsewhere).
+4. The buffered frames + measured `duration_seconds` are POSTed to a new
+   **vision-only** endpoint (see Section 4) via
+   `frontend/src/lib/visionModel.ts`'s `predictVisionForm()`. Not the fused
+   `/predict` endpoint — that would require fabricating `imu.flex/drift/emg/
+   vib_on` arrays for a camera-only session, which this project has a
+   standing rule against (see `ensemble/README.md`).
+5. The result renders in an "AI Form Check" card in `LiveSession.tsx`
+   (idle / checking / result / unavailable states) — `unavailable` is the
+   normal state whenever the API process (Section 3) isn't running; the UI
+   degrades to that silently rather than erroring.
 
 ---
 
@@ -250,13 +280,24 @@ Given Section 2's gap, this is the realistic version, not a drop-in:
 
 ## 7. What's tested vs. not
 
-**Tested (model/API side):** the API server against real HTTP requests, CORS
-preflight, all four validation error cases, the fusion logic against real
-per-model outputs. See `ensemble/README.md`.
+**Tested (model/API side):** both endpoints against real HTTP requests
+(`/predict/vision` and the fused `/predict`), CORS preflight, all validation
+error cases, the fusion logic against real per-model outputs. See
+`ensemble/README.md`.
 
-**Not tested — and now known to need real work, not just wiring:**
-- No browser has called this API yet.
-- The vision integration path (Section 5) is straightforward but unbuilt.
+**Tested (vision integration, Section 5):** a real Chromium browser calling
+`predictVisionForm()` against a live local API instance — both the success
+path (200, gate correctly rejects out-of-distribution input) and the
+API-offline path (`fetch` rejects, `LiveSession.tsx`'s "AI Form Check" card
+degrades to its `unavailable` state rather than throwing). **Not** tested
+end-to-end with a real camera + a real bicep curl in front of it — that needs
+an actual webcam and a person, not something a sandboxed test runner has.
+The MediaPipe model-asset fetch (from Google's CDN, in `usePoseLandmarker.ts`)
+is also unverified inside network-restricted sandboxes specifically — it
+works from a normal machine with normal internet access, which is the only
+environment this ships to.
+
+**Not tested — and still needs real work, not just wiring:**
 - The IMU integration path (Section 6) is a genuine open question, not a
   solved problem — the placeholder-value approach will produce results, but
   "produces a response" and "produces a meaningful one" are different
