@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, TriangleAlert, Vibrate, Timer, Repeat, ScanEye, Loader2 } from 'lucide-react'
+import { ArrowLeft, TriangleAlert, Timer, Repeat, ScanEye, Loader2 } from 'lucide-react'
 import { PageShell } from '@/components/layout/PageShell'
 import { Logo } from '@/components/layout/Logo'
 import { ThemeToggle } from '@/components/ui/ThemeToggle'
@@ -11,22 +11,15 @@ import { RadialGauge } from '@/components/charts/RadialGauge'
 import { EmgActivationBar } from '@/components/charts/EmgActivationBar'
 import { CameraViewport } from '@/components/pose/CameraViewport'
 import { PoseOverlay } from '@/components/pose/PoseOverlay'
-import { BodyMap } from '@/components/body/BodyMap'
 import { useSensorStream } from '@/lib/useSensorStream'
 import { useAppData } from '@/lib/data/AppDataContext'
 import { useAuth } from '@/lib/AuthContext'
 import { muscleEmgTarget } from '@/lib/muscles'
 import { useSensorHub } from '@/lib/hub/HubProvider'
-import { CURL_DRIFT_POD_ID, CURL_FLEX_POD_ID, POD_HAPTIC_CORRIDOR, POD_HAPTIC_FAULT } from '@/lib/hub/bicepCurlCounter'
+import { CURL_DRIFT_POD_ID, CURL_FLEX_POD_ID } from '@/lib/hub/bicepCurlCounter'
 import { predictVisionForm, predictFusedForm, MIN_VISION_FRAMES, type VisionPrediction, type FusedPrediction } from '@/lib/visionModel'
-import { PODS } from '@/lib/mockData'
+import type { FlexDriftSample } from '@/lib/hub/imuFlexDriftRecorder'
 import type { RepSample } from '@/types'
-
-// The motor pulses for exactly 1 second the instant flexion enters the
-// exercise's target corridor (see the corridor-entry effect below) — no
-// periodic retrigger, since it's an edge-triggered "you reached it" cue,
-// not a sustained correction signal.
-const HAPTIC_PULSE_MS = 1000
 
 // MediaPipe camera-based pose detection — was a hardcoded-off testing flag
 // to isolate the hub's MPU-only rep counter; now on by default so the
@@ -37,10 +30,18 @@ const ENABLE_MEDIAPIPE_VISION = true
 
 type FormCheckState =
   | { status: 'idle' }
+  | { status: 'accumulating'; frameCount: number }
   | { status: 'checking' }
   | { status: 'result'; result: VisionPrediction | FusedPrediction }
   | { status: 'unavailable' }
-  | { status: 'insufficient_frames'; frameCount: number }
+
+/** Builds the human-readable verdict stored per-rep for Session Summary's "AI Form Check Notes" (see SessionSummary.tsx). */
+function describeAiResult(result: VisionPrediction | FusedPrediction): string {
+  const prediction = result.prediction ?? 'No result'
+  const score = result.good_form_score != null ? ` (${Math.round(result.good_form_score * 100)}% good form)` : ''
+  const message = result.message ? ` — ${result.message}` : ''
+  return `${prediction}${score}${message}`
+}
 
 export function LiveSession() {
   const { exerciseId } = useParams()
@@ -50,7 +51,6 @@ export function LiveSession() {
   const exercise = useMemo(() => exercises.find((e) => e.id === exerciseId) ?? null, [exercises, exerciseId])
   const [ending, setEnding] = useState(false)
   const hub = useSensorHub()
-  const hubConnected = hub.connectionState === 'connected'
 
   const primaryAngle = exercise?.angleConfigs[0] ?? null
 
@@ -77,11 +77,27 @@ export function LiveSession() {
   const faultActive = usingHubCurl ? curl.formCheatDetected : simulated.faultActive
   const faultDeg = usingHubCurl ? Math.round(curl.driftError) : simulated.faultDeg
   const faultLabel = faultActive ? `Upper-Arm Drift Detected (+${faultDeg}° Over Baseline)` : null
-  const repCount = usingHubCurl ? curl.repCount : simulated.repCount
 
   const targetMin = primaryAngle?.targetMin ?? simulated.targetMin
   const targetMax = primaryAngle?.targetMax ?? simulated.targetMax
   const inCorridor = kneeFlexionDeg >= targetMin && kneeFlexionDeg <= targetMax
+
+  // Rep counting: every time flexion enters the target corridor, count it —
+  // full stop. Deliberately does NOT consider form/posture/drift-fault
+  // detection at all (an explicit product decision, not an oversight): the
+  // AI Form Check and the fault badge above remain separate, informational
+  // signals that never gate counting. Edge-triggered on corridor entry
+  // (holding inside it doesn't add extra reps), and works identically
+  // whether flex comes from the real hub or the wearable simulator, since
+  // both already funnel into the same kneeFlexionDeg/inCorridor above.
+  const [repCount, setRepCount] = useState(0)
+  const wasInCorridor = useRef(false)
+  useEffect(() => {
+    if (inCorridor && !wasInCorridor.current) {
+      setRepCount((c) => c + 1)
+    }
+    wasInCorridor.current = inCorridor
+  }, [inCorridor])
 
   // Real EMG from Pod 1 — the sole EMG-capable pod on this rig (bicep) —
   // once it has actually reported a reading; otherwise the wearable
@@ -94,67 +110,17 @@ export function LiveSession() {
   const usingHubEmg = emgBicepLive !== undefined
   const emgBicep = emgBicepLive !== undefined ? Math.round(emgBicepLive) : simulated.emgLeft
 
-  // Target-corridor feedback: pulse the corridor motor for exactly 1 second
-  // the instant flexion enters the exercise's target corridor (100°-135° for
-  // the default Bicep Curl, a real measured range -- see
-  // buildDefaultBicepCurlExercise() in AppDataContext.tsx). Purely
-  // edge-triggered — holding inside the
-  // corridor doesn't retrigger the buzz — and `corridorPulseActive` (rather
-  // than just `inCorridor`) drives the UI so the "Pod X Active" badge tracks
-  // the real ~1s motor pulse window instead of however long the arm stays in
-  // range.
-  const [corridorPulseActive, setCorridorPulseActive] = useState(false)
-  const wasInCorridor = useRef(false)
-  const corridorPulseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  useEffect(() => {
-    if (inCorridor && !wasInCorridor.current) {
-      setCorridorPulseActive(true)
-      if (corridorPulseTimeoutRef.current) clearTimeout(corridorPulseTimeoutRef.current)
-      corridorPulseTimeoutRef.current = setTimeout(() => setCorridorPulseActive(false), HAPTIC_PULSE_MS)
-      if (hubConnected) hub.sendHaptic(POD_HAPTIC_CORRIDOR, HAPTIC_PULSE_MS).catch(() => {})
-    }
-    wasInCorridor.current = inCorridor
-  }, [inCorridor, hubConnected, hub])
-
-  // Fault feedback: pulse the second motor the instant a form fault/cheat
-  // rep is newly detected — same edge-triggered pattern as the corridor
-  // pulse above, on the independent fault motor (Pod 16).
-  const [faultPulseActive, setFaultPulseActive] = useState(false)
-  const wasFaultActive = useRef(false)
-  const faultPulseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  useEffect(() => {
-    if (faultActive && !wasFaultActive.current) {
-      setFaultPulseActive(true)
-      if (faultPulseTimeoutRef.current) clearTimeout(faultPulseTimeoutRef.current)
-      faultPulseTimeoutRef.current = setTimeout(() => setFaultPulseActive(false), HAPTIC_PULSE_MS)
-      if (hubConnected) hub.sendHaptic(POD_HAPTIC_FAULT, HAPTIC_PULSE_MS).catch(() => {})
-    }
-    wasFaultActive.current = faultActive
-  }, [faultActive, hubConnected, hub])
-
-  useEffect(() => {
-    return () => {
-      if (corridorPulseTimeoutRef.current) clearTimeout(corridorPulseTimeoutRef.current)
-      if (faultPulseTimeoutRef.current) clearTimeout(faultPulseTimeoutRef.current)
-    }
-  }, [])
-
-  const activeHapticPods = [
-    ...(corridorPulseActive ? [POD_HAPTIC_CORRIDOR] : []),
-    ...(faultPulseActive ? [POD_HAPTIC_FAULT] : []),
-  ]
-
   // AI form check (ml/'s trained bicep-curl classifier, via the ensemble
   // API's vision-only endpoint — see ensemble/FRONTEND_INTEGRATION.md
   // Section 5): buffer every camera frame's MediaPipe Pose WORLD landmarks
-  // while a person is in view, then flush and classify the buffer the
-  // instant a rep completes (same repCount-increment boundary repSamples
-  // below already uses). Frames buffered here are the same shape the model
+  // while a person is in view, then flush and classify the buffer once
+  // there's enough of it. Frames buffered here are the same shape the model
   // was trained on regardless of whether the buffer spans one clean rep or
-  // some MPU-timed slice of one — the model's own best-window search (see
-  // BicepCurlPredictor) handles pacing/tempo variance on the server side.
+  // several — the model's own best-window search (see BicepCurlPredictor)
+  // handles pacing/tempo variance on the server side.
   const visionFramesRef = useRef<number[][][]>([])
   const visionBufferStartRef = useRef<number | null>(null)
+  const flexDriftBufferRef = useRef<FlexDriftSample[]>([])
   const [formCheck, setFormCheck] = useState<FormCheckState>({ status: 'idle' })
 
   function handleWorldLandmarks(landmarks: number[][] | null) {
@@ -170,28 +136,35 @@ export function LiveSession() {
   const prevRepCount = useRef(0)
   useEffect(() => {
     if (repCount > prevRepCount.current) {
+      const thisRep = repCount
       prevRepCount.current = repCount
       setRepSamples((prev) => [
         ...prev,
-        { rep: repCount, angle: Math.round(kneeFlexionDeg), emgLeft: emgBicep, emgRight: emgBicep, faultActive },
+        { rep: thisRep, angle: Math.round(kneeFlexionDeg), emgLeft: emgBicep, emgRight: emgBicep, faultActive },
       ])
+
+      // Accumulated across reps rather than drained-and-discarded here: the
+      // simple corridor-entry rep counter above can complete a rep in well
+      // under a second, often before enough camera frames exist to say
+      // anything useful. Keep collecting flex/drift and camera frames alike
+      // across as many reps as it takes to reach MIN_VISION_FRAMES, then
+      // score the whole accumulated window at once (duration_seconds below
+      // reflects that full window, not just the latest rep) — this is what
+      // fixed "AI Form Check never activates": the old version reset the
+      // buffer and reported "not enough data" on nearly every single rep
+      // instead of ever letting it accumulate.
+      flexDriftBufferRef.current.push(...hub.drainFlexDriftSamples())
 
       const frames = visionFramesRef.current
       const bufferStart = visionBufferStartRef.current
-      visionFramesRef.current = []
-      visionBufferStartRef.current = null
-      // Always drained, even on the vision-only path below, so a hub that's
-      // connected but idle this rep doesn't leak samples into the next one.
-      const flexDrift = hub.drainFlexDriftSamples()
       if (bufferStart !== null) {
-        // Checked here, before calling predict*, so a too-short buffer (a
-        // quick rep, or MediaPipe briefly losing the person mid-movement)
-        // shows its own accurate state instead of falling into the same
-        // catch as a genuinely unreachable API and being mislabeled "Model
-        // Offline" when the API was fine all along.
         if (frames.length < MIN_VISION_FRAMES) {
-          setFormCheck({ status: 'insufficient_frames', frameCount: frames.length })
+          setFormCheck({ status: 'accumulating', frameCount: frames.length })
         } else {
+          visionFramesRef.current = []
+          visionBufferStartRef.current = null
+          const flexDrift = flexDriftBufferRef.current
+          flexDriftBufferRef.current = []
           const durationSeconds = (performance.now() - bufferStart) / 1000
           setFormCheck({ status: 'checking' })
           // Real flex/drift from the hub feeds the fused model when
@@ -204,7 +177,14 @@ export function LiveSession() {
               ? predictFusedForm(frames, durationSeconds, flexDrift)
               : predictVisionForm(frames, durationSeconds)
           prediction
-            .then((result) => setFormCheck({ status: 'result', result }))
+            .then((result) => {
+              setFormCheck({ status: 'result', result })
+              // Patches the rep that triggered this flush — resolves after
+              // that rep's sample was already added above, and the
+              // accumulated window may span several reps besides.
+              const comment = describeAiResult(result)
+              setRepSamples((prev) => prev.map((r) => (r.rep === thisRep ? { ...r, aiComment: comment } : r)))
+            })
             .catch(() => setFormCheck({ status: 'unavailable' }))
         }
       }
@@ -277,7 +257,7 @@ export function LiveSession() {
         {/* Primary viewport */}
         <div className="flex flex-col gap-4">
           <CameraViewport
-            faultThresholdDeg={primaryAngle?.faultThresholdDeg ?? 8}
+            faultActive={faultActive}
             onWorldLandmarks={handleWorldLandmarks}
             poseDetectionEnabled={ENABLE_MEDIAPIPE_VISION}
             fallbackSkeleton={
@@ -328,6 +308,9 @@ export function LiveSession() {
             >
               {usingHubCurl ? 'Source: Live Hub (MPU)' : 'Source: Wearable Simulation'}
             </span>
+            <p className="mt-3 text-center text-[13px] font-medium text-ink-muted">
+              {kneeFlexionDeg < targetMin ? 'Keep going!' : 'Nice — target reached!'}
+            </p>
           </Card>
 
           <Card className="flex flex-col gap-2.5 p-6">
@@ -353,10 +336,10 @@ export function LiveSession() {
                 Scoring your last rep…
               </p>
             )}
-            {formCheck.status === 'insufficient_frames' && (
-              <p className="text-[13px] text-ink-faint">
-                Only saw {formCheck.frameCount} camera frame{formCheck.frameCount === 1 ? '' : 's'} of that rep — not
-                enough to score it. Stay fully in frame for the whole movement and it'll pick up next rep.
+            {formCheck.status === 'accumulating' && (
+              <p className="flex items-center gap-2 text-[13px] text-ink-faint">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                Gathering camera data ({formCheck.frameCount} frame{formCheck.frameCount === 1 ? '' : 's'} so far)…
               </p>
             )}
             {formCheck.status === 'unavailable' && (
@@ -409,30 +392,6 @@ export function LiveSession() {
               </span>
             </div>
             <EmgActivationBar label="Bicep" value={emgBicep} target={muscleEmgTarget(exercise.muscleEmgTargets, 'right-biceps-brachii')} />
-          </Card>
-
-          <Card className="p-6">
-            <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-[15px] font-semibold text-ink">Haptic Biofeedback</h3>
-              {activeHapticPods.length > 0 && (
-                <span className="flex items-center gap-1.5 text-[13px] font-semibold text-emerald">
-                  <Vibrate className="h-3.5 w-3.5" />
-                  {activeHapticPods.length > 1 ? `Pods ${activeHapticPods.join(', ')} Active` : `Pod ${activeHapticPods[0]} Active`}
-                </span>
-              )}
-            </div>
-            <div>
-              <BodyMap pods={PODS} hapticPodId={activeHapticPods.length > 0 ? activeHapticPods : null} height={170} />
-            </div>
-            <p className="mt-3 text-center text-[13px] text-ink-muted">
-              {corridorPulseActive && faultPulseActive
-                ? 'Pulsing both motors — corridor reached and a form fault detected'
-                : corridorPulseActive
-                  ? `Target Corridor Reached — pulsing the corridor motor (Pod ${POD_HAPTIC_CORRIDOR}) for 1s`
-                  : faultPulseActive
-                    ? `Form Fault Detected — pulsing the fault motor (Pod ${POD_HAPTIC_FAULT}) for 1s`
-                    : `Curl into the ${targetMin}°–${targetMax}° corridor to trigger haptic feedback`}
-            </p>
           </Card>
 
           <Button variant="danger" size="lg" className="w-full" onClick={handleEnd} disabled={ending}>

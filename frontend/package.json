@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "concurrently -n vite,api -c blue,green \"npm:dev:web\" \"npm:dev:api\"",
     "dev:web": "vite",
-    "dev:api": "cd .. && python -m uvicorn ensemble.api.server:app --reload --port 8000",
+    "dev:api": "node scripts/run-api.mjs",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",

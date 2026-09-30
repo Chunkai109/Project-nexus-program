@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { CheckCircle2, Timer, Repeat, Target, TriangleAlert, ArrowLeft, Crosshair, Gauge } from 'lucide-react'
+import { CheckCircle2, Timer, Repeat, Target, TriangleAlert, ArrowLeft, Crosshair, Gauge, Sparkles } from 'lucide-react'
 import { PageShell } from '@/components/layout/PageShell'
 import { Logo } from '@/components/layout/Logo'
 import { ThemeToggle } from '@/components/ui/ThemeToggle'
@@ -38,8 +38,7 @@ export function SessionSummary() {
   const { sessions, exercises } = useAppData()
   const session = useMemo(() => sessions.find((s) => s.id === sessionId) ?? null, [sessions, sessionId])
   const exercise = useMemo(() => exercises.find((e) => e.id === session?.exerciseId) ?? null, [exercises, session])
-  const targetEmgLeft = muscleEmgTarget(exercise?.muscleEmgTargets ?? [], 'left-vastus-medialis')
-  const targetEmgRight = muscleEmgTarget(exercise?.muscleEmgTargets ?? [], 'right-vastus-medialis')
+  const targetEmgBicep = muscleEmgTarget(exercise?.muscleEmgTargets ?? [], 'right-biceps-brachii')
 
   const priorSession = useMemo(() => {
     if (!session) return null
@@ -78,9 +77,11 @@ export function SessionSummary() {
 
   const totalReps = session.reps.length
   const avgAngle = average(session.reps.map((r) => r.angle))
-  const avgEmgLeft = average(session.reps.map((r) => r.emgLeft))
-  const avgEmgRight = average(session.reps.map((r) => r.emgRight))
+  // emgLeft/emgRight are duplicates of the same single bicep EMG channel on
+  // this rig (see LiveSession.tsx) — averaging either gives the same number.
+  const avgEmgBicep = average(session.reps.map((r) => r.emgLeft))
   const faultCount = session.reps.filter((r) => r.faultActive).length
+  const repsWithAiComment = session.reps.filter((r) => r.aiComment)
   const mm = String(Math.floor(session.durationSec / 60)).padStart(2, '0')
   const ss = String(session.durationSec % 60).padStart(2, '0')
 
@@ -167,10 +168,28 @@ export function SessionSummary() {
         <Card className="p-7">
           <p className="mb-4 text-[13px] font-medium text-ink-muted">Average Muscle Activation</p>
           <div className="flex flex-col gap-5">
-            <EmgActivationBar label="Left Quad" value={avgEmgLeft} target={targetEmgLeft} />
-            <EmgActivationBar label="Right Quad" value={avgEmgRight} target={targetEmgRight} />
+            <EmgActivationBar label="Bicep" value={avgEmgBicep} target={targetEmgBicep} />
           </div>
         </Card>
+
+        {repsWithAiComment.length > 0 && (
+          <Card className="p-7">
+            <div className="mb-4 flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-accent" />
+              <p className="text-[13px] font-medium text-ink-muted">AI Form Check Notes</p>
+            </div>
+            <div className="flex flex-col gap-3">
+              {repsWithAiComment.map((r) => (
+                <div key={r.rep} className="flex items-start gap-3 rounded-xl bg-surface-secondary p-3.5">
+                  <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-surface text-[11px] font-semibold text-ink">
+                    {r.rep}
+                  </span>
+                  <p className="text-[13px] text-ink-muted">{r.aiComment}</p>
+                </div>
+              ))}
+            </div>
+          </Card>
+        )}
 
         <Button size="lg" className="w-full" onClick={() => navigate('/patient/exercises')}>
           Back to Exercises
