@@ -4,7 +4,9 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "concurrently -n vite,api -c blue,green \"npm:dev:web\" \"npm:dev:api\"",
+    "dev:web": "vite",
+    "dev:api": "cd .. && python -m uvicorn ensemble.api.server:app --reload --port 8000",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
@@ -30,6 +32,7 @@
     "@types/react-dom": "^19.2.7",
     "@types/three": "^0.186.0",
     "@vitejs/plugin-react": "^6.1.1",
+    "concurrently": "^10.0.5",
     "oxlint": "^1.81.0",
     "tailwindcss": "^4.3.3",
     "typescript": "~6.0.2",

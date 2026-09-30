@@ -132,9 +132,27 @@ integration path is clean. See Section 4.
 
 ## 3. Set up and run the API
 
+One-time setup:
+
 ```bash
 pip install -r ensemble/api/requirements.txt
-uvicorn ensemble.api.server:app --reload --port 8000
+```
+
+Then, from `frontend/`, `npm run dev` starts **both** Vite and this API
+together (via `concurrently` — see `package.json`'s `dev`/`dev:web`/`dev:api`
+scripts), each with its own colored `[vite]`/`[api]` prefix in one terminal.
+If the API fails to start (Python not installed, deps missing, wrong
+`python`/`python3` on your platform — the script assumes `python`, edit
+`dev:api` in `package.json` if yours is `python3`), Vite keeps running
+regardless; the frontend is built to degrade to a "Model Offline" state
+rather than depend on this API being up.
+
+To run just the API on its own (e.g. to see its logs without Vite's, or to
+`curl` it directly):
+
+```bash
+cd ..   # repo root, not frontend/ -- `ensemble` must be importable from cwd
+python -m uvicorn ensemble.api.server:app --reload --port 8000
 ```
 
 ```bash

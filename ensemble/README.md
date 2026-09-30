@@ -106,6 +106,10 @@ pip install -r ensemble/api/requirements.txt
 uvicorn ensemble.api.server:app --reload --port 8000
 ```
 
+(Or, once dependencies are installed, run `npm run dev` from `frontend/` —
+it starts this API alongside the Vite dev server in one terminal. See
+`ensemble/FRONTEND_INTEGRATION.md` Section 3.)
+
 `POST /predict`:
 
 ```json
