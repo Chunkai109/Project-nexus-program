@@ -7,7 +7,7 @@ import { ThemeToggle } from '@/components/ui/ThemeToggle'
 import { Breadcrumb } from '@/components/ui/Breadcrumb'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
-import { BodyMap } from '@/components/body/BodyMap'
+import { SensorPlacementPicker } from '@/components/body/SensorPlacementPicker'
 import { PODS } from '@/lib/mockData'
 import { useAppData } from '@/lib/data/AppDataContext'
 import { podLabel } from '@/lib/podUtils'
@@ -19,23 +19,23 @@ import { clsx } from 'clsx'
 const PLACEMENT_STEPS = [
   {
     title: 'Prep the skin',
-    detail: 'Wipe the bicep electrode site with an alcohol swab and let it air-dry for 10 seconds to reduce impedance noise.',
+    detail: 'Wipe the bicep and elbow electrode sites with an alcohol swab and let them air-dry for 10 seconds to reduce impedance noise.',
   },
   {
-    title: 'Place the EMG pod on your bicep (Pod 1)',
-    detail: 'Snap the Ag/AgCl electrodes onto Pod 1 and stick it over the belly of the bicep, aligned along the muscle fiber direction.',
+    title: 'Place the 3-lead EMG electrode (Pod 1)',
+    detail: 'Stick the red and green electrodes on the belly of the bicep, 2cm apart along the muscle fiber direction — this pair carries Pod 1\'s signal. Stick the yellow reference electrode on the elbow, over bone rather than muscle, to give the sensor a clean electrical ground.',
   },
   {
     title: 'Strap the IMU pod on your forearm (Pod 2)',
-    detail: 'Secure Pod 2 on the forearm, just below the elbow, using the neoprene band — snug, not restrictive.',
+    detail: 'Secure Pod 2 on the outer middle of the forearm, between the flexor and extensor muscle groups — this placement is the same whichever arm you use.',
   },
   {
     title: 'Strap the second IMU pod on your lower tricep (Pod 3)',
-    detail: 'Secure Pod 3 on the lower tricep / upper arm, just above the elbow. Together with Pod 2 this tracks forearm flexion against upper-arm drift.',
+    detail: 'Secure Pod 3 on the lower tricep, close to the elbow. Together with Pod 2 this tracks forearm flexion against upper-arm drift.',
   },
   {
     title: 'Attach the two vibration motors',
-    detail: 'Motor 1 (corridor alert) straps near the bicep pod; Motor 2 (fault alert) straps near the forearm pod. Only 3 sensor pods and 2 motors go on the arm in total.',
+    detail: 'Motor 1 (corridor alert) straps anywhere on the bicep part of the arm; Motor 2 (fault alert) straps anywhere on the forearm part. Only 3 sensor pods and 2 motors go on the arm in total.',
   },
   {
     title: 'Confirm connection',
@@ -124,15 +124,9 @@ export function SensorSetup() {
         {/* Left column: body map + pod status */}
         <Card className="flex flex-col items-center p-7">
           <h2 className="mb-1 self-start text-[15px] font-semibold text-ink">Satellite Pod Map</h2>
-          <p className="mb-5 self-start text-[13px] text-ink-faint">{exercise.title} · tap a pod for details</p>
-          <div className={clsx('py-2', vibrating && 'animate-pulse')}>
-            <BodyMap
-              pods={displayPods}
-              activePod={activePod}
-              onSelect={setActivePod}
-              selectedPods={Array.from(new Set(exercise.angleConfigs.flatMap((c) => [c.nodeA, c.nodeB])))}
-              height={340}
-            />
+          <p className="mb-5 self-start text-[13px] text-ink-faint">{exercise.title} · drag to rotate, tap a pod for details</p>
+          <div className={clsx('w-full', vibrating && 'animate-pulse')}>
+            <SensorPlacementPicker pods={displayPods} activePodId={activePod} onSelect={setActivePod} height={280} />
           </div>
           <p className="mb-1 text-center text-[12px] text-ink-faint">
             Highlighted nodes:{' '}

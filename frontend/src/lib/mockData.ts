@@ -17,8 +17,8 @@ export const PRACTICES: Practice[] = [
 // by real hardware to begin with.
 export const PODS: Pod[] = [
   { id: 1, label: 'Pod 1', location: 'Bicep (EMG)', kind: 'EMG', signal: 'strong', battery: 94 },
-  { id: 2, label: 'Pod 2', location: 'Forearm (IMU)', kind: 'IMU', signal: 'strong', battery: 91 },
-  { id: 3, label: 'Pod 3', location: 'Lower Tricep / Upper Arm (IMU)', kind: 'IMU', signal: 'strong', battery: 88 },
+  { id: 2, label: 'Pod 2', location: 'Outer Forearm (IMU)', kind: 'IMU', signal: 'strong', battery: 91 },
+  { id: 3, label: 'Pod 3', location: 'Lower Tricep, Near Elbow (IMU)', kind: 'IMU', signal: 'strong', battery: 88 },
   { id: 15, label: 'Motor 1', location: 'Corridor Alert (near bicep)', kind: 'Haptics', signal: 'strong', battery: 100 },
   { id: 16, label: 'Motor 2', location: 'Fault Alert (near forearm)', kind: 'Haptics', signal: 'strong', battery: 100 },
 ]
