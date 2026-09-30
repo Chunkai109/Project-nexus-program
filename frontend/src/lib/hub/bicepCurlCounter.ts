@@ -23,6 +23,16 @@ const SETTLE_SAMPLES = 50
 export const CURL_FLEX_POD_ID = 2
 export const CURL_DRIFT_POD_ID = 3
 
+/**
+ * The two independent vibration motors, matching POD_HAPTIC_CORRIDOR/
+ * POD_HAPTIC_FAULT in smartphysio_hub.ino. Chosen past the sensor pods (1-3)
+ * and the frontend's virtual joint/muscle node range (lib/joints.ts,
+ * muscles.ts top out at 14) so a haptic command's podId never collides with
+ * a real or virtual sensor node.
+ */
+export const POD_HAPTIC_CORRIDOR = 15
+export const POD_HAPTIC_FAULT = 16
+
 const INITIAL_RESULT: BicepCurlCounterResult = {
   repCount: 0,
   repState: 'down',

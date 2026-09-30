@@ -9,16 +9,15 @@ import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { RadialGauge } from '@/components/charts/RadialGauge'
 import { EmgActivationBar } from '@/components/charts/EmgActivationBar'
-import { CameraViewport, type VisionReading } from '@/components/pose/CameraViewport'
+import { CameraViewport } from '@/components/pose/CameraViewport'
 import { PoseOverlay } from '@/components/pose/PoseOverlay'
 import { BodyMap } from '@/components/body/BodyMap'
 import { useSensorStream } from '@/lib/useSensorStream'
 import { useAppData } from '@/lib/data/AppDataContext'
 import { useAuth } from '@/lib/AuthContext'
-import { podSide, kneePodForSide } from '@/lib/podUtils'
 import { muscleEmgTarget } from '@/lib/muscles'
 import { useSensorHub } from '@/lib/hub/HubProvider'
-import { CURL_DRIFT_POD_ID, CURL_FLEX_POD_ID } from '@/lib/hub/bicepCurlCounter'
+import { CURL_DRIFT_POD_ID, CURL_FLEX_POD_ID, POD_HAPTIC_CORRIDOR, POD_HAPTIC_FAULT } from '@/lib/hub/bicepCurlCounter'
 import { predictVisionForm, predictFusedForm, MIN_VISION_FRAMES, type VisionPrediction, type FusedPrediction } from '@/lib/visionModel'
 import { PODS } from '@/lib/mockData'
 import type { RepSample } from '@/types'
@@ -50,13 +49,10 @@ export function LiveSession() {
   const { exercises, patients, recordSession } = useAppData()
   const exercise = useMemo(() => exercises.find((e) => e.id === exerciseId) ?? null, [exercises, exerciseId])
   const [ending, setEnding] = useState(false)
-  const [vision, setVision] = useState<VisionReading | null>(null)
   const hub = useSensorHub()
   const hubConnected = hub.connectionState === 'connected'
 
   const primaryAngle = exercise?.angleConfigs[0] ?? null
-  const monitoredSide = primaryAngle ? podSide(primaryAngle.nodeA) : 'right'
-  const hapticPod = kneePodForSide(monitoredSide)
 
   const simulated = useSensorStream(!ending, primaryAngle?.targetMin ?? null, primaryAngle?.targetMax ?? null)
   const squatDepth = Math.max(0, Math.min(1, 1 - (simulated.kneeFlexionDeg - 70) / 60))
@@ -71,62 +67,80 @@ export function LiveSession() {
   const curl = hub.curl
   const usingHubCurl = flexLive !== null && driftLive !== null
 
-  // Hybrid multimodal decision engine: prefer the camera's real joint-angle
-  // reading when a person is in frame, then the hub's real MPU curl
-  // algorithm when connected, falling back to the wearable simulator only
-  // when neither real source is available.
-  const usingVision = vision !== null
-  const kneeFlexionDeg = vision?.flexionDeg ?? (usingHubCurl ? flexLive : simulated.kneeFlexionDeg)
-  const faultActive = vision?.faultActive ?? (usingHubCurl ? curl.formCheatDetected : simulated.faultActive)
-  const faultDeg = vision ? Math.round(vision.valgusDeg) : usingHubCurl ? Math.round(curl.driftError) : simulated.faultDeg
-  const faultLabel = faultActive
-    ? usingHubCurl && !usingVision
-      ? `Upper-Arm Drift Detected (+${faultDeg}° Over Baseline)`
-      : `${monitoredSide === 'left' ? 'Left' : 'Right'} Knee Valgus Detected (+${faultDeg}° Fault)`
-    : null
+  // The hub's real MPU curl algorithm when connected, falling back to the
+  // wearable simulator otherwise. (The camera feed below still runs its own
+  // MediaPipe pose detection for AI Form Check — see the fused/vision-only
+  // predict call further down — it just isn't used for this angle/fault
+  // reading, since the trained knee-valgus vision math doesn't apply to an
+  // elbow curl.)
+  const kneeFlexionDeg = usingHubCurl ? flexLive : simulated.kneeFlexionDeg
+  const faultActive = usingHubCurl ? curl.formCheatDetected : simulated.faultActive
+  const faultDeg = usingHubCurl ? Math.round(curl.driftError) : simulated.faultDeg
+  const faultLabel = faultActive ? `Upper-Arm Drift Detected (+${faultDeg}° Over Baseline)` : null
   const repCount = usingHubCurl ? curl.repCount : simulated.repCount
 
   const targetMin = primaryAngle?.targetMin ?? simulated.targetMin
   const targetMax = primaryAngle?.targetMax ?? simulated.targetMax
   const inCorridor = kneeFlexionDeg >= targetMin && kneeFlexionDeg <= targetMax
 
-  // Real EMG pods (1 = left vastus medialis, 2 = right) once that specific
-  // pod has actually reported an EMG reading; otherwise the wearable
+  // Real EMG from Pod 1 — the sole EMG-capable pod on this rig (bicep) —
+  // once it has actually reported a reading; otherwise the wearable
   // simulator, same as the knee angle above. This is independent of
   // hubConnected since a real hub (e.g. IMU-only hardware) may not have EMG
-  // wired up at all yet.
-  const emgLeftLive = hub.pods[1]?.emgActivationPct
-  const emgRightLive = hub.pods[2]?.emgActivationPct
-  const usingHubEmg = emgLeftLive !== undefined || emgRightLive !== undefined
-  const emgLeft = emgLeftLive !== undefined ? Math.round(emgLeftLive) : simulated.emgLeft
-  const emgRight = emgRightLive !== undefined ? Math.round(emgRightLive) : simulated.emgRight
+  // wired up at all yet. Duplicated into both emgLeft/emgRight when stored
+  // in a RepSample below, since that's the shared shape every exercise's
+  // session analytics reads and this rig only has one EMG channel.
+  const emgBicepLive = hub.pods[1]?.emgActivationPct
+  const usingHubEmg = emgBicepLive !== undefined
+  const emgBicep = emgBicepLive !== undefined ? Math.round(emgBicepLive) : simulated.emgLeft
 
-  // Target-corridor feedback: pulse the monitored pod for exactly 1 second
+  // Target-corridor feedback: pulse the corridor motor for exactly 1 second
   // the instant flexion enters the exercise's target corridor (150°-180° for
   // the default Bicep Curl). Purely edge-triggered — holding inside the
-  // corridor doesn't retrigger the buzz — and `pulseActive` (rather than just
-  // `inCorridor`) drives the UI so the "Pod X Active" badge tracks the real
-  // ~1s motor pulse window instead of however long the arm stays in range.
-  const [pulseActive, setPulseActive] = useState(false)
+  // corridor doesn't retrigger the buzz — and `corridorPulseActive` (rather
+  // than just `inCorridor`) drives the UI so the "Pod X Active" badge tracks
+  // the real ~1s motor pulse window instead of however long the arm stays in
+  // range.
+  const [corridorPulseActive, setCorridorPulseActive] = useState(false)
   const wasInCorridor = useRef(false)
-  const pulseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const corridorPulseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(() => {
     if (inCorridor && !wasInCorridor.current) {
-      setPulseActive(true)
-      if (pulseTimeoutRef.current) clearTimeout(pulseTimeoutRef.current)
-      pulseTimeoutRef.current = setTimeout(() => setPulseActive(false), HAPTIC_PULSE_MS)
-      if (hubConnected) hub.sendHaptic(hapticPod, HAPTIC_PULSE_MS).catch(() => {})
+      setCorridorPulseActive(true)
+      if (corridorPulseTimeoutRef.current) clearTimeout(corridorPulseTimeoutRef.current)
+      corridorPulseTimeoutRef.current = setTimeout(() => setCorridorPulseActive(false), HAPTIC_PULSE_MS)
+      if (hubConnected) hub.sendHaptic(POD_HAPTIC_CORRIDOR, HAPTIC_PULSE_MS).catch(() => {})
     }
     wasInCorridor.current = inCorridor
-  }, [inCorridor, hubConnected, hub, hapticPod])
+  }, [inCorridor, hubConnected, hub])
+
+  // Fault feedback: pulse the second motor the instant a form fault/cheat
+  // rep is newly detected — same edge-triggered pattern as the corridor
+  // pulse above, on the independent fault motor (Pod 16).
+  const [faultPulseActive, setFaultPulseActive] = useState(false)
+  const wasFaultActive = useRef(false)
+  const faultPulseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => {
+    if (faultActive && !wasFaultActive.current) {
+      setFaultPulseActive(true)
+      if (faultPulseTimeoutRef.current) clearTimeout(faultPulseTimeoutRef.current)
+      faultPulseTimeoutRef.current = setTimeout(() => setFaultPulseActive(false), HAPTIC_PULSE_MS)
+      if (hubConnected) hub.sendHaptic(POD_HAPTIC_FAULT, HAPTIC_PULSE_MS).catch(() => {})
+    }
+    wasFaultActive.current = faultActive
+  }, [faultActive, hubConnected, hub])
 
   useEffect(() => {
     return () => {
-      if (pulseTimeoutRef.current) clearTimeout(pulseTimeoutRef.current)
+      if (corridorPulseTimeoutRef.current) clearTimeout(corridorPulseTimeoutRef.current)
+      if (faultPulseTimeoutRef.current) clearTimeout(faultPulseTimeoutRef.current)
     }
   }, [])
 
-  const activeHapticPod = pulseActive ? hapticPod : null
+  const activeHapticPods = [
+    ...(corridorPulseActive ? [POD_HAPTIC_CORRIDOR] : []),
+    ...(faultPulseActive ? [POD_HAPTIC_FAULT] : []),
+  ]
 
   // AI form check (ml/'s trained bicep-curl classifier, via the ensemble
   // API's vision-only endpoint — see ensemble/FRONTEND_INTEGRATION.md
@@ -155,7 +169,10 @@ export function LiveSession() {
   useEffect(() => {
     if (repCount > prevRepCount.current) {
       prevRepCount.current = repCount
-      setRepSamples((prev) => [...prev, { rep: repCount, angle: Math.round(kneeFlexionDeg), emgLeft, emgRight, faultActive }])
+      setRepSamples((prev) => [
+        ...prev,
+        { rep: repCount, angle: Math.round(kneeFlexionDeg), emgLeft: emgBicep, emgRight: emgBicep, faultActive },
+      ])
 
       const frames = visionFramesRef.current
       const bufferStart = visionBufferStartRef.current
@@ -190,7 +207,7 @@ export function LiveSession() {
         }
       }
     }
-  }, [repCount, kneeFlexionDeg, emgLeft, emgRight, faultActive, hub, usingHubCurl])
+  }, [repCount, kneeFlexionDeg, emgBicep, faultActive, hub, usingHubCurl])
 
   if (!exercise) {
     return (
@@ -258,9 +275,7 @@ export function LiveSession() {
         {/* Primary viewport */}
         <div className="flex flex-col gap-4">
           <CameraViewport
-            monitoredSide={monitoredSide}
             faultThresholdDeg={primaryAngle?.faultThresholdDeg ?? 8}
-            onVisionMetrics={setVision}
             onWorldLandmarks={handleWorldLandmarks}
             poseDetectionEnabled={ENABLE_MEDIAPIPE_VISION}
             fallbackSkeleton={
@@ -282,11 +297,9 @@ export function LiveSession() {
           <Card className="flex items-start gap-2.5 p-5">
             <ScanEye className="mt-0.5 h-4 w-4 flex-shrink-0 text-accent" />
             <p className="text-[13px] text-ink-faint">
-              {usingVision
-                ? 'Knee angle is being measured live from your camera via MediaPipe Pose. Wearable pods still supply EMG and localized limb rotation the camera alone can\'t see.'
-                : usingHubCurl
-                  ? "MediaPipe is disabled — flexion, drift and rep counting below are computed live from the ESP32's MPU6050 pods, run through the same curl algorithm as the firmware."
-                  : 'No live camera reading right now, so the knee angle and fault state below are simulated from the wearable stream, per the hybrid multimodal decision engine.'}
+              {usingHubCurl
+                ? "Flexion, drift and rep counting below are computed live from the ESP32's MPU6050 pods, run through the same curl algorithm as the firmware. The camera feed alongside it feeds AI Form Check."
+                : 'No live hub connection right now, so the joint angle and fault state below are simulated from the wearable stream.'}
             </p>
           </Card>
         </div>
@@ -309,9 +322,9 @@ export function LiveSession() {
               fault={faultActive}
             />
             <span
-              className={`mt-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium ${usingVision || usingHubCurl ? 'bg-accent/10 text-accent' : 'bg-surface-secondary text-ink-faint'}`}
+              className={`mt-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium ${usingHubCurl ? 'bg-accent/10 text-accent' : 'bg-surface-secondary text-ink-faint'}`}
             >
-              {usingVision ? 'Source: Live Camera (MediaPipe)' : usingHubCurl ? 'Source: Live Hub (MPU)' : 'Source: Wearable Simulation'}
+              {usingHubCurl ? 'Source: Live Hub (MPU)' : 'Source: Wearable Simulation'}
             </span>
           </Card>
 
@@ -393,27 +406,30 @@ export function LiveSession() {
                 {usingHubEmg ? 'Source: Live Hub' : 'Source: Wearable Simulation'}
               </span>
             </div>
-            <EmgActivationBar label="Left Quad" value={emgLeft} target={muscleEmgTarget(exercise.muscleEmgTargets, 'left-vastus-medialis')} />
-            <EmgActivationBar label="Right Quad" value={emgRight} target={muscleEmgTarget(exercise.muscleEmgTargets, 'right-vastus-medialis')} />
+            <EmgActivationBar label="Bicep" value={emgBicep} target={muscleEmgTarget(exercise.muscleEmgTargets, 'right-biceps-brachii')} />
           </Card>
 
           <Card className="p-6">
             <div className="mb-4 flex items-center justify-between">
               <h3 className="text-[15px] font-semibold text-ink">Haptic Biofeedback</h3>
-              {activeHapticPod && (
+              {activeHapticPods.length > 0 && (
                 <span className="flex items-center gap-1.5 text-[13px] font-semibold text-emerald">
                   <Vibrate className="h-3.5 w-3.5" />
-                  Pod {activeHapticPod} Active
+                  {activeHapticPods.length > 1 ? `Pods ${activeHapticPods.join(', ')} Active` : `Pod ${activeHapticPods[0]} Active`}
                 </span>
               )}
             </div>
             <div>
-              <BodyMap pods={PODS} hapticPodId={activeHapticPod} height={170} />
+              <BodyMap pods={PODS} hapticPodId={activeHapticPods.length > 0 ? activeHapticPods : null} height={170} />
             </div>
             <p className="mt-3 text-center text-[13px] text-ink-muted">
-              {activeHapticPod
-                ? `Target Corridor Reached — pulsing pod ${activeHapticPod} for 1s`
-                : `Curl into the ${targetMin}°–${targetMax}° corridor to trigger haptic feedback`}
+              {corridorPulseActive && faultPulseActive
+                ? 'Pulsing both motors — corridor reached and a form fault detected'
+                : corridorPulseActive
+                  ? `Target Corridor Reached — pulsing the corridor motor (Pod ${POD_HAPTIC_CORRIDOR}) for 1s`
+                  : faultPulseActive
+                    ? `Form Fault Detected — pulsing the fault motor (Pod ${POD_HAPTIC_FAULT}) for 1s`
+                    : `Curl into the ${targetMin}°–${targetMax}° corridor to trigger haptic feedback`}
             </p>
           </Card>
 

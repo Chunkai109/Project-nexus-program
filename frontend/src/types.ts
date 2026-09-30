@@ -13,8 +13,8 @@ export interface AuthUser {
 }
 
 export type PodSignal = 'strong' | 'weak' | 'offline'
-export type PodKind = 'EMG+IMU' | 'IMU+Haptics' | 'IMU'
-export type PodId = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14
+export type PodKind = 'EMG+IMU' | 'IMU+Haptics' | 'IMU' | 'EMG' | 'Haptics'
+export type PodId = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16
 
 export interface Pod {
   id: PodId

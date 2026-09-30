@@ -8,8 +8,9 @@
 #define I2C_SCL 22
 
 // Hardware Peripheral Pins
-#define EMG_PIN       35  // Analog pin for EMG envelope/signal
-#define VIB_MOTOR_PIN 25  // Digital output to drive vibration motor
+#define EMG_PIN                35  // Analog pin for EMG envelope/signal
+#define VIB_MOTOR_CORRIDOR_PIN 25  // Digital output — motor strapped near the bicep, pulses on reaching the target corridor
+#define VIB_MOTOR_FAULT_PIN    26  // Digital output — motor strapped near the forearm, pulses on a detected form fault
 
 // MPU-6050 Addresses
 #define MPU1_ADDR 0x68  // Sensor 1: Forearm (Flexion) -> AD0 to GND
@@ -50,6 +51,17 @@ constexpr uint8_t POD_EMG       = 1;  // Bicep EMG envelope
 constexpr uint8_t POD_FOREARM   = 2;  // Sensor 1 — flexion
 constexpr uint8_t POD_UPPERARM  = 3;  // Sensor 2 — drift
 
+// Which pod ID a "haptic" command must address to pulse each motor. Two real
+// physical motors now (see VIB_MOTOR_CORRIDOR_PIN/VIB_MOTOR_FAULT_PIN above),
+// each wired to a distinct GPIO, addressed independently — unlike the
+// earlier single-motor board where any haptic command pulsed the one motor
+// regardless of podId. Numbered well past the sensor pods (1-3) and this
+// app's virtual joint/muscle node range (frontend/src/lib/joints.ts,
+// muscles.ts go up to 14) so a haptic command can never collide with a
+// sensor or virtual-node ID.
+constexpr uint8_t POD_HAPTIC_CORRIDOR = 15;
+constexpr uint8_t POD_HAPTIC_FAULT    = 16;
+
 constexpr unsigned long STATUS_INTERVAL_MS = 2000;
 
 // Both IMU sensors and the EMG sensor are sampled and broadcast together,
@@ -63,7 +75,8 @@ unsigned long lastSampleAt = 0;
 WebSocketsServer webSocket(WS_PORT);
 uint8_t connectedClientCount = 0;
 unsigned long lastStatusSentAt = 0;
-unsigned long hapticOffAt = 0;  // millis() deadline for an app-commanded vibration pulse
+unsigned long corridorMotorOffAt = 0;  // millis() deadline for the corridor motor's app-commanded pulse
+unsigned long faultMotorOffAt = 0;     // millis() deadline for the fault motor's app-commanded pulse
 
 void broadcastJson(JsonDocument &doc) {
   String out;
@@ -81,11 +94,18 @@ void sendHello(uint8_t clientNum) {
 }
 
 void handleHapticCommand(JsonDocument &doc) {
-  // Only one physical motor is wired on this board, so any haptic command
-  // pulses it regardless of which podId the app addresses.
+  // Two physical motors now, addressed independently by podId -- anything
+  // other than POD_HAPTIC_FAULT pulses the corridor motor, so an unrecognized
+  // podId still does something sensible rather than silently no-op'ing.
   unsigned long durationMs = doc["durationMs"] | 0UL;
   if (durationMs == 0) return;
-  hapticOffAt = millis() + durationMs;
+  uint8_t podId = doc["podId"] | 0;
+  unsigned long deadline = millis() + durationMs;
+  if (podId == POD_HAPTIC_FAULT) {
+    faultMotorOffAt = deadline;
+  } else {
+    corridorMotorOffAt = deadline;
+  }
 }
 
 void onWebSocketEvent(uint8_t clientNum, WStype_t type, uint8_t *payload, size_t length) {
@@ -186,8 +206,10 @@ void setup() {
   Serial.begin(115200);
   while (!Serial) delay(10);
 
-  pinMode(VIB_MOTOR_PIN, OUTPUT);
-  digitalWrite(VIB_MOTOR_PIN, LOW);
+  pinMode(VIB_MOTOR_CORRIDOR_PIN, OUTPUT);
+  digitalWrite(VIB_MOTOR_CORRIDOR_PIN, LOW);
+  pinMode(VIB_MOTOR_FAULT_PIN, OUTPUT);
+  digitalWrite(VIB_MOTOR_FAULT_PIN, LOW);
 
   analogReadResolution(12); // ESP32 ADC: 0 to 4095
 
@@ -274,23 +296,34 @@ void loop() {
   int emgRaw = EMG_ENABLED ? analogRead(EMG_PIN) : 0;
   int emgProcessed = EMG_ENABLED ? processEmgSample(emgRaw) : 0;
 
-  // 5. Vibration Motor Trigger Condition:
-  // This board has no autonomous vibration trigger of its own — the target
-  // flexion corridor is a per-exercise, dashboard-configurable value (see
-  // buildDefaultBicepCurlExercise() in AppDataContext.tsx), not something
-  // this firmware knows about. The motor only pulses when the dashboard
-  // sends an explicit "haptic" command over WebSocket, which it sends the
-  // instant it sees flexion enter that corridor (see LiveSession.tsx).
-  bool appCommandActive = false;
-  if (hapticOffAt != 0) {
-    if (millis() < hapticOffAt) {
-      appCommandActive = true;
+  // 5. Vibration Motor Trigger Conditions:
+  // This board has no autonomous vibration trigger of its own for either
+  // motor — the target flexion corridor and the drift/cheat fault threshold
+  // are both dashboard-side concepts (buildDefaultBicepCurlExercise() in
+  // AppDataContext.tsx, bicepCurlCounter.ts), not something this firmware
+  // knows about. Each motor only pulses when the dashboard sends an explicit
+  // "haptic" command addressed to it over WebSocket — corridor motor the
+  // instant flexion enters the target corridor, fault motor the instant a
+  // form fault/cheat is detected (see LiveSession.tsx).
+  bool corridorActive = false;
+  if (corridorMotorOffAt != 0) {
+    if (millis() < corridorMotorOffAt) {
+      corridorActive = true;
     } else {
-      hapticOffAt = 0;
+      corridorMotorOffAt = 0;
     }
   }
-  bool motorActive = appCommandActive;
-  digitalWrite(VIB_MOTOR_PIN, motorActive ? HIGH : LOW);
+  digitalWrite(VIB_MOTOR_CORRIDOR_PIN, corridorActive ? HIGH : LOW);
+
+  bool faultVibActive = false;
+  if (faultMotorOffAt != 0) {
+    if (millis() < faultMotorOffAt) {
+      faultVibActive = true;
+    } else {
+      faultMotorOffAt = 0;
+    }
+  }
+  digitalWrite(VIB_MOTOR_FAULT_PIN, faultVibActive ? HIGH : LOW);
 
   // 6. Stream live telemetry to the dashboard, if it's connected. Rep
   // counting and drift/cheat detection run entirely on the dashboard now
@@ -345,9 +378,10 @@ void loop() {
 
   // Serial Monitor Output
   if (EMG_ENABLED) {
-    Serial.printf("Flex: %5.1f | Drift: %5.1f | EMG: %4d | Vib: %s\n",
-                  flexion, drift, emgProcessed, motorActive ? "ON " : "OFF");
+    Serial.printf("Flex: %5.1f | Drift: %5.1f | EMG: %4d | Vib(Corridor): %s | Vib(Fault): %s\n",
+                  flexion, drift, emgProcessed, corridorActive ? "ON " : "OFF", faultVibActive ? "ON " : "OFF");
   } else {
-    Serial.printf("Flex: %5.1f | Drift: %5.1f | Vib: %s\n", flexion, drift, motorActive ? "ON " : "OFF");
+    Serial.printf("Flex: %5.1f | Drift: %5.1f | Vib(Corridor): %s | Vib(Fault): %s\n",
+                  flexion, drift, corridorActive ? "ON " : "OFF", faultVibActive ? "ON " : "OFF");
   }
 }

@@ -2,13 +2,17 @@ import { clsx } from 'clsx'
 import { BodySilhouette } from './BodySilhouette'
 import type { Pod } from '@/types'
 
+// Positioned along the right arm (see BodySilhouette's right-arm path:
+// shoulder (130,70) -> elbow (160,90) -> wrist (166,160)) to match the real
+// single-arm bicep-curl rig: bicep EMG pod near the shoulder end, forearm IMU
+// pod near the wrist end, the upper-tricep IMU pod at the elbow between them,
+// and the two haptic motors bracketing that span.
 const POD_POSITIONS: Record<number, { x: number; y: number }> = {
-  1: { x: 72, y: 205 },
-  2: { x: 128, y: 205 },
-  3: { x: 80, y: 268 },
-  4: { x: 120, y: 268 },
-  5: { x: 82, y: 328 },
-  6: { x: 118, y: 328 },
+  1: { x: 141, y: 77 }, // Bicep EMG
+  15: { x: 150, y: 83 }, // Corridor motor
+  3: { x: 158, y: 89 }, // Upper tricep / upper-arm IMU
+  2: { x: 162, y: 118 }, // Forearm IMU
+  16: { x: 165, y: 143 }, // Fault motor
 }
 
 const signalDot: Record<Pod['signal'], string> = {
@@ -28,7 +32,8 @@ export function BodyMap({
   pods: Pod[]
   activePod?: number | null
   onSelect?: (id: number) => void
-  hapticPodId?: number | null
+  /** One pod id, several at once (the two haptic motors can pulse independently), or null/none active. */
+  hapticPodId?: number | number[] | null
   /** Pods highlighted as a deliberate selection (e.g. the two reference nodes for an exercise's angle), distinct from live activity. */
   selectedPods?: number[]
   height?: number
@@ -42,7 +47,7 @@ export function BodyMap({
         const pos = POD_POSITIONS[pod.id]
         if (!pos) return null
         const isActive = activePod === pod.id
-        const isHaptic = hapticPodId === pod.id
+        const isHaptic = Array.isArray(hapticPodId) ? hapticPodId.includes(pod.id) : hapticPodId === pod.id
         const isSelected = selectedPods?.includes(pod.id) ?? false
         const color = isHaptic ? 'var(--color-crimson)' : isSelected ? 'var(--color-accent)' : signalDot[pod.signal]
         return (

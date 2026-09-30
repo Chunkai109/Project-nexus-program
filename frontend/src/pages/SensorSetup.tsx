@@ -13,32 +13,33 @@ import { useAppData } from '@/lib/data/AppDataContext'
 import { podLabel } from '@/lib/podUtils'
 import { useSensorHub } from '@/lib/hub/HubProvider'
 import { DEFAULT_HUB_WS_URL, type PodId } from '@/lib/hub/protocol'
+import { POD_HAPTIC_CORRIDOR, POD_HAPTIC_FAULT } from '@/lib/hub/bicepCurlCounter'
 import { clsx } from 'clsx'
 
 const PLACEMENT_STEPS = [
   {
     title: 'Prep the skin',
-    detail: 'Wipe each electrode site with an alcohol swab and let it air-dry for 10 seconds to reduce impedance noise.',
+    detail: 'Wipe the bicep electrode site with an alcohol swab and let it air-dry for 10 seconds to reduce impedance noise.',
   },
   {
-    title: 'Place EMG electrodes (Pods 1–2)',
-    detail: 'Snap Ag/AgCl electrodes onto Pod 1 & 2, aligned along the vastus medialis fiber direction, 2cm apart.',
+    title: 'Place the EMG pod on your bicep (Pod 1)',
+    detail: 'Snap the Ag/AgCl electrodes onto Pod 1 and stick it over the belly of the bicep, aligned along the muscle fiber direction.',
   },
   {
-    title: 'Secure knee IMU + haptics (Pods 3–4)',
-    detail: 'Strap Pod 3 & 4 directly over the lateral knee joint line using the neoprene band — snug, not restrictive.',
+    title: 'Strap the IMU pod on your forearm (Pod 2)',
+    detail: 'Secure Pod 2 on the forearm, just below the elbow, using the neoprene band — snug, not restrictive.',
   },
   {
-    title: 'Attach shin/ankle pods (Pods 5–6)',
-    detail: 'Position Pod 5 & 6 just above the malleolus. Leave slack in the ribbon cable for full range of motion.',
+    title: 'Strap the second IMU pod on your lower tricep (Pod 3)',
+    detail: 'Secure Pod 3 on the lower tricep / upper arm, just above the elbow. Together with Pod 2 this tracks forearm flexion against upper-arm drift.',
   },
   {
-    title: 'Route the ribbon harness',
-    detail: 'Run the 6-core silicone ribbon along the limb\'s lateral line, clipping with velcro every ~10cm to avoid pinch points.',
+    title: 'Attach the two vibration motors',
+    detail: 'Motor 1 (corridor alert) straps near the bicep pod; Motor 2 (fault alert) straps near the forearm pod. Only 3 sensor pods and 2 motors go on the arm in total.',
   },
   {
     title: 'Confirm connection',
-    detail: 'Check the pod list on the left — every pod should read a green "Signal Strong" badge before proceeding.',
+    detail: 'Check the pod list on the left — every pod and motor should read a green "Signal Strong" badge before proceeding.',
   },
 ]
 
@@ -78,7 +79,10 @@ export function SensorSetup() {
     setHapticSendError(null)
     if (hubConnected) {
       try {
-        await Promise.all([hub.sendHaptic(3 as PodId, 400), hub.sendHaptic(4 as PodId, 400)])
+        await Promise.all([
+          hub.sendHaptic(POD_HAPTIC_CORRIDOR as PodId, 400),
+          hub.sendHaptic(POD_HAPTIC_FAULT as PodId, 400),
+        ])
       } catch (err) {
         setHapticSendError(err instanceof Error ? err.message : 'Failed to trigger vibration.')
       }
@@ -261,7 +265,7 @@ export function SensorSetup() {
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="text-sm">
                 <p className="font-semibold text-ink">
-                  {allConnected ? 'All 6 pods connected' : 'Waiting for full pod connection'}
+                  {allConnected ? 'All pods & motors connected' : 'Waiting for full pod connection'}
                 </p>
                 <p className="text-[13px] text-ink-faint">
                   ESP32-WROOM-32D hub · WebSocket stream {hubConnected ? '(live)' : '(simulated)'}
