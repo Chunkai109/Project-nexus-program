@@ -16,9 +16,8 @@ import { useAppData } from '@/lib/data/AppDataContext'
 import { useAuth } from '@/lib/AuthContext'
 import { muscleEmgTarget } from '@/lib/muscles'
 import { useSensorHub } from '@/lib/hub/HubProvider'
-import { CURL_DRIFT_POD_ID, CURL_FLEX_POD_ID } from '@/lib/hub/bicepCurlCounter'
+import { CURL_DRIFT_POD_ID, CURL_FLEX_POD_ID, EXTENSION_LIMIT } from '@/lib/hub/bicepCurlCounter'
 import { predictVisionForm, predictFusedForm, MIN_VISION_FRAMES, type VisionPrediction, type FusedPrediction } from '@/lib/visionModel'
-import type { FlexDriftSample } from '@/lib/hub/imuFlexDriftRecorder'
 import type { RepSample } from '@/types'
 
 // MediaPipe camera-based pose detection — was a hardcoded-off testing flag
@@ -30,9 +29,10 @@ const ENABLE_MEDIAPIPE_VISION = true
 
 type FormCheckState =
   | { status: 'idle' }
-  | { status: 'accumulating'; frameCount: number }
+  | { status: 'capturing' }
   | { status: 'checking' }
   | { status: 'result'; result: VisionPrediction | FusedPrediction }
+  | { status: 'insufficient_frames'; frameCount: number }
   | { status: 'unavailable' }
 
 /** Builds the human-readable verdict stored per-rep for Session Summary's "AI Form Check Notes" (see SessionSummary.tsx). */
@@ -92,12 +92,6 @@ export function LiveSession() {
   // both already funnel into the same kneeFlexionDeg/inCorridor above.
   const [repCount, setRepCount] = useState(0)
   const wasInCorridor = useRef(false)
-  useEffect(() => {
-    if (inCorridor && !wasInCorridor.current) {
-      setRepCount((c) => c + 1)
-    }
-    wasInCorridor.current = inCorridor
-  }, [inCorridor])
 
   // Real EMG from Pod 1 — the sole EMG-capable pod on this rig (bicep) —
   // once it has actually reported a reading; otherwise the wearable
@@ -112,20 +106,23 @@ export function LiveSession() {
 
   // AI form check (ml/'s trained bicep-curl classifier, via the ensemble
   // API's vision-only endpoint — see ensemble/FRONTEND_INTEGRATION.md
-  // Section 5): buffer every camera frame's MediaPipe Pose WORLD landmarks
-  // while a person is in view, then flush and classify the buffer once
-  // there's enough of it. Frames buffered here are the same shape the model
-  // was trained on regardless of whether the buffer spans one clean rep or
-  // several — the model's own best-window search (see BicepCurlPredictor)
-  // handles pacing/tempo variance on the server side.
+  // Section 5): buffer MediaPipe Pose WORLD landmarks for exactly the
+  // concentric phase of a rep — from the instant flexion leaves full
+  // extension (below EXTENSION_LIMIT) and starts rising, to the instant it
+  // reaches the target corridor — then classify that window. A fixed frame
+  // count doesn't correspond to any real phase of the movement; this does,
+  // so what gets scored is always "this one lift", never a few frames of one
+  // rep glued to a few frames of the next. visionCapturingRef gates
+  // handleWorldLandmarks below so frames outside the window (resting at the
+  // bottom, or descending back down after a rep) are never buffered at all.
+  const visionCapturingRef = useRef(false)
+  const hasRestedRef = useRef(true) // starts true: a session begins at rest
   const visionFramesRef = useRef<number[][][]>([])
   const visionBufferStartRef = useRef<number | null>(null)
-  const flexDriftBufferRef = useRef<FlexDriftSample[]>([])
   const [formCheck, setFormCheck] = useState<FormCheckState>({ status: 'idle' })
 
   function handleWorldLandmarks(landmarks: number[][] | null) {
-    if (!landmarks) return
-    if (visionBufferStartRef.current === null) visionBufferStartRef.current = performance.now()
+    if (!landmarks || !visionCapturingRef.current) return
     visionFramesRef.current.push(landmarks)
   }
 
@@ -134,6 +131,40 @@ export function LiveSession() {
   // instead of nothing — this is what Session Analytics reads back later.
   const [repSamples, setRepSamples] = useState<RepSample[]>([])
   const prevRepCount = useRef(0)
+
+  useEffect(() => {
+    const belowRest = kneeFlexionDeg < EXTENSION_LIMIT
+    if (belowRest) hasRestedRef.current = true
+
+    if (!visionCapturingRef.current && hasRestedRef.current && !belowRest && !inCorridor) {
+      // Flexion just left full extension and is climbing toward the
+      // corridor — start this rep's capture window right here. Requiring
+      // hasRestedRef (only set once the arm is confirmed fully extended,
+      // and cleared the moment a capture starts) stops this from
+      // re-triggering on the way back down out of the corridor for someone
+      // doing partial-range reps that never bottom out.
+      visionCapturingRef.current = true
+      hasRestedRef.current = false
+      visionFramesRef.current = []
+      visionBufferStartRef.current = performance.now()
+      hub.drainFlexDriftSamples() // discard anything from before this rise began
+      setFormCheck({ status: 'capturing' })
+    } else if (visionCapturingRef.current && belowRest) {
+      // Dropped back to full extension without ever reaching the corridor —
+      // an aborted lift. Discard rather than scoring a partial attempt.
+      visionCapturingRef.current = false
+      visionFramesRef.current = []
+      visionBufferStartRef.current = null
+      hub.drainFlexDriftSamples()
+      setFormCheck({ status: 'idle' })
+    }
+
+    if (inCorridor && !wasInCorridor.current) {
+      setRepCount((c) => c + 1)
+    }
+    wasInCorridor.current = inCorridor
+  }, [kneeFlexionDeg, inCorridor, hub])
+
   useEffect(() => {
     if (repCount > prevRepCount.current) {
       const thisRep = repCount
@@ -143,28 +174,25 @@ export function LiveSession() {
         { rep: thisRep, angle: Math.round(kneeFlexionDeg), emgLeft: emgBicep, emgRight: emgBicep, faultActive },
       ])
 
-      // Accumulated across reps rather than drained-and-discarded here: the
-      // simple corridor-entry rep counter above can complete a rep in well
-      // under a second, often before enough camera frames exist to say
-      // anything useful. Keep collecting flex/drift and camera frames alike
-      // across as many reps as it takes to reach MIN_VISION_FRAMES, then
-      // score the whole accumulated window at once (duration_seconds below
-      // reflects that full window, not just the latest rep) — this is what
-      // fixed "AI Form Check never activates": the old version reset the
-      // buffer and reported "not enough data" on nearly every single rep
-      // instead of ever letting it accumulate.
-      flexDriftBufferRef.current.push(...hub.drainFlexDriftSamples())
-
+      // This rep's capture window (started the moment flexion left full
+      // extension, above) just ended by reaching the corridor — flush
+      // exactly that window, not an accumulated multi-rep buffer.
+      visionCapturingRef.current = false
       const frames = visionFramesRef.current
+      visionFramesRef.current = []
+      const flexDrift = hub.drainFlexDriftSamples()
       const bufferStart = visionBufferStartRef.current
+      visionBufferStartRef.current = null
+
       if (bufferStart !== null) {
         if (frames.length < MIN_VISION_FRAMES) {
-          setFormCheck({ status: 'accumulating', frameCount: frames.length })
+          // The rep's rise happened faster than the camera could keep up
+          // with — a real possibility now that the window is scoped to one
+          // lift instead of accumulating across several. Reported per-rep
+          // rather than silently carried into the next window, since a
+          // carried-over window would no longer represent a single rep.
+          setFormCheck({ status: 'insufficient_frames', frameCount: frames.length })
         } else {
-          visionFramesRef.current = []
-          visionBufferStartRef.current = null
-          const flexDrift = flexDriftBufferRef.current
-          flexDriftBufferRef.current = []
           const durationSeconds = (performance.now() - bufferStart) / 1000
           setFormCheck({ status: 'checking' })
           // Real flex/drift from the hub feeds the fused model when
@@ -179,9 +207,6 @@ export function LiveSession() {
           prediction
             .then((result) => {
               setFormCheck({ status: 'result', result })
-              // Patches the rep that triggered this flush — resolves after
-              // that rep's sample was already added above, and the
-              // accumulated window may span several reps besides.
               const comment = describeAiResult(result)
               setRepSamples((prev) => prev.map((r) => (r.rep === thisRep ? { ...r, aiComment: comment } : r)))
             })
@@ -327,7 +352,13 @@ export function LiveSession() {
 
             {formCheck.status === 'idle' && (
               <p className="text-[13px] text-ink-faint">
-                Complete a rep in view of the camera to get an AI-scored form check.
+                Start curling from full extension in view of the camera to get an AI-scored form check.
+              </p>
+            )}
+            {formCheck.status === 'capturing' && (
+              <p className="flex items-center gap-2 text-[13px] text-ink-faint">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                Recording this rep — keep going to the target…
               </p>
             )}
             {formCheck.status === 'checking' && (
@@ -336,10 +367,10 @@ export function LiveSession() {
                 Scoring your last rep…
               </p>
             )}
-            {formCheck.status === 'accumulating' && (
-              <p className="flex items-center gap-2 text-[13px] text-ink-faint">
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                Gathering camera data ({formCheck.frameCount} frame{formCheck.frameCount === 1 ? '' : 's'} so far)…
+            {formCheck.status === 'insufficient_frames' && (
+              <p className="text-[13px] text-ink-faint">
+                That rep was too fast for the camera to score (only {formCheck.frameCount} frame
+                {formCheck.frameCount === 1 ? '' : 's'} captured) — try pacing the lift a little slower.
               </p>
             )}
             {formCheck.status === 'unavailable' && (

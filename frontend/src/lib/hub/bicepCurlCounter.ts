@@ -32,9 +32,21 @@ export interface BicepCurlCounterResult {
 // max contraction every time.
 const START_CURL_LIMIT = 35
 const CONTRACTION_LIMIT = 90
-const EXTENSION_LIMIT = 20
 const DRIFT_TOLERANCE = 15
 const SETTLE_SAMPLES = 50
+
+/**
+ * Below this = arm fully extended at the bottom of a rep, on this rig's real
+ * measured 0-135 range. Exported (unlike the other thresholds above) because
+ * LiveSession.tsx reuses it for a second, unrelated purpose: marking the
+ * start of the AI Form Check's camera-frame buffering window, which now
+ * spans "from the moment flexion leaves full extension and starts rising"
+ * through "reaches the target corridor" for a single rep, instead of a fixed
+ * frame count that could span multiple reps. Sharing this constant (rather
+ * than inventing a second one) keeps "what counts as the bottom of a rep"
+ * defined in exactly one place.
+ */
+export const EXTENSION_LIMIT = 20
 
 /** Which hub pods carry flex/drift, matching POD_FOREARM/POD_UPPERARM in smartphysio_hub.ino. */
 export const CURL_FLEX_POD_ID = 2
