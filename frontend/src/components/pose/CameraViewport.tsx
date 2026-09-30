@@ -36,7 +36,7 @@ export function CameraViewport({
   const containerRef = useRef<HTMLDivElement>(null)
   const [cameraOk, setCameraOk] = useState<boolean | null>(null)
   const [personDetected, setPersonDetected] = useState(false)
-  const { status: poseStatus, detectForVideo } = usePoseLandmarker(poseDetectionEnabled)
+  const { status: poseStatus, error: poseError, detectForVideo } = usePoseLandmarker(poseDetectionEnabled)
 
   useEffect(() => {
     if (!poseDetectionEnabled) return
@@ -154,9 +154,17 @@ export function CameraViewport({
       )}
 
       {cameraOk && poseStatus === 'unavailable' && (
-        <div className="absolute top-3 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-full bg-black/40 px-3 py-1.5 backdrop-blur-sm">
-          <VideoOff className="h-3.5 w-3.5 text-amber" />
-          <p className="text-xs text-ink-faint">Pose model unavailable — camera feed only</p>
+        <div className="absolute top-3 left-1/2 flex max-w-[90%] -translate-x-1/2 flex-col items-center gap-1 rounded-xl bg-black/60 px-3 py-2 text-center backdrop-blur-sm">
+          <div className="flex items-center gap-2">
+            <VideoOff className="h-3.5 w-3.5 flex-shrink-0 text-amber" />
+            <p className="text-xs text-ink-faint">Pose model unavailable — camera feed only</p>
+          </div>
+          {poseError && (
+            <p className="text-[10px] text-ink-faint/70">
+              {poseError} — try re-running <code>npm install</code> in frontend/ (this vendors the MediaPipe WASM
+              runtime into public/mediapipe/wasm on postinstall).
+            </p>
+          )}
         </div>
       )}
 
