@@ -98,20 +98,19 @@ export function LiveSession() {
   const targetMax = primaryAngle?.targetMax ?? simulated.targetMax
   const inCorridor = kneeFlexionDeg >= targetMin && kneeFlexionDeg <= targetMax
 
-  // Rep counting: counts the instant the rise-detection mechanism below
-  // activates (flexion climbs RISE_THRESHOLD_DEG off its rested baseline) --
-  // full stop, regardless of whether that attempt goes on to reach the
-  // target corridor, gets scored "good form" by the AI, or gets aborted
-  // partway. Reaching the corridor and passing the AI's form check remain
-  // separate, informational signals (the fault badge, "Nice — target
-  // reached!", the AI Form Check card) that never gate counting -- this
-  // counts attempts, not clean reps. Works identically whether flex comes
-  // from the real hub or the wearable simulator, since both already funnel
-  // into the same kneeFlexionDeg above. prevRepCount is the authoritative
-  // synchronous counter (repCount state is just its rendered mirror, for the
-  // header) -- reading it synchronously matters for stamping AI results onto
-  // the right rep, since the vision window it started may not resolve until
-  // several samples later once it settles or re-rises.
+  // Rep counting: the full condition for a rep is the same rise -> corridor
+  // -> settle/re-rise cycle the vision-capture window below tracks, so a rep
+  // is counted at the exact moment that cycle completes (see the "if
+  // (settled || risingAgain || fellToRest)" block further down) -- not at
+  // the rise that merely starts an attempt. An attempt that never reaches
+  // the corridor (an aborted lift, see the belowRest branch below) is not
+  // counted at all: the full condition was never satisfied. Passing the
+  // AI's form check is still a separate, informational signal (the AI Form
+  // Check card) that never gates counting -- a rep can count and still be
+  // scored poor form. Works identically whether flex comes from the real
+  // hub or the wearable simulator, since both already funnel into the same
+  // kneeFlexionDeg above. prevRepCount is the authoritative synchronous
+  // counter (repCount state is just its rendered mirror, for the header).
   const [repCount, setRepCount] = useState(0)
   const prevRepCount = useRef(0)
 
@@ -170,7 +169,6 @@ export function LiveSession() {
   const postCorridorDescendedRef = useRef(false)
   const postCorridorMinAfterDescentRef = useRef(Infinity)
   const angleHistoryRef = useRef<{ t: number; angle: number }[]>([])
-  const pendingRepForVisionRef = useRef<number | null>(null)
   const visionFramesRef = useRef<number[][][]>([])
   const visionBufferStartRef = useRef<number | null>(null)
   const [formCheck, setFormCheck] = useState<FormCheckState>({ status: 'idle' })
@@ -192,22 +190,6 @@ export function LiveSession() {
     if (!visionCapturingRef.current) {
       angleLocalMinRef.current = Math.min(angleLocalMinRef.current, kneeFlexionDeg)
       if (kneeFlexionDeg - angleLocalMinRef.current >= RISE_THRESHOLD_DEG) {
-        // The rep-counting mechanism activating IS this rise-detection
-        // firing -- count it right here, synchronously (prevRepCount, not
-        // the async repCount state), before we know anything about how this
-        // attempt turns out. The vision-capture window it also starts below
-        // may not resolve (and need this rep number for its AI comment)
-        // until several samples later, once it settles or re-rises -- see
-        // pendingRepForVisionRef.
-        prevRepCount.current += 1
-        const thisRep = prevRepCount.current
-        setRepCount(thisRep)
-        setRepSamples((prev) => [
-          ...prev,
-          { rep: thisRep, angle: Math.round(kneeFlexionDeg), emgLeft: emgBicep, emgRight: emgBicep, faultActive },
-        ])
-        pendingRepForVisionRef.current = thisRep
-
         visionCapturingRef.current = true
         postCorridorRef.current = false
         visionFramesRef.current = []
@@ -233,10 +215,9 @@ export function LiveSession() {
         setFormCheck({ status: 'capturing', phase: 'settling' })
       } else if (belowRest) {
         // Dropped back to full extension without ever reaching the
-        // corridor — an aborted lift. The rep itself was already counted
-        // the instant this window started (rep counting doesn't require
-        // reaching the corridor); this only discards the AI scoring for
-        // it, rather than scoring a partial attempt.
+        // corridor — the full rep condition (rise -> corridor ->
+        // settle/re-rise) was never satisfied, so this attempt is not
+        // counted at all, and its frames are discarded rather than scored.
         visionCapturingRef.current = false
         visionFramesRef.current = []
         visionBufferStartRef.current = null
@@ -273,7 +254,19 @@ export function LiveSession() {
     const fellToRest = belowRest
 
     if (settled || risingAgain || fellToRest) {
-      const thisRep = pendingRepForVisionRef.current
+      // This is the full condition for a rep: it rose at least
+      // RISE_THRESHOLD_DEG, reached the corridor (postCorridorRef only gets
+      // here once that happened), and has now either settled, started
+      // rising again, or fallen back to rest -- count it right here, at
+      // completion, not at the rise that merely started the attempt.
+      prevRepCount.current += 1
+      const thisRep = prevRepCount.current
+      setRepCount(thisRep)
+      setRepSamples((prev) => [
+        ...prev,
+        { rep: thisRep, angle: Math.round(kneeFlexionDeg), emgLeft: emgBicep, emgRight: emgBicep, faultActive },
+      ])
+
       const frames = visionFramesRef.current
       visionFramesRef.current = []
       const flexDrift = hub.drainFlexDriftSamples()
@@ -282,7 +275,7 @@ export function LiveSession() {
       visionCapturingRef.current = false
       angleLocalMinRef.current = kneeFlexionDeg // fresh baseline for the next rise
 
-      if (bufferStart !== null && thisRep !== null) {
+      if (bufferStart !== null) {
         if (frames.length < MIN_VISION_FRAMES) {
           // The rep happened faster than the camera could keep up with —
           // a real possibility now that the window is scoped to one lift
