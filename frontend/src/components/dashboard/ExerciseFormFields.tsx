@@ -3,6 +3,7 @@ import { ArrowLeft, ArrowRight, Bold, Check, ChevronDown, Italic, List, Save, X 
 import { clsx } from 'clsx'
 import { Button } from '@/components/ui/Button'
 import { Breadcrumb } from '@/components/ui/Breadcrumb'
+import { HoverExplain } from '@/components/ui/HoverExplain'
 import { Slider } from '@/components/ui/Slider'
 import { RangeSlider } from '@/components/ui/RangeSlider'
 import { RadialGauge } from '@/components/charts/RadialGauge'
@@ -85,128 +86,147 @@ export function ExerciseFormFields({
         {step === 'basics' && (
           <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
             <div className="flex flex-col gap-6">
-              <label className="block">
-                <span className="mb-2 block text-[13px] font-medium text-ink-muted">Exercise Title</span>
-                <input
-                  value={form.title}
-                  onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
-                  placeholder="e.g. Bilateral Squat Rehab"
-                  className={fieldClass}
-                />
-              </label>
+              <HoverExplain explanation="The exercise's display name, shown to patients on their exercise list and throughout this dashboard.">
+                <label className="block">
+                  <span className="mb-2 block text-[13px] font-medium text-ink-muted">Exercise Title</span>
+                  <input
+                    value={form.title}
+                    onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
+                    placeholder="e.g. Bilateral Squat Rehab"
+                    className={fieldClass}
+                  />
+                </label>
+              </HoverExplain>
 
-              <label className="block">
-                <span className="mb-2 block text-[13px] font-medium text-ink-muted">Assign to Patient</span>
-                <div className="relative">
-                  <select
-                    value={form.assignedPatientId ?? ''}
-                    onChange={(e) => setForm((f) => ({ ...f, assignedPatientId: e.target.value || null }))}
-                    className={clsx(fieldClass, 'appearance-none pr-9')}
-                  >
-                    <option value="">All Patients</option>
-                    {patients.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name} · {p.email}
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown className="pointer-events-none absolute right-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-faint" />
-                </div>
-                {patients.length === 0 && (
-                  <p className="mt-1.5 text-[12px] text-ink-faint">
-                    No patients have signed in yet — this exercise will be visible to whoever signs in until you assign it.
-                  </p>
-                )}
-              </label>
+              <HoverExplain explanation="Restrict this exercise to one patient, or leave as All Patients so everyone who signs in sees it.">
+                <label className="block">
+                  <span className="mb-2 block text-[13px] font-medium text-ink-muted">Assign to Patient</span>
+                  <div className="relative">
+                    <select
+                      value={form.assignedPatientId ?? ''}
+                      onChange={(e) => setForm((f) => ({ ...f, assignedPatientId: e.target.value || null }))}
+                      className={clsx(fieldClass, 'appearance-none pr-9')}
+                    >
+                      <option value="">All Patients</option>
+                      {patients.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name} · {p.email}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown className="pointer-events-none absolute right-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-faint" />
+                  </div>
+                  {patients.length === 0 && (
+                    <p className="mt-1.5 text-[12px] text-ink-faint">
+                      No patients have signed in yet — this exercise will be visible to whoever signs in until you assign it.
+                    </p>
+                  )}
+                </label>
+              </HoverExplain>
 
               <div>
                 <span className="mb-2 block text-[13px] font-medium text-ink-muted">Target Muscle Group</span>
                 <div className="flex flex-wrap gap-2">
                   {MUSCLE_TAGS.map((tag) => (
-                    <button
+                    <HoverExplain
                       key={tag}
-                      type="button"
-                      onClick={() => toggleTag(tag)}
-                      className={clsx(
-                        'rounded-full px-3.5 py-1.5 text-[13px] font-medium transition-colors duration-200',
-                        form.muscleGroups.includes(tag)
-                          ? 'bg-accent/10 text-accent'
-                          : 'bg-surface-secondary text-ink-muted hover:bg-surface-hover',
-                      )}
+                      explanation={`Tags this exercise as targeting ${tag} — for reference only, doesn't affect sensor tracking.`}
                     >
-                      {tag}
-                    </button>
+                      <button
+                        type="button"
+                        onClick={() => toggleTag(tag)}
+                        className={clsx(
+                          'rounded-full px-3.5 py-1.5 text-[13px] font-medium transition-colors duration-200',
+                          form.muscleGroups.includes(tag)
+                            ? 'bg-accent/10 text-accent'
+                            : 'bg-surface-secondary text-ink-muted hover:bg-surface-hover',
+                        )}
+                      >
+                        {tag}
+                      </button>
+                    </HoverExplain>
                   ))}
                 </div>
               </div>
 
               <div className="grid grid-cols-3 gap-4">
-                <label className="block">
-                  <span className="mb-2 block text-[13px] font-medium text-ink-muted">Sets</span>
-                  <input
-                    type="number"
-                    value={form.sets}
-                    min={1}
-                    onChange={(e) => setForm((f) => ({ ...f, sets: Number(e.target.value) }))}
-                    className={fieldClass}
-                  />
-                </label>
-                <label className="block">
-                  <span className="mb-2 block text-[13px] font-medium text-ink-muted">Reps</span>
-                  <input
-                    type="number"
-                    value={form.reps}
-                    min={1}
-                    onChange={(e) => setForm((f) => ({ ...f, reps: Number(e.target.value) }))}
-                    className={fieldClass}
-                  />
-                </label>
-                <label className="block">
-                  <span className="mb-2 block text-[13px] font-medium text-ink-muted">Est. Minutes</span>
-                  <input
-                    type="number"
-                    value={form.estMinutes}
-                    min={1}
-                    onChange={(e) => setForm((f) => ({ ...f, estMinutes: Number(e.target.value) }))}
-                    className={fieldClass}
-                  />
-                </label>
+                <HoverExplain explanation="Number of sets the patient should complete per session.">
+                  <label className="block">
+                    <span className="mb-2 block text-[13px] font-medium text-ink-muted">Sets</span>
+                    <input
+                      type="number"
+                      value={form.sets}
+                      min={1}
+                      onChange={(e) => setForm((f) => ({ ...f, sets: Number(e.target.value) }))}
+                      className={fieldClass}
+                    />
+                  </label>
+                </HoverExplain>
+                <HoverExplain explanation="Number of reps per set the patient should complete.">
+                  <label className="block">
+                    <span className="mb-2 block text-[13px] font-medium text-ink-muted">Reps</span>
+                    <input
+                      type="number"
+                      value={form.reps}
+                      min={1}
+                      onChange={(e) => setForm((f) => ({ ...f, reps: Number(e.target.value) }))}
+                      className={fieldClass}
+                    />
+                  </label>
+                </HoverExplain>
+                <HoverExplain explanation="Estimated time to complete this exercise, shown to the patient before they start.">
+                  <label className="block">
+                    <span className="mb-2 block text-[13px] font-medium text-ink-muted">Est. Minutes</span>
+                    <input
+                      type="number"
+                      value={form.estMinutes}
+                      min={1}
+                      onChange={(e) => setForm((f) => ({ ...f, estMinutes: Number(e.target.value) }))}
+                      className={fieldClass}
+                    />
+                  </label>
+                </HoverExplain>
               </div>
             </div>
 
             <div className="flex flex-col gap-6">
-              <label className="block">
-                <span className="mb-2 block text-[13px] font-medium text-ink-muted">Therapist Note (shown to patient)</span>
-                <textarea
-                  value={form.therapistNote}
-                  onChange={(e) => setForm((f) => ({ ...f, therapistNote: e.target.value }))}
-                  rows={4}
-                  className={clsx(fieldClass, 'resize-none')}
-                  placeholder="e.g. Focus on symmetric weight distribution."
-                />
-              </label>
+              <HoverExplain explanation="A short note shown directly to the patient on their exercise card — use it for form cues or reminders.">
+                <label className="block">
+                  <span className="mb-2 block text-[13px] font-medium text-ink-muted">Therapist Note (shown to patient)</span>
+                  <textarea
+                    value={form.therapistNote}
+                    onChange={(e) => setForm((f) => ({ ...f, therapistNote: e.target.value }))}
+                    rows={4}
+                    className={clsx(fieldClass, 'resize-none')}
+                    placeholder="e.g. Focus on symmetric weight distribution."
+                  />
+                </label>
+              </HoverExplain>
 
               <label className="block">
                 <span className="mb-2 block text-[13px] font-medium text-ink-muted">Setup Instructions Editor</span>
                 <div className="rounded-xl bg-surface-secondary ring-1 ring-transparent transition-all duration-200 focus-within:ring-accent/50">
                   <div className="flex items-center gap-1 border-b border-border px-2 py-1.5">
                     {[Bold, Italic, List].map((Icon, i) => (
-                      <button
-                        key={i}
-                        type="button"
-                        className="rounded p-1.5 text-ink-faint transition-colors duration-200 hover:bg-surface-hover hover:text-ink"
-                      >
-                        <Icon className="h-3.5 w-3.5" />
-                      </button>
+                      <HoverExplain key={i} explanation="Text formatting for the instructions below — not yet functional in this draft.">
+                        <button
+                          type="button"
+                          className="rounded p-1.5 text-ink-faint transition-colors duration-200 hover:bg-surface-hover hover:text-ink"
+                        >
+                          <Icon className="h-3.5 w-3.5" />
+                        </button>
+                      </HoverExplain>
                     ))}
                   </div>
-                  <textarea
-                    value={form.setupInstructions}
-                    onChange={(e) => setForm((f) => ({ ...f, setupInstructions: e.target.value }))}
-                    rows={9}
-                    className="w-full resize-none bg-transparent px-4 py-3 text-[14px] text-ink outline-none placeholder:text-ink-faint"
-                    placeholder="Write pod placement guidelines for the patient…"
-                  />
+                  <HoverExplain explanation="Step-by-step pod placement guidance shown to the patient on the Sensor Setup screen.">
+                    <textarea
+                      value={form.setupInstructions}
+                      onChange={(e) => setForm((f) => ({ ...f, setupInstructions: e.target.value }))}
+                      rows={9}
+                      className="w-full resize-none bg-transparent px-4 py-3 text-[14px] text-ink outline-none placeholder:text-ink-faint"
+                      placeholder="Write pod placement guidelines for the patient…"
+                    />
+                  </HoverExplain>
                 </div>
               </label>
             </div>
@@ -251,32 +271,47 @@ export function ExerciseFormFields({
                 label={draftJoint ? draftJoint.label : 'Select a joint to preview'}
                 size={160}
               />
-              <div className="w-full">
-                <RangeSlider
-                  label="Min/Max Joint ROM Range"
-                  valueMin={form.draftMin}
-                  valueMax={form.draftMax}
-                  min={0}
-                  max={180}
-                  onChangeMin={(v) => setForm((f) => ({ ...f, draftMin: v }))}
-                  onChangeMax={(v) => setForm((f) => ({ ...f, draftMax: v }))}
-                />
-              </div>
-              <div className="w-full">
-                <Slider
-                  label="Fault Angle Threshold"
-                  value={form.draftFaultThresholdDeg}
-                  min={1}
-                  max={30}
-                  unit="° deviation"
-                  onChange={(v) => setForm((f) => ({ ...f, draftFaultThresholdDeg: v }))}
-                  tone="amber"
-                />
-              </div>
-              <Button size="sm" className="mt-2 w-full" onClick={confirmAngle} disabled={!draftValid}>
-                <Check className="h-3.5 w-3.5" />
-                Confirm This Angle
-              </Button>
+              <HoverExplain
+                className="w-full"
+                explanation="Sets the target range-of-motion corridor (in degrees) the patient should reach for this joint each rep."
+              >
+                <div className="w-full">
+                  <RangeSlider
+                    label="Min/Max Joint ROM Range"
+                    valueMin={form.draftMin}
+                    valueMax={form.draftMax}
+                    min={0}
+                    max={180}
+                    onChangeMin={(v) => setForm((f) => ({ ...f, draftMin: v }))}
+                    onChangeMax={(v) => setForm((f) => ({ ...f, draftMax: v }))}
+                  />
+                </div>
+              </HoverExplain>
+              <HoverExplain
+                className="w-full"
+                explanation="How many degrees of deviation from the target angle counts as a form fault for this joint."
+              >
+                <div className="w-full">
+                  <Slider
+                    label="Fault Angle Threshold"
+                    value={form.draftFaultThresholdDeg}
+                    min={1}
+                    max={30}
+                    unit="° deviation"
+                    onChange={(v) => setForm((f) => ({ ...f, draftFaultThresholdDeg: v }))}
+                    tone="amber"
+                  />
+                </div>
+              </HoverExplain>
+              <HoverExplain
+                className="w-full"
+                explanation="Saves the selected joint's target ROM and fault threshold as one of this exercise's tracked angles."
+              >
+                <Button size="sm" className="mt-2 w-full" onClick={confirmAngle} disabled={!draftValid}>
+                  <Check className="h-3.5 w-3.5" />
+                  Confirm This Angle
+                </Button>
+              </HoverExplain>
             </div>
 
             <div className="lg:col-span-2">
@@ -291,28 +326,31 @@ export function ExerciseFormFields({
                 <div className="flex flex-col gap-2">
                   {form.angleConfigs.map((c) => (
                     <div key={c.id} className="flex items-center justify-between gap-3 rounded-lg bg-surface-secondary px-3.5 py-2.5">
-                      <button
-                        type="button"
-                        onClick={() => loadAngleIntoDraft(c)}
-                        className="flex min-w-0 items-center gap-1.5 text-left text-[13px] text-ink"
-                        title="Load into the editor above — confirming again will override this angle"
-                      >
-                        <Check className="h-3.5 w-3.5 flex-shrink-0 text-emerald" />
-                        <span className="truncate">
-                          {podLabel(c.nodeA)} ↔ {podLabel(c.nodeB)}
-                        </span>
-                        <span className="flex-shrink-0 font-medium text-accent">
-                          · {c.targetMin}°–{c.targetMax}° · ±{c.faultThresholdDeg}° fault
-                        </span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => removeAngleConfig(c.id)}
-                        className="flex-shrink-0 rounded p-1 text-ink-faint transition-colors duration-200 hover:bg-surface-hover hover:text-crimson"
-                        aria-label={`Remove ${podLabel(c.nodeA)} to ${podLabel(c.nodeB)} angle`}
-                      >
-                        <X className="h-3.5 w-3.5" />
-                      </button>
+                      <HoverExplain explanation="Load this confirmed angle back into the editor above — confirming again will overwrite it.">
+                        <button
+                          type="button"
+                          onClick={() => loadAngleIntoDraft(c)}
+                          className="flex min-w-0 items-center gap-1.5 text-left text-[13px] text-ink"
+                        >
+                          <Check className="h-3.5 w-3.5 flex-shrink-0 text-emerald" />
+                          <span className="truncate">
+                            {podLabel(c.nodeA)} ↔ {podLabel(c.nodeB)}
+                          </span>
+                          <span className="flex-shrink-0 font-medium text-accent">
+                            · {c.targetMin}°–{c.targetMax}° · ±{c.faultThresholdDeg}° fault
+                          </span>
+                        </button>
+                      </HoverExplain>
+                      <HoverExplain explanation={`Remove the ${podLabel(c.nodeA)} ↔ ${podLabel(c.nodeB)} angle from this exercise.`}>
+                        <button
+                          type="button"
+                          onClick={() => removeAngleConfig(c.id)}
+                          className="flex-shrink-0 rounded p-1 text-ink-faint transition-colors duration-200 hover:bg-surface-hover hover:text-crimson"
+                          aria-label={`Remove ${podLabel(c.nodeA)} to ${podLabel(c.nodeB)} angle`}
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </HoverExplain>
                     </div>
                   ))}
                 </div>
@@ -353,42 +391,51 @@ export function ExerciseFormFields({
               </p>
               {draftGroup ? (
                 <>
-                  <label className="block w-full">
-                    <span className="mb-2 block text-[13px] font-medium text-ink-muted">Muscle</span>
-                    <div className="relative">
-                      <select
-                        value={form.draftMuscleId ?? ''}
-                        onChange={(e) => selectDraftMuscle(e.target.value)}
-                        className={clsx(fieldClass, 'appearance-none pr-9')}
-                      >
-                        <option value="" disabled>
-                          Select a muscle…
-                        </option>
-                        {draftGroup.muscles.map((m) => (
-                          <option key={m.id} value={m.id}>
-                            {m.label}
+                  <HoverExplain className="w-full" explanation="Choose which specific muscle (within the selected group) to set a target activation for.">
+                    <label className="block w-full">
+                      <span className="mb-2 block text-[13px] font-medium text-ink-muted">Muscle</span>
+                      <div className="relative">
+                        <select
+                          value={form.draftMuscleId ?? ''}
+                          onChange={(e) => selectDraftMuscle(e.target.value)}
+                          className={clsx(fieldClass, 'appearance-none pr-9')}
+                        >
+                          <option value="" disabled>
+                            Select a muscle…
                           </option>
-                        ))}
-                      </select>
-                      <ChevronDown className="pointer-events-none absolute right-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-faint" />
-                    </div>
-                  </label>
+                          {draftGroup.muscles.map((m) => (
+                            <option key={m.id} value={m.id}>
+                              {m.label}
+                            </option>
+                          ))}
+                        </select>
+                        <ChevronDown className="pointer-events-none absolute right-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-faint" />
+                      </div>
+                    </label>
+                  </HoverExplain>
                   {form.draftMuscleId ? (
                     <>
-                      <div className="w-full">
-                        <Slider
-                          label="Target EMG %MVC"
-                          value={form.draftMuscleEmgPct}
-                          min={0}
-                          max={100}
-                          unit="%"
-                          onChange={setDraftMuscleEmgPct}
-                        />
-                      </div>
-                      <Button size="sm" className="mt-2 w-full" onClick={confirmMuscleEmgTarget}>
-                        <Check className="h-3.5 w-3.5" />
-                        Confirm This Muscle Target
-                      </Button>
+                      <HoverExplain
+                        className="w-full"
+                        explanation="The percentage of maximum voluntary contraction (%MVC) this muscle should reach during the exercise's concentric phase."
+                      >
+                        <div className="w-full">
+                          <Slider
+                            label="Target EMG %MVC"
+                            value={form.draftMuscleEmgPct}
+                            min={0}
+                            max={100}
+                            unit="%"
+                            onChange={setDraftMuscleEmgPct}
+                          />
+                        </div>
+                      </HoverExplain>
+                      <HoverExplain className="w-full" explanation="Saves the selected muscle's target %MVC activation for this exercise.">
+                        <Button size="sm" className="mt-2 w-full" onClick={confirmMuscleEmgTarget}>
+                          <Check className="h-3.5 w-3.5" />
+                          Confirm This Muscle Target
+                        </Button>
+                      </HoverExplain>
                     </>
                   ) : (
                     <p className="w-full rounded-lg bg-surface p-3.5 text-center text-[13px] text-ink-faint">
@@ -420,14 +467,16 @@ export function ExerciseFormFields({
                         <span className="truncate">{muscleLabel(t.muscleId)}</span>
                         <span className="flex-shrink-0 font-medium text-accent">· {t.targetMvc}% MVC</span>
                       </span>
-                      <button
-                        type="button"
-                        onClick={() => removeMuscleEmgTarget(t.muscleId)}
-                        className="flex-shrink-0 rounded p-1 text-ink-faint transition-colors duration-200 hover:bg-surface-hover hover:text-crimson"
-                        aria-label={`Remove ${muscleLabel(t.muscleId)} EMG target`}
-                      >
-                        <X className="h-3.5 w-3.5" />
-                      </button>
+                      <HoverExplain explanation={`Remove the ${muscleLabel(t.muscleId)} EMG target from this exercise.`}>
+                        <button
+                          type="button"
+                          onClick={() => removeMuscleEmgTarget(t.muscleId)}
+                          className="flex-shrink-0 rounded p-1 text-ink-faint transition-colors duration-200 hover:bg-surface-hover hover:text-crimson"
+                          aria-label={`Remove ${muscleLabel(t.muscleId)} EMG target`}
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </HoverExplain>
                     </div>
                   ))}
                 </div>
@@ -444,29 +493,37 @@ export function ExerciseFormFields({
       <div className="mt-8 flex items-center justify-between border-t border-border pt-6">
         <div>
           {step !== 'basics' && (
-            <Button variant="ghost" size="sm" onClick={() => setStep(step === 'emg' ? 'angles' : 'basics')}>
-              <ArrowLeft className="h-3.5 w-3.5" />
-              Back
-            </Button>
+            <HoverExplain explanation="Return to the previous step without losing what you've entered.">
+              <Button variant="ghost" size="sm" onClick={() => setStep(step === 'emg' ? 'angles' : 'basics')}>
+                <ArrowLeft className="h-3.5 w-3.5" />
+                Back
+              </Button>
+            </HoverExplain>
           )}
         </div>
         <div className="flex gap-2">
           {onCancel && (
-            <Button variant="ghost" size="sm" onClick={onCancel}>
-              <X className="h-3.5 w-3.5" />
-              Cancel
-            </Button>
+            <HoverExplain explanation="Discard this exercise and return to the Exercise Protocols list.">
+              <Button variant="ghost" size="sm" onClick={onCancel}>
+                <X className="h-3.5 w-3.5" />
+                Cancel
+              </Button>
+            </HoverExplain>
           )}
           {step !== 'emg' ? (
-            <Button size="sm" onClick={() => setStep(step === 'basics' ? 'angles' : 'emg')} disabled={step === 'basics' && !form.title.trim()}>
-              Next
-              <ArrowRight className="h-3.5 w-3.5" />
-            </Button>
+            <HoverExplain explanation="Continue to the next step of the wizard.">
+              <Button size="sm" onClick={() => setStep(step === 'basics' ? 'angles' : 'emg')} disabled={step === 'basics' && !form.title.trim()}>
+                Next
+                <ArrowRight className="h-3.5 w-3.5" />
+              </Button>
+            </HoverExplain>
           ) : (
-            <Button size="sm" onClick={onSave} disabled={!canSave}>
-              <Save className="h-3.5 w-3.5" />
-              {saveLabel}
-            </Button>
+            <HoverExplain explanation="Save this exercise so it appears on the patient's exercise list immediately.">
+              <Button size="sm" onClick={onSave} disabled={!canSave}>
+                <Save className="h-3.5 w-3.5" />
+                {saveLabel}
+              </Button>
+            </HoverExplain>
           )}
         </div>
       </div>
