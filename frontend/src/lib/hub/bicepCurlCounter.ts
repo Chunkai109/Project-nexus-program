@@ -14,23 +14,25 @@ export interface BicepCurlCounterResult {
 // Rep-counting thresholds, independent of the firmware — the ESP32 has no
 // rep-counting or vibration-trigger logic of its own; see smartphysio_hub.ino.
 //
-// These must track the default Bicep Curl exercise's target corridor
+// Deliberately INDEPENDENT of the exercise's own target corridor
 // (targetMin/targetMax in buildDefaultBicepCurlExercise(), AppDataContext.tsx)
-// -- START_CURL_LIMIT = targetMin, CONTRACTION_LIMIT = targetMax,
-// EXTENSION_LIMIT = targetMin - 10. When the corridor was recalibrated from
-// 30-80 to the real rig's actual 150-180 range ("Set bicep curl corridor to
-// 150-180" commit), these three constants were left behind at the old
-// 30/80/20 values -- since 80 sits well BELOW the real sensor's resting
-// (fully-extended) reading once the corridor moved up to 150+, every sample
-// after the ~1s baseline-settle window already read above CONTRACTION_LIMIT,
-// so repState jumped straight to 'top' and could never drop back below
-// EXTENSION_LIMIT (also stale at 20) to complete a rep -- rep counting was
-// permanently stuck at 0 no matter how many real curls were performed. Fixed
-// by moving these to match the real corridor; if the corridor is ever
-// recalibrated again, update these three in the same commit.
-const START_CURL_LIMIT = 150
-const CONTRACTION_LIMIT = 180
-const EXTENSION_LIMIT = 140
+// -- an earlier version tied these directly to that corridor (START_CURL_LIMIT
+// = targetMin, CONTRACTION_LIMIT = targetMax), which meant recalibrating the
+// corridor silently broke rep counting twice: once when the corridor moved to
+// 150-180 while these stayed at the old 30/80/20 (rep counting got
+// permanently stuck at 0 since the real sensor's resting reading was already
+// above the stale CONTRACTION_LIMIT=80), and the 150-180 corridor itself then
+// turned out to be wrong too -- a real measured curl on this rig reads 0° at
+// full extension and 135° at full contraction, nowhere near 150-180. "Rep
+// happened at all" (below) and "hit the prescribed target zone" (the
+// exercise's own corridor, checked separately in LiveSession.tsx) are
+// different questions and now use different numbers on purpose: these three
+// span most of the real measured 0-135 range with margin for natural
+// variation, so an ordinary rep gets counted even short of a picture-perfect
+// max contraction every time.
+const START_CURL_LIMIT = 35
+const CONTRACTION_LIMIT = 90
+const EXTENSION_LIMIT = 20
 const DRIFT_TOLERANCE = 15
 const SETTLE_SAMPLES = 50
 

@@ -121,7 +121,7 @@ The dashboard sends that command in three places:
   on both motors).
 - Live Session, the instant the resolved flexion angle enters the exercise's
   configured target corridor (`targetMin`/`targetMax` on its `AngleConfig` —
-  150°-180° for the default Bicep Curl, see `buildDefaultBicepCurlExercise()`
+  100°-135° for the default Bicep Curl, a real measured range — see `buildDefaultBicepCurlExercise()`
   in `frontend/src/lib/data/AppDataContext.tsx`) — pulses the **corridor**
   motor. It sends a 1000ms pulse exactly once per corridor entry
   (edge-triggered — holding inside the corridor doesn't retrigger it).

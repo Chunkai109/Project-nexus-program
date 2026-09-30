@@ -95,8 +95,10 @@ export function LiveSession() {
   const emgBicep = emgBicepLive !== undefined ? Math.round(emgBicepLive) : simulated.emgLeft
 
   // Target-corridor feedback: pulse the corridor motor for exactly 1 second
-  // the instant flexion enters the exercise's target corridor (150°-180° for
-  // the default Bicep Curl). Purely edge-triggered — holding inside the
+  // the instant flexion enters the exercise's target corridor (100°-135° for
+  // the default Bicep Curl, a real measured range -- see
+  // buildDefaultBicepCurlExercise() in AppDataContext.tsx). Purely
+  // edge-triggered — holding inside the
   // corridor doesn't retrigger the buzz — and `corridorPulseActive` (rather
   // than just `inCorridor`) drives the UI so the "Pod X Active" badge tracks
   // the real ~1s motor pulse window instead of however long the arm stays in
