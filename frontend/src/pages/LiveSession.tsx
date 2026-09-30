@@ -98,20 +98,21 @@ export function LiveSession() {
   const targetMax = primaryAngle?.targetMax ?? simulated.targetMax
   const inCorridor = kneeFlexionDeg >= targetMin && kneeFlexionDeg <= targetMax
 
-  // Rep counting: every time flexion enters the target corridor, count it —
-  // full stop. Deliberately does NOT consider form/posture/drift-fault
-  // detection at all (an explicit product decision, not an oversight): the
-  // AI Form Check and the fault badge above remain separate, informational
-  // signals that never gate counting. Edge-triggered on corridor entry
-  // (holding inside it doesn't add extra reps), and works identically
-  // whether flex comes from the real hub or the wearable simulator, since
-  // both already funnel into the same kneeFlexionDeg/inCorridor above.
-  // prevRepCount is the authoritative synchronous counter (repCount state is
-  // just its rendered mirror, for the header) -- reading it synchronously
-  // matters below for stamping AI results onto the right rep; see the
-  // vision-capture block's comment.
+  // Rep counting: counts the instant the rise-detection mechanism below
+  // activates (flexion climbs RISE_THRESHOLD_DEG off its rested baseline) --
+  // full stop, regardless of whether that attempt goes on to reach the
+  // target corridor, gets scored "good form" by the AI, or gets aborted
+  // partway. Reaching the corridor and passing the AI's form check remain
+  // separate, informational signals (the fault badge, "Nice — target
+  // reached!", the AI Form Check card) that never gate counting -- this
+  // counts attempts, not clean reps. Works identically whether flex comes
+  // from the real hub or the wearable simulator, since both already funnel
+  // into the same kneeFlexionDeg above. prevRepCount is the authoritative
+  // synchronous counter (repCount state is just its rendered mirror, for the
+  // header) -- reading it synchronously matters for stamping AI results onto
+  // the right rep, since the vision window it started may not resolve until
+  // several samples later once it settles or re-rises.
   const [repCount, setRepCount] = useState(0)
-  const wasInCorridor = useRef(false)
   const prevRepCount = useRef(0)
 
   // Real EMG from Pod 1 — the sole EMG-capable pod on this rig (bicep) —
@@ -188,26 +189,25 @@ export function LiveSession() {
     const now = performance.now()
     const belowRest = kneeFlexionDeg < EXTENSION_LIMIT
 
-    // Rep counting fires first and updates prevRepCount synchronously (not
-    // via the async repCount state) so the vision-capture block below can
-    // safely read "which rep just completed" in the same pass, even though
-    // its own window might not finish (and need that number) until several
-    // samples later once it settles or re-rises.
-    const enteredCorridor = inCorridor && !wasInCorridor.current
-    wasInCorridor.current = inCorridor
-    if (enteredCorridor) {
-      prevRepCount.current += 1
-      const thisRep = prevRepCount.current
-      setRepCount(thisRep)
-      setRepSamples((prev) => [
-        ...prev,
-        { rep: thisRep, angle: Math.round(kneeFlexionDeg), emgLeft: emgBicep, emgRight: emgBicep, faultActive },
-      ])
-    }
-
     if (!visionCapturingRef.current) {
       angleLocalMinRef.current = Math.min(angleLocalMinRef.current, kneeFlexionDeg)
       if (kneeFlexionDeg - angleLocalMinRef.current >= RISE_THRESHOLD_DEG) {
+        // The rep-counting mechanism activating IS this rise-detection
+        // firing -- count it right here, synchronously (prevRepCount, not
+        // the async repCount state), before we know anything about how this
+        // attempt turns out. The vision-capture window it also starts below
+        // may not resolve (and need this rep number for its AI comment)
+        // until several samples later, once it settles or re-rises -- see
+        // pendingRepForVisionRef.
+        prevRepCount.current += 1
+        const thisRep = prevRepCount.current
+        setRepCount(thisRep)
+        setRepSamples((prev) => [
+          ...prev,
+          { rep: thisRep, angle: Math.round(kneeFlexionDeg), emgLeft: emgBicep, emgRight: emgBicep, faultActive },
+        ])
+        pendingRepForVisionRef.current = thisRep
+
         visionCapturingRef.current = true
         postCorridorRef.current = false
         visionFramesRef.current = []
@@ -230,12 +230,13 @@ export function LiveSession() {
         postCorridorPeakRef.current = kneeFlexionDeg
         postCorridorDescendedRef.current = false
         postCorridorMinAfterDescentRef.current = Infinity
-        if (enteredCorridor) pendingRepForVisionRef.current = prevRepCount.current
         setFormCheck({ status: 'capturing', phase: 'settling' })
       } else if (belowRest) {
         // Dropped back to full extension without ever reaching the
-        // corridor — an aborted lift. Discard rather than scoring a
-        // partial attempt.
+        // corridor — an aborted lift. The rep itself was already counted
+        // the instant this window started (rep counting doesn't require
+        // reaching the corridor); this only discards the AI scoring for
+        // it, rather than scoring a partial attempt.
         visionCapturingRef.current = false
         visionFramesRef.current = []
         visionBufferStartRef.current = null
