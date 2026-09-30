@@ -28,24 +28,33 @@ function is a pure combination step on top.
 ### Three design decisions (resolved with the user, applied exactly)
 
 1. **Label mismatch**: vision has 6 classes (Perfect/Drag/Swing/Half/
-   Heave/Incomplete); the IMU model only covers 4 (no real Swing/
-   Incomplete data exists for it, and fabricating that data was explicitly
-   rejected as circular/dishonest -- the same reasoning already applied to
-   declining synthetic label generation for `ml_imu/`'s original dataset).
-   **Resolution**: fuse probabilities only over the 4 `SHARED_CLASSES`. If
-   vision's own top prediction is Swing or Incomplete, IMU is not
-   consulted at all -- blending in an opinion IMU was never trained to
-   give would be meaningless, not conservative.
+   Heave/Incomplete); the IMU model originally covered only 4 (no real
+   Swing/Incomplete data existed for it, and fabricating that data was
+   explicitly rejected as circular/dishonest). A second data-collection
+   batch later added real Swing (5 sessions) and Incomplete (1 session)
+   examples, so `SHARED_CLASSES` now covers all 6 and
+   `VISION_EXCLUSIVE_CLASSES` is empty -- IMU's opinion is blended in for
+   every class instead of bypassed for two of them. **This is a
+   capability change, not a validated-improvement one**: Swing's data has
+   an unresolved sensor-calibration-offset question, and Incomplete has
+   exactly one example (too few for its GroupKFold score to mean much,
+   and that one example is currently rejected by IMU's own novelty gate)
+   -- see `ml_imu/README.md`'s "Second data batch" and "Trained
+   classifier" sections for the full investigation. IMU's opinion on
+   these two classes should be trusted less than on Perfect/Drag/Half/
+   Heave; the fixed global `vision_weight` below can't express that
+   difference per-class, which is a known limitation, not an oversight.
 
 2. **Weighting**: heavily favor vision, **80/20 by default**
    (`DEFAULT_VISION_WEIGHT`). This reflects the real, current honesty gap
    between the two models: vision has an independently-validated ~88.5%
-   GroupKFold CV macro-F1; the IMU model's 100% CV number was diagnosed as
-   a ceiling effect (both RandomForest and Logistic Regression hit it
-   identically, confirming it's the data's trivial separability, not
-   either model's skill) and is not a validated accuracy claim. 80/20 is a
-   documented policy choice, not a value fit to data -- there is no
-   synchronized data to fit it to.
+   GroupKFold CV macro-F1; IMU's headline CV macro-F1 is now 0.822 (the
+   4-class version of this dataset hit a suspicious ceiling of 1.000,
+   confirmed as a red flag via both RandomForest and Logistic Regression
+   hitting it identically -- adding Swing/Incomplete broke that ceiling
+   by exposing how little data backs the two new classes, a more honest
+   number, not a regression). 80/20 is a documented policy choice, not a
+   value fit to data -- there is no synchronized data to fit it to.
 
 3. **Gate conflicts**: if **either** model's own gate rejects the input
    (vision's rest gate or `IsolationForest` novelty detector, or the IMU
@@ -60,8 +69,8 @@ function is a pure combination step on top.
 Every call returns a dict with `"source"` set to one of:
 - `"rejected_by_vision_gate"` -- vision's own gate rejected first, checked before anything else.
 - `"rejected_by_imu_gate"` -- IMU's novelty gate rejected (checked second).
-- `"vision_only_exclusive_class"` -- vision's top class is Swing/Incomplete; IMU's opinion is attached for transparency but not used in the decision.
-- `"fused"` -- both models had a real say; `class_probabilities` is the weighted blend over the 4 shared classes (renormalized after dropping vision's Swing/Incomplete mass -- the exact amount dropped is stated in the returned `"message"`), and a `good_form_score` is derived by running the blended P(Perfect) through vision's existing calibration anchor (an approximation, since that anchor was tuned for vision's raw output alone, not a blend).
+- `"vision_only_exclusive_class"` -- vision's top class is in `VISION_EXCLUSIVE_CLASSES`, currently empty (IMU now has real, if thin, data for all 6 classes -- see design decision 1 above), so this branch is unreachable today but kept in the code as the mechanism to revert a class to vision-only if its IMU data turns out not to generalize.
+- `"fused"` -- both models had a real say; `class_probabilities` is the weighted blend over `SHARED_CLASSES` (all 6 classes today; renormalized after dropping any `VISION_EXCLUSIVE_CLASSES` mass, currently none -- the exact amount dropped, if any, is stated in the returned `"message"`), and a `good_form_score` is derived by running the blended P(Perfect) through vision's existing calibration anchor (an approximation, since that anchor was tuned for vision's raw output alone, not a blend).
 
 Every branch includes the raw `vision_result` and `imu_result` unmodified,
 so nothing is hidden behind the fused number.

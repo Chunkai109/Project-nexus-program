@@ -18,7 +18,7 @@ very last step:
 | Piece | Directory | Input | Output |
 |---|---|---|---|
 | **Vision model** | `ml/` | MediaPipe Pose landmarks from a camera | One of 6 classes: Perfect / Drag / Swing / Half / Heave / Incomplete |
-| **IMU model** | `ml_imu/` | Flex/Drift/EMG/Vib from a wearable arm device | One of 4 classes: Perfect / Drag / Half / Heave |
+| **IMU model** | `ml_imu/` | Flex/Drift/EMG/Vib from a wearable arm device | One of 6 classes: Perfect / Drag / Swing / Half / Heave / Incomplete |
 | **Fusion layer** | `ensemble/` | Both models' own output dicts | One combined answer |
 
 **Vision model** (`ml/src/inference/predictor.py`, `BicepCurlPredictor`):
@@ -31,18 +31,24 @@ for the best-looking rep, so total recording duration doesn't matter.
 
 **IMU model** (`ml_imu/src/predictor.py`, `ImuCurlPredictor`): a
 RandomForest trained on 19 engineered features (flex/drift/emg stats,
-tempo) from 52 labeled reps derived from 35 raw sessions performed by one
-person. Also has a novelty gate, though a much coarser one (see accuracy
-section below). No "Swing" or "Incomplete" data exists for this model --
-it only ever predicts among 4 classes.
+tempo) from 58 labeled reps derived from 41 raw sessions. Also has a
+novelty gate, though a much coarser one (see accuracy section below).
+Swing and Incomplete were added from a second data batch and are
+noticeably thinner than the original 4 classes -- Swing's signal has an
+unresolved sensor-calibration question, and Incomplete has exactly one
+real example (which the novelty gate itself currently rejects). See
+`ml_imu/README.md` for the full investigation.
 
 **Fusion layer** (`ensemble/src/fusion.py`, `fuse_predictions()`): takes
 both models' results and combines them --
 - If either model's gate rejects the input, the fused result rejects too.
-- If vision's own top class is Swing or Incomplete (classes IMU has no
-  data for), vision's answer is used directly, unmodified.
-- Otherwise, both models' probabilities are blended over the 4 shared
-  classes, weighted **80% vision / 20% IMU**.
+- Both models' probabilities are blended over all 6 shared classes,
+  weighted **80% vision / 20% IMU**. (Earlier, IMU had no Swing/Incomplete
+  data and those two classes bypassed IMU entirely -- now that IMU has
+  real, if thin, data for them, they're fused like everything else. The
+  bypass mechanism, `VISION_EXCLUSIVE_CLASSES`, is kept in the code, just
+  empty -- a way to revert a class to vision-only if its IMU data doesn't
+  hold up.)
 
 **Live demo** (`ensemble/scripts/live_ensemble_demo.py`): runs all three
 on an actual bicep curl in real time -- camera + wearable device
@@ -61,14 +67,16 @@ misquoted if simplified:
 | Component | Number | What it actually means |
 |---|---|---|
 | Vision model | **~88.5% CV macro-F1** | Honestly validated via 5-fold GroupKFold cross-validation across 34 independent recordings. This is the one real, trustworthy number in the whole system. |
-| IMU model | **100% CV macro-F1** | **Not a real accuracy claim.** Diagnosed as a ceiling effect: the 4 classes are trivially separable by 1-2 feature thresholds, confirmed by testing a second, unrelated model type (Logistic Regression), which also hit 100%. Reflects one person performing exaggerated, staged demonstrations, not real-world performance. |
+| IMU model | **0.822 CV macro-F1** | Better than it sounds, and worse than it sounds, in different ways. Perfect/Drag/Half/Heave (5-15 real sessions each) still separate cleanly -- 1.00 F1 each. The 0.822 average is pulled down almost entirely by **Incomplete (1 example, F1=0.00 in CV)** -- too little data for cross-validation to say anything about that class yet, not a sign the model performs badly overall. Swing (5 sessions, F1=0.91) checked out reasonably -- its recall held at 1.00 even with its most suspect feature (a possible sensor-calibration offset) removed entirely, though the shipped model still uses that feature. Earlier, this same dataset (4 classes, no Swing/Incomplete) hit a suspicious 1.000 -- a diagnosed ceiling effect, confirmed via a second model type (Logistic Regression) also hitting 100%. That ceiling is gone now; treat 0.822 as more honest, not simply "worse." |
 | Fusion layer | **No number exists** | Not "unknown" in the sense of "not yet measured carefully" -- there is currently no synchronized data (same rep, both sensors, ground truth) to measure it against at all. Any number here would be invented. |
 
 **If someone asks "what's the accuracy of the app," the only honest
 answer today is 88.5%, from the vision model alone**, with the caveat that
 it's cross-validated on a small (34-recording) dataset. The IMU and fusion
 numbers cannot be quoted as accuracy claims without misleading whoever
-you tell.
+you tell -- and for IMU specifically, don't round 0.822 down to "worse than
+before" or up to "resolved": Perfect/Drag/Half/Heave are as solid as ever,
+Swing is promising but unconfirmed, and Incomplete is one data point.
 
 **What would change this**: real synchronized recordings (camera + IMU on
 the same reps, multiple people, natural — not staged — form) would let
