@@ -19,7 +19,7 @@ import { podSide, kneePodForSide } from '@/lib/podUtils'
 import { muscleEmgTarget } from '@/lib/muscles'
 import { useSensorHub } from '@/lib/hub/HubProvider'
 import { CURL_DRIFT_POD_ID, CURL_FLEX_POD_ID } from '@/lib/hub/bicepCurlCounter'
-import { predictVisionForm, type VisionPrediction } from '@/lib/visionModel'
+import { predictVisionForm, MIN_VISION_FRAMES, type VisionPrediction } from '@/lib/visionModel'
 import { PODS } from '@/lib/mockData'
 import type { RepSample } from '@/types'
 
@@ -41,6 +41,7 @@ type FormCheckState =
   | { status: 'checking' }
   | { status: 'result'; result: VisionPrediction }
   | { status: 'unavailable' }
+  | { status: 'insufficient_frames'; frameCount: number }
 
 export function LiveSession() {
   const { exerciseId } = useParams()
@@ -160,12 +161,21 @@ export function LiveSession() {
       const bufferStart = visionBufferStartRef.current
       visionFramesRef.current = []
       visionBufferStartRef.current = null
-      if (frames.length > 0 && bufferStart !== null) {
-        const durationSeconds = (performance.now() - bufferStart) / 1000
-        setFormCheck({ status: 'checking' })
-        predictVisionForm(frames, durationSeconds)
-          .then((result) => setFormCheck({ status: 'result', result }))
-          .catch(() => setFormCheck({ status: 'unavailable' }))
+      if (bufferStart !== null) {
+        // Checked here, before calling predictVisionForm, so a too-short
+        // buffer (a quick rep, or MediaPipe briefly losing the person
+        // mid-movement) shows its own accurate state instead of falling
+        // into the same catch as a genuinely unreachable API and being
+        // mislabeled "Model Offline" when the API was fine all along.
+        if (frames.length < MIN_VISION_FRAMES) {
+          setFormCheck({ status: 'insufficient_frames', frameCount: frames.length })
+        } else {
+          const durationSeconds = (performance.now() - bufferStart) / 1000
+          setFormCheck({ status: 'checking' })
+          predictVisionForm(frames, durationSeconds)
+            .then((result) => setFormCheck({ status: 'result', result }))
+            .catch(() => setFormCheck({ status: 'unavailable' }))
+        }
       }
     }
   }, [repCount, kneeFlexionDeg, emgLeft, emgRight, faultActive])
@@ -314,6 +324,12 @@ export function LiveSession() {
               <p className="flex items-center gap-2 text-[13px] text-ink-faint">
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
                 Scoring your last rep…
+              </p>
+            )}
+            {formCheck.status === 'insufficient_frames' && (
+              <p className="text-[13px] text-ink-faint">
+                Only saw {formCheck.frameCount} camera frame{formCheck.frameCount === 1 ? '' : 's'} of that rep — not
+                enough to score it. Stay fully in frame for the whole movement and it'll pick up next rep.
               </p>
             )}
             {formCheck.status === 'unavailable' && (

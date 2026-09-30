@@ -40,22 +40,25 @@ export interface VisionPrediction {
 /** One buffered rep's worth of MediaPipe Pose WORLD landmarks: T frames, each 33 [x, y, z] entries, in MediaPipe's standard landmark order (matches `ml/src/preprocessing/landmarks.py`'s MEDIAPIPE_LANDMARK_NAMES exactly, so no reordering is needed on either side). */
 export type VisionFrames = number[][][]
 
-const MIN_FRAMES_FOR_PREDICTION = 10 // mirrors ensemble/api/server.py's own minimum
+/** Mirrors ensemble/api/server.py's own minimum — callers should check a buffer against this themselves (see LiveSession.tsx) before calling predictVisionForm, so a too-short rep can be told apart from a genuinely unreachable API instead of both looking like the same failure. */
+export const MIN_VISION_FRAMES = 10
 
 /**
  * POST a buffered rep to the vision model and return its classification.
  * Throws on a network failure (API not running — the common case during
- * normal use, since it's an optional local process) or a non-2xx response,
- * so callers should wrap this in try/catch and treat a rejection as
- * "model unavailable" rather than a user-facing error.
+ * normal use, since it's an optional local process), a non-2xx response, or
+ * fewer than MIN_VISION_FRAMES frames, so callers should wrap this in
+ * try/catch — but see MIN_VISION_FRAMES above for why that specific case is
+ * worth checking for and handling separately rather than lumping into the
+ * same catch as a real network failure.
  */
 export async function predictVisionForm(
   frames: VisionFrames,
   durationSeconds: number,
   baseUrl: string = DEFAULT_VISION_MODEL_URL,
 ): Promise<VisionPrediction> {
-  if (frames.length < MIN_FRAMES_FOR_PREDICTION) {
-    throw new Error(`need at least ${MIN_FRAMES_FOR_PREDICTION} buffered frames, got ${frames.length}`)
+  if (frames.length < MIN_VISION_FRAMES) {
+    throw new Error(`need at least ${MIN_VISION_FRAMES} buffered frames, got ${frames.length}`)
   }
   const res = await fetch(`${baseUrl}/predict/vision`, {
     method: 'POST',
