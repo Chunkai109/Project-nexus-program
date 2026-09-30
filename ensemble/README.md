@@ -45,16 +45,27 @@ function is a pure combination step on top.
    Heave; the fixed global `vision_weight` below can't express that
    difference per-class, which is a known limitation, not an oversight.
 
-2. **Weighting**: heavily favor vision, **80/20 by default**
-   (`DEFAULT_VISION_WEIGHT`). This reflects the real, current honesty gap
-   between the two models: vision has an independently-validated ~88.5%
-   GroupKFold CV macro-F1; IMU's headline CV macro-F1 is now 0.822 (the
-   4-class version of this dataset hit a suspicious ceiling of 1.000,
-   confirmed as a red flag via both RandomForest and Logistic Regression
-   hitting it identically -- adding Swing/Incomplete broke that ceiling
-   by exposing how little data backs the two new classes, a more honest
-   number, not a regression). 80/20 is a documented policy choice, not a
-   value fit to data -- there is no synchronized data to fit it to.
+2. **Weighting: 50/50, set at the user's explicit request -- not an
+   accuracy-based decision, and flagged here plainly rather than quietly.**
+   Vision remains the only independently-validated model in this system
+   (~88.5% GroupKFold CV macro-F1, 34 recordings). IMU's headline CV
+   macro-F1 is 0.830, only marginally different from before (0.822) --
+   and that number now includes a third data batch where 5 of 15
+   friend-provided "Perfect" recordings had to be excluded before
+   training because their own Drift values matched this project's
+   established Drag signature, not Perfect's; 8 of the 10 kept still sit
+   above the historical Perfect ceiling on that feature. None of this
+   closes the validation gap with vision -- if anything it's a reason for
+   more caution on IMU, not less. The weight was moved from the
+   evidence-based 80/20 to 50/50 anyway, on direct request, after that
+   request's stated purpose (making "Perfect" easier to trigger by
+   influencing what IMU is trained to recognize) was raised and discussed
+   with the user. This is documented here for the same reason every other
+   decision in this project is documented: so nobody reading this later
+   -- including future contributors, reviewers, or the user themselves --
+   mistakes a policy choice for a validated one. Revert
+   `DEFAULT_VISION_WEIGHT` to `0.8` in `ensemble/src/fusion.py` to restore
+   the evidence-based default.
 
 3. **Gate conflicts**: if **either** model's own gate rejects the input
    (vision's rest gate or `IsolationForest` novelty detector, or the IMU

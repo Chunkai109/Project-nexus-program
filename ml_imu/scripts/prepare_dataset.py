@@ -84,6 +84,30 @@ WHOLE_FILE_LABELS[41] = ("Incomplete", "user-provided Incomplete recording (2nd 
                                         "their own baseline (a completed cycle) and were "
                                         "excluded as not matching this class's definition")
 
+# Third batch (tests 42-51): 10 of 15 friend-provided recordings claimed as "all
+# Perfect" -- 5 of the original 15 (numbered 1,2,3,4,6 in the upload) were
+# EXCLUDED before labeling: their own Drift values (21.8-28.5) matched this
+# project's established Drag signature (+21..+33, from 7 independently-noted
+# elbow-flare sessions), directly contradicting the claimed Perfect label, not
+# just an unverified claim issue. Of the 10 kept, 2 (orig 9, 15) match the
+# existing Perfect group's drift range (<=12) cleanly; the other 8 sit
+# somewhat above the historical Perfect ceiling (12.0-15.5 vs the original
+# group's max 11.2) -- not Drag-range, but flagged rather than silently
+# treated as identical evidence to the clean two. No per-file notes were
+# provided beyond the batch-level "these are all Perfect reps" claim.
+_PERFECT_BATCH3 = {
+    42: 14.7, 43: 12.8, 44: 14.1, 45: 11.4, 46: 15.5,
+    47: 15.4, 48: 15.5, 49: 12.4, 50: 15.3, 51: 12.0,
+}
+for t, drift_max in _PERFECT_BATCH3.items():
+    flag = ("matches existing Perfect group's drift range (<=12)" if drift_max <= 12
+            else f"drift_max={drift_max} is above the historical Perfect ceiling "
+                 f"(11.2) though well below Drag's (21+) -- included but flagged, "
+                 f"not independently verified beyond the batch-level claim")
+    WHOLE_FILE_LABELS[t] = ("Perfect", f"friend-provided (3rd batch, 10 of 15 kept -- "
+                                        f"5 excluded for drift matching Drag's range, "
+                                        f"not Perfect's); {flag}")
+
 SEGMENTED_TEST_IDS = set(range(31, 36))
 
 
