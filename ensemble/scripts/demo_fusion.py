@@ -53,7 +53,9 @@ def main():
 
     # --- Branch 1: vision gate rejection takes priority ---
     vision_rejected = mock_vision_result("no_exercise_detected", {})
-    imu_confident = mock_imu_result("Perfect", {"Perfect": 0.9, "Drag": 0.05, "Half": 0.03, "Heave": 0.02})
+    imu_confident = mock_imu_result("Perfect", {
+        "Perfect": 0.9, "Drag": 0.03, "Swing": 0.02, "Half": 0.03, "Heave": 0.01, "Incomplete": 0.01,
+    })
     result = fuse_predictions(vision_rejected, imu_confident)
     all_ok &= check("vision gate rejection short-circuits even a confident IMU opinion",
                      result["source"] == "rejected_by_vision_gate" and result["prediction"] == "no_exercise_detected",
@@ -70,33 +72,39 @@ def main():
                      result["source"] == "rejected_by_imu_gate" and result["prediction"] == "unrecognized_input",
                      f"got source={result['source']}, prediction={result['prediction']}")
 
-    # --- Branch 3: vision's top class is exclusive (Swing) -- IMU bypassed ---
+    # --- Branch 3: Swing/Incomplete are no longer vision-exclusive -- IMU
+    # now has real (if thin) training data for both, so its opinion is
+    # blended in like any other class instead of being bypassed. Hand-
+    # verified math, since VISION_EXCLUSIVE_CLASSES is empty and nothing
+    # gets dropped from vision's proba before blending.
     vision_swing = mock_vision_result(
         "Swing", {"Perfect": 0.1, "Drag": 0.05, "Swing": 0.6, "Half": 0.1, "Heave": 0.1, "Incomplete": 0.05},
         good_form_score=0.11, good_form_score_raw=0.06,
     )
-    result = fuse_predictions(vision_swing, imu_confident)
-    all_ok &= check("vision's exclusive-class top prediction (Swing) bypasses IMU entirely",
-                     result["source"] == "vision_only_exclusive_class" and result["prediction"] == "Swing",
+    result = fuse_predictions(vision_swing, imu_confident, vision_weight=0.8)
+    # fused = 0.8*vision + 0.2*imu, per class (no restriction/renormalization
+    # since SHARED_CLASSES now covers all 6 vision classes):
+    expected_swing = 0.8 * 0.6 + 0.2 * 0.02  # = 0.484
+    all_ok &= check("Swing as vision's top class now goes through normal fusion, not a bypass",
+                     result["source"] == "fused" and result["prediction"] == "Swing",
                      f"got source={result['source']}, prediction={result['prediction']}")
-    all_ok &= check("bypassed result still carries the raw IMU result for transparency",
-                     result.get("imu_result") == imu_confident)
+    all_ok &= check("fused P(Swing) matches hand-computed expected value",
+                     abs(result["class_probabilities"]["Swing"] - expected_swing) < 1e-6,
+                     f"got {result['class_probabilities']['Swing']:.6f}, expected {expected_swing:.6f}")
 
     # --- Branch 4: real fusion over shared classes, hand-verified math ---
     vision_shared_case = mock_vision_result(
         "Perfect", {"Perfect": 0.6, "Drag": 0.1, "Swing": 0.05, "Half": 0.15, "Heave": 0.05, "Incomplete": 0.05},
         good_form_score=1.0, good_form_score_raw=0.6,
     )
-    imu_shared_case = mock_imu_result("Half", {"Perfect": 0.2, "Drag": 0.1, "Half": 0.6, "Heave": 0.1})
+    imu_shared_case = mock_imu_result("Half", {
+        "Perfect": 0.2, "Drag": 0.1, "Swing": 0.05, "Half": 0.55, "Heave": 0.05, "Incomplete": 0.05,
+    })
     result = fuse_predictions(vision_shared_case, imu_shared_case, vision_weight=0.8)
-    # Hand-computed expected values:
-    # vision's Swing+Incomplete mass = 0.05+0.05 = 0.10, remaining shared mass = 0.90
-    # vision_shared (renormalized) = {Perfect:0.6/0.9, Drag:0.1/0.9, Half:0.15/0.9, Heave:0.05/0.9}
-    #                              = {Perfect:0.6667, Drag:0.1111, Half:0.1667, Heave:0.0556}
-    # imu_shared (already sums to 1) = {Perfect:0.2, Drag:0.1, Half:0.6, Heave:0.1}
-    # fused = 0.8*vision_shared + 0.2*imu_shared
-    expected_perfect = 0.8 * (0.6 / 0.9) + 0.2 * 0.2
-    expected_half = 0.8 * (0.15 / 0.9) + 0.2 * 0.6
+    # Hand-computed expected values (SHARED_CLASSES = all 6, so no mass is
+    # dropped/renormalized from either side -- fused = 0.8*vision + 0.2*imu):
+    expected_perfect = 0.8 * 0.6 + 0.2 * 0.2
+    expected_half = 0.8 * 0.15 + 0.2 * 0.55
     all_ok &= check("fused source is 'fused' for a normal shared-class case",
                      result["source"] == "fused", f"got source={result['source']}")
     all_ok &= check("fused P(Perfect) matches hand-computed expected value",
@@ -105,7 +113,7 @@ def main():
     all_ok &= check("fused P(Half) matches hand-computed expected value",
                      abs(result["class_probabilities"]["Half"] - expected_half) < 1e-6,
                      f"got {result['class_probabilities']['Half']:.6f}, expected {expected_half:.6f}")
-    all_ok &= check("fused class_probabilities sum to 1 over the 4 shared classes",
+    all_ok &= check("fused class_probabilities sum to 1 over the 6 shared classes",
                      abs(sum(result["class_probabilities"].values()) - 1.0) < 1e-9,
                      f"sum={sum(result['class_probabilities'].values()):.9f}")
     all_ok &= check("fused prediction is the argmax of the fused probabilities",

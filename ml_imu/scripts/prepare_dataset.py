@@ -58,6 +58,32 @@ for t in range(24, 31):
     WHOLE_FILE_LABELS[t] = ("Drag", "elbow flare; Drift spikes to +21..+33 vs roughly "
                                      "[-14,+8] in every other group")
 
+# Second data-collection batch (tests 36-41): reduced-format logs (no State/
+# EMG/Vib/Reps -- see parse_log.py's FLEX_DRIFT_ONLY_RE), user-provided as
+# "Swing DataSet"/"Incomplete Dataset". Checked directly before labeling,
+# not taken on the filename's word alone -- see ml_imu/README.md for the
+# full comparison against the existing 35-session dataset.
+for t in range(36, 41):
+    WHOLE_FILE_LABELS[t] = ("Swing", "user-provided Swing recording (2nd batch); Drift "
+                                       "sits at a near-constant -43..-53, outside every "
+                                       "other class's range including this same batch's "
+                                       "own Incomplete recordings (-21..+16) -- flagged as "
+                                       "a likely sensor-calibration offset rather than a "
+                                       "confirmed swing-motion signal, trained on as-is per "
+                                       "an explicit decision (see README)")
+# Only test 41 (of 5 candidate "Incomplete" recordings) -- the other 4
+# measurably show a completed rise-and-return cycle (end back near their own
+# baseline), which is a Half/normal-rep signature, not a mid-rep cutoff, so
+# they were excluded rather than mislabeled. Test 41 ends 56% of the way
+# from its baseline to its peak -- genuinely still elevated, not returned.
+WHOLE_FILE_LABELS[41] = ("Incomplete", "user-provided Incomplete recording (2nd batch, "
+                                        "1 of 5 candidates used); flex rises then the "
+                                        "session ends at 56% of the way to peak, "
+                                        "consistent with a genuinely truncated rep -- the "
+                                        "other 4 candidate recordings ended back near "
+                                        "their own baseline (a completed cycle) and were "
+                                        "excluded as not matching this class's definition")
+
 SEGMENTED_TEST_IDS = set(range(31, 36))
 
 
@@ -67,7 +93,7 @@ def main():
 
     PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
 
-    # 1. Long-format per-frame CSV, all 35 sessions.
+    # 1. Long-format per-frame CSV, all sessions.
     frame_rows = []
     for s in sessions:
         for i in range(s.num_frames):
@@ -75,6 +101,7 @@ def main():
                 "test_id": s.test_id, "frame_idx": i, "flex": s.flex[i],
                 "drift": s.drift[i], "emg": int(s.emg[i]),
                 "vib_on": bool(s.vib_on[i]), "state": s.state[i],
+                "has_emg_vib_state": s.has_emg_vib_state,
             })
     frames_df = pd.DataFrame(frame_rows)
     frames_df.to_csv(PROCESSED_DIR / "imu_sessions.csv", index=False)
@@ -139,9 +166,20 @@ def main():
     # 3. Dataset report.
     whole_session_rows = labels_df[labels_df.label_source == "manual_full_session"]
     segmented_rows = labels_df[labels_df.label_source == "peak_detection_segmented"]
+    no_emg_vib_tests = sorted(s.test_id for s in sessions if not s.has_emg_vib_state)
     report = {
         "num_raw_sessions": len(sessions),
         "num_labeled_rows": len(labels_df),
+        "tests_without_real_emg_vib_data": no_emg_vib_tests,
+        "note_on_missing_emg_vib": (
+            f"Tests {no_emg_vib_tests} come from a reduced logging format "
+            f"(Flex/Drift only, no State/EMG/Vib/Reps). Their emg_* and "
+            f"vib_on_frac features are 0/False by convention, meaning "
+            f"'not recorded', not 'recorded as zero' -- the classifier will "
+            f"see these as indistinguishable from a genuinely silent EMG "
+            f"reading, which is a real limitation for any class built "
+            f"mostly from these tests (Swing, Incomplete)."
+        ),
         "class_counts_by_source": {
             "manual_full_session": whole_session_rows["label"].value_counts().to_dict(),
             "peak_detection_segmented": segmented_rows["label"].value_counts().to_dict(),

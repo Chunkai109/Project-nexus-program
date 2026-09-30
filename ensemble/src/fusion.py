@@ -17,18 +17,26 @@ model.
 
 Three design decisions, resolved with the user and applied here exactly:
 
-1. Label mismatch: the vision model has 6 classes (adds Swing and
-   Incomplete); the IMU model only covers 4 (no real Swing/Incomplete data
-   exists for it, and fabricating labels for those was explicitly
-   rejected as circular/dishonest -- same reasoning already applied to
-   declining synthetic label generation for ml_imu/). Resolution: fuse
-   probabilities only over the 4 SHARED_CLASSES. If vision's own top
-   prediction is Swing or Incomplete, IMU is not consulted at all -- its
-   opinion would be meaningless for a class it was never trained to judge.
+1. Label mismatch: the vision model has 6 classes; the IMU model
+   originally covered only 4 (no real Swing/Incomplete data existed for
+   it). A second data-collection batch added real Swing (5 sessions) and
+   Incomplete (1 session) examples, so IMU now nominally covers all 6 --
+   SHARED_CLASSES was widened to match. **This is a capability change, not
+   a validated-improvement one**: Swing's data shows a Drift signature
+   that looks more like a sensor-calibration offset than confirmed swing
+   motion (trained on as-is per an explicit decision -- see
+   ml_imu/README.md), and Incomplete has exactly ONE example, too few for
+   GroupKFold to say anything reliable about it (one CV fold trains with
+   zero Incomplete examples entirely). IMU's opinion on these two classes
+   should be trusted considerably less than its opinion on Perfect/Drag/
+   Half/Heave, which have 5-17 sessions each -- the fixed global
+   `vision_weight` can't express that per-class difference, so this is a
+   known, documented limitation of the current weighting, not an oversight.
 
 2. Weighting: heavily favor vision (80/20 default) -- vision has an
-   honestly-validated ~88.5% CV macro-F1; the IMU model's 100% CV number
-   was flagged as a ceiling effect, not validated real-world accuracy.
+   honestly-validated ~88.5% CV macro-F1; IMU's headline CV macro-F1 is
+   now 0.822 (no ceiling effect, but Incomplete's single-example class
+   pulls it down honestly rather than artificially).
 
 3. Gate conflicts: if EITHER model's own gate rejects the input (vision's
    rest gate / novelty detector, or IMU's novelty gate), the ensemble
@@ -37,8 +45,15 @@ Three design decisions, resolved with the user and applied here exactly:
 """
 from __future__ import annotations
 
-SHARED_CLASSES = ["Perfect", "Drag", "Half", "Heave"]
-VISION_EXCLUSIVE_CLASSES = ["Swing", "Incomplete"]
+SHARED_CLASSES = ["Perfect", "Drag", "Swing", "Half", "Heave", "Incomplete"]
+# Previously ["Swing", "Incomplete"] -- IMU had zero training data for
+# either class, so vision's answer was used directly, bypassing IMU
+# entirely for these two. Now that IMU has (thin, caveated -- see above)
+# real data for both, they're fused like every other class instead of
+# bypassed. Kept as an empty list, not deleted, so the bypass mechanism
+# stays available if a class needs to revert to vision-only in the future
+# (e.g. if Swing's drift signal turns out not to generalize).
+VISION_EXCLUSIVE_CLASSES = []
 VISION_REJECT_PREDICTIONS = {"no_exercise_detected", "unrecognized_movement"}
 IMU_REJECT_PREDICTIONS = {"unrecognized_input"}
 DEFAULT_VISION_WEIGHT = 0.8

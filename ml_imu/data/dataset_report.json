@@ -1,12 +1,23 @@
 {
-  "num_raw_sessions": 35,
-  "num_labeled_rows": 52,
+  "num_raw_sessions": 41,
+  "num_labeled_rows": 58,
+  "tests_without_real_emg_vib_data": [
+    36,
+    37,
+    38,
+    39,
+    40,
+    41
+  ],
+  "note_on_missing_emg_vib": "Tests [36, 37, 38, 39, 40, 41] come from a reduced logging format (Flex/Drift only, no State/EMG/Vib/Reps). Their emg_* and vib_on_frac features are 0/False by convention, meaning 'not recorded', not 'recorded as zero' -- the classifier will see these as indistinguishable from a genuinely silent EMG reading, which is a real limitation for any class built mostly from these tests (Swing, Incomplete).",
   "class_counts_by_source": {
     "manual_full_session": {
       "Perfect": 10,
       "Half": 8,
       "Drag": 7,
-      "Heave": 5
+      "Heave": 5,
+      "Swing": 5,
+      "Incomplete": 1
     },
     "peak_detection_segmented": {
       "Half": 17,
