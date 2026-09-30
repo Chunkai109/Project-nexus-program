@@ -13,9 +13,24 @@ export interface BicepCurlCounterResult {
 
 // Rep-counting thresholds, independent of the firmware — the ESP32 has no
 // rep-counting or vibration-trigger logic of its own; see smartphysio_hub.ino.
-const START_CURL_LIMIT = 30
-const CONTRACTION_LIMIT = 80
-const EXTENSION_LIMIT = 20
+//
+// These must track the default Bicep Curl exercise's target corridor
+// (targetMin/targetMax in buildDefaultBicepCurlExercise(), AppDataContext.tsx)
+// -- START_CURL_LIMIT = targetMin, CONTRACTION_LIMIT = targetMax,
+// EXTENSION_LIMIT = targetMin - 10. When the corridor was recalibrated from
+// 30-80 to the real rig's actual 150-180 range ("Set bicep curl corridor to
+// 150-180" commit), these three constants were left behind at the old
+// 30/80/20 values -- since 80 sits well BELOW the real sensor's resting
+// (fully-extended) reading once the corridor moved up to 150+, every sample
+// after the ~1s baseline-settle window already read above CONTRACTION_LIMIT,
+// so repState jumped straight to 'top' and could never drop back below
+// EXTENSION_LIMIT (also stale at 20) to complete a rep -- rep counting was
+// permanently stuck at 0 no matter how many real curls were performed. Fixed
+// by moving these to match the real corridor; if the corridor is ever
+// recalibrated again, update these three in the same commit.
+const START_CURL_LIMIT = 150
+const CONTRACTION_LIMIT = 180
+const EXTENSION_LIMIT = 140
 const DRIFT_TOLERANCE = 15
 const SETTLE_SAMPLES = 50
 
@@ -114,19 +129,25 @@ export class BicepCurlCounter {
         break
 
       case 'top':
+        // Stays latched in 'top' through any wobble above EXTENSION_LIMIT
+        // (including a real, gradual descent that hasn't reached it yet) --
+        // only a genuine full extension exits this state. An earlier version
+        // fell back to 'curling' as soon as flex dropped below
+        // START_CURL_LIMIT, meant as a safety valve for someone releasing
+        // partway and never fully extending; in practice, since
+        // START_CURL_LIMIT and EXTENSION_LIMIT are only ~10 degrees apart
+        // and real sensor samples arrive every ~20ms, an ordinary rep's
+        // descent almost always lands a sample inside that band before
+        // reaching EXTENSION_LIMIT, so this branch fired on nearly every
+        // real rep and silently discarded it (repCount permanently stuck at
+        // 0) -- confirmed by simulating a normal gradual descent through the
+        // state machine. Removed rather than widened: a real partial release
+        // just means the count is credited a little later, once the arm
+        // actually reaches full extension, instead of being dropped.
         if (flex < EXTENSION_LIMIT) {
           if (!this.formCheatDetected) this.repCount += 1
           this.formCheatDetected = false
           this.repState = 'down'
-        } else if (flex < START_CURL_LIMIT) {
-          // Released the contraction without reaching full extension (e.g.
-          // sensor drift has nudged the effective "zero" above
-          // EXTENSION_LIMIT, or they simply didn't extend all the way this
-          // time). Fall back to 'curling' instead of staying latched in
-          // 'top' forever — this one rep goes uncounted, but the very next
-          // full extension can still complete normally instead of the
-          // counter being permanently stuck at whatever count it last hit.
-          this.repState = 'curling'
         }
         break
     }
