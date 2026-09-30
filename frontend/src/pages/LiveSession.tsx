@@ -29,11 +29,27 @@ const ENABLE_MEDIAPIPE_VISION = true
 
 type FormCheckState =
   | { status: 'idle' }
-  | { status: 'capturing' }
+  | { status: 'capturing'; phase: 'rising' | 'settling' }
   | { status: 'checking' }
   | { status: 'result'; result: VisionPrediction | FusedPrediction }
   | { status: 'insufficient_frames'; frameCount: number }
   | { status: 'unavailable' }
+
+// Degrees of genuine movement required before the vision-capture window
+// reacts to it — filters out sensor jitter so a 1-2 degree wobble at rest
+// (or at the top of a rep) never looks like "started rising"/"started
+// rising again". Reused for both the start-of-rise check and the
+// post-corridor re-rise check below, and doubles as the plateau tolerance
+// (see SETTLE_WINDOW_MS) since both are "is this actually moving?" checks
+// on the same signal.
+const RISE_THRESHOLD_DEG = 10
+
+// How long flexion has to stay within RISE_THRESHOLD_DEG of itself, once the
+// corridor has been reached at least once, before that stillness counts as
+// "settled" and ends the capture window. 1s is long enough that ordinary
+// between-sample jitter doesn't trigger it prematurely, short enough that a
+// genuine hold at the top isn't kept waiting.
+const SETTLE_WINDOW_MS = 1000
 
 /** Builds the human-readable verdict stored per-rep for Session Summary's "AI Form Check Notes" (see SessionSummary.tsx). */
 function describeAiResult(result: VisionPrediction | FusedPrediction): string {
@@ -90,8 +106,13 @@ export function LiveSession() {
   // (holding inside it doesn't add extra reps), and works identically
   // whether flex comes from the real hub or the wearable simulator, since
   // both already funnel into the same kneeFlexionDeg/inCorridor above.
+  // prevRepCount is the authoritative synchronous counter (repCount state is
+  // just its rendered mirror, for the header) -- reading it synchronously
+  // matters below for stamping AI results onto the right rep; see the
+  // vision-capture block's comment.
   const [repCount, setRepCount] = useState(0)
   const wasInCorridor = useRef(false)
+  const prevRepCount = useRef(0)
 
   // Real EMG from Pod 1 — the sole EMG-capable pod on this rig (bicep) —
   // once it has actually reported a reading; otherwise the wearable
@@ -106,17 +127,49 @@ export function LiveSession() {
 
   // AI form check (ml/'s trained bicep-curl classifier, via the ensemble
   // API's vision-only endpoint — see ensemble/FRONTEND_INTEGRATION.md
-  // Section 5): buffer MediaPipe Pose WORLD landmarks for exactly the
-  // concentric phase of a rep — from the instant flexion leaves full
-  // extension (below EXTENSION_LIMIT) and starts rising, to the instant it
-  // reaches the target corridor — then classify that window. A fixed frame
-  // count doesn't correspond to any real phase of the movement; this does,
-  // so what gets scored is always "this one lift", never a few frames of one
-  // rep glued to a few frames of the next. visionCapturingRef gates
-  // handleWorldLandmarks below so frames outside the window (resting at the
-  // bottom, or descending back down after a rep) are never buffered at all.
+  // Section 5): buffer MediaPipe Pose WORLD landmarks for exactly one rep's
+  // motion, bounded by real movement rather than a fixed frame count or a
+  // single instant:
+  //  - STARTS once flexion has climbed RISE_THRESHOLD_DEG above the lowest
+  //    point it's rested at (angleLocalMinRef) -- not the instant it ticks
+  //    upward at all, so ordinary sensor jitter while resting never counts
+  //    as "started rising". angleLocalMinRef tracks a plain running minimum
+  //    while not capturing, so this also works for someone doing
+  //    partial-range reps that never touch true full extension: the
+  //    baseline just becomes wherever their own bottom actually is.
+  //  - Once flexion reaches the corridor, the window doesn't end there —
+  //    it keeps recording (postCorridorRef true) until ANY of:
+  //      (a) flexion has stayed within RISE_THRESHOLD_DEG of itself for a
+  //          full SETTLE_WINDOW_MS (a genuine hold/plateau -- angleHistoryRef
+  //          is the trailing ~1s of samples this checks),
+  //      (b) flexion genuinely falls RISE_THRESHOLD_DEG off its post-corridor
+  //          peak and then climbs RISE_THRESHOLD_DEG again (a real
+  //          down-then-up bounce -- see postCorridorPeakRef's own comment for
+  //          why "climbed at all since touching the corridor" isn't enough),
+  //      (c) flexion falls all the way back to full extension (a safety net:
+  //          fast back-to-back reps with no pause anywhere could otherwise
+  //          never satisfy (a) or (b) and capture indefinitely).
+  // visionCapturingRef gates handleWorldLandmarks below so frames outside
+  // an active window (resting, or descending after a completed rep) are
+  // never buffered at all.
   const visionCapturingRef = useRef(false)
-  const hasRestedRef = useRef(true) // starts true: a session begins at rest
+  const angleLocalMinRef = useRef(Infinity)
+  const postCorridorRef = useRef(false)
+  // "Rising again" (below) has to mean a genuine down-then-up bounce, not
+  // just continued upward motion toward the rep's own natural peak — flexion
+  // keeps climbing for a while after first touching the corridor (the
+  // corridor's floor isn't the top of the rep), and treating that ordinary
+  // continued rise as "rising again" flushed the window within milliseconds
+  // of ever reaching the corridor, before any real hold could register. So
+  // this tracks the post-corridor peak, waits for flexion to actually fall
+  // RISE_THRESHOLD_DEG off that peak (postCorridorDescendedRef flips true),
+  // and only then treats a further RISE_THRESHOLD_DEG climb off the
+  // post-descent low as "rising again".
+  const postCorridorPeakRef = useRef(-Infinity)
+  const postCorridorDescendedRef = useRef(false)
+  const postCorridorMinAfterDescentRef = useRef(Infinity)
+  const angleHistoryRef = useRef<{ t: number; angle: number }[]>([])
+  const pendingRepForVisionRef = useRef<number | null>(null)
   const visionFramesRef = useRef<number[][][]>([])
   const visionBufferStartRef = useRef<number | null>(null)
   const [formCheck, setFormCheck] = useState<FormCheckState>({ status: 'idle' })
@@ -130,70 +183,114 @@ export function LiveSession() {
   // rep completes, so a finished session leaves behind real per-rep data
   // instead of nothing — this is what Session Analytics reads back later.
   const [repSamples, setRepSamples] = useState<RepSample[]>([])
-  const prevRepCount = useRef(0)
 
   useEffect(() => {
+    const now = performance.now()
     const belowRest = kneeFlexionDeg < EXTENSION_LIMIT
-    if (belowRest) hasRestedRef.current = true
 
-    if (!visionCapturingRef.current && hasRestedRef.current && !belowRest && !inCorridor) {
-      // Flexion just left full extension and is climbing toward the
-      // corridor — start this rep's capture window right here. Requiring
-      // hasRestedRef (only set once the arm is confirmed fully extended,
-      // and cleared the moment a capture starts) stops this from
-      // re-triggering on the way back down out of the corridor for someone
-      // doing partial-range reps that never bottom out.
-      visionCapturingRef.current = true
-      hasRestedRef.current = false
-      visionFramesRef.current = []
-      visionBufferStartRef.current = performance.now()
-      hub.drainFlexDriftSamples() // discard anything from before this rise began
-      setFormCheck({ status: 'capturing' })
-    } else if (visionCapturingRef.current && belowRest) {
-      // Dropped back to full extension without ever reaching the corridor —
-      // an aborted lift. Discard rather than scoring a partial attempt.
-      visionCapturingRef.current = false
-      visionFramesRef.current = []
-      visionBufferStartRef.current = null
-      hub.drainFlexDriftSamples()
-      setFormCheck({ status: 'idle' })
-    }
-
-    if (inCorridor && !wasInCorridor.current) {
-      setRepCount((c) => c + 1)
-    }
+    // Rep counting fires first and updates prevRepCount synchronously (not
+    // via the async repCount state) so the vision-capture block below can
+    // safely read "which rep just completed" in the same pass, even though
+    // its own window might not finish (and need that number) until several
+    // samples later once it settles or re-rises.
+    const enteredCorridor = inCorridor && !wasInCorridor.current
     wasInCorridor.current = inCorridor
-  }, [kneeFlexionDeg, inCorridor, hub])
-
-  useEffect(() => {
-    if (repCount > prevRepCount.current) {
-      const thisRep = repCount
-      prevRepCount.current = repCount
+    if (enteredCorridor) {
+      prevRepCount.current += 1
+      const thisRep = prevRepCount.current
+      setRepCount(thisRep)
       setRepSamples((prev) => [
         ...prev,
         { rep: thisRep, angle: Math.round(kneeFlexionDeg), emgLeft: emgBicep, emgRight: emgBicep, faultActive },
       ])
+    }
 
-      // This rep's capture window (started the moment flexion left full
-      // extension, above) just ended by reaching the corridor — flush
-      // exactly that window, not an accumulated multi-rep buffer.
-      visionCapturingRef.current = false
+    if (!visionCapturingRef.current) {
+      angleLocalMinRef.current = Math.min(angleLocalMinRef.current, kneeFlexionDeg)
+      if (kneeFlexionDeg - angleLocalMinRef.current >= RISE_THRESHOLD_DEG) {
+        visionCapturingRef.current = true
+        postCorridorRef.current = false
+        visionFramesRef.current = []
+        visionBufferStartRef.current = now
+        angleHistoryRef.current = [{ t: now, angle: kneeFlexionDeg }]
+        hub.drainFlexDriftSamples() // discard anything from before this rise began
+        setFormCheck({ status: 'capturing', phase: 'rising' })
+      }
+      return
+    }
+
+    angleHistoryRef.current.push({ t: now, angle: kneeFlexionDeg })
+    while (angleHistoryRef.current.length > 1 && now - angleHistoryRef.current[0].t > SETTLE_WINDOW_MS) {
+      angleHistoryRef.current.shift()
+    }
+
+    if (!postCorridorRef.current) {
+      if (inCorridor) {
+        postCorridorRef.current = true
+        postCorridorPeakRef.current = kneeFlexionDeg
+        postCorridorDescendedRef.current = false
+        postCorridorMinAfterDescentRef.current = Infinity
+        if (enteredCorridor) pendingRepForVisionRef.current = prevRepCount.current
+        setFormCheck({ status: 'capturing', phase: 'settling' })
+      } else if (belowRest) {
+        // Dropped back to full extension without ever reaching the
+        // corridor — an aborted lift. Discard rather than scoring a
+        // partial attempt.
+        visionCapturingRef.current = false
+        visionFramesRef.current = []
+        visionBufferStartRef.current = null
+        hub.drainFlexDriftSamples()
+        setFormCheck({ status: 'idle' })
+      }
+      return
+    }
+
+    postCorridorPeakRef.current = Math.max(postCorridorPeakRef.current, kneeFlexionDeg)
+    if (!postCorridorDescendedRef.current) {
+      if (postCorridorPeakRef.current - kneeFlexionDeg >= RISE_THRESHOLD_DEG) {
+        postCorridorDescendedRef.current = true
+        postCorridorMinAfterDescentRef.current = kneeFlexionDeg
+      }
+    } else {
+      postCorridorMinAfterDescentRef.current = Math.min(postCorridorMinAfterDescentRef.current, kneeFlexionDeg)
+    }
+
+    const history = angleHistoryRef.current
+    const spanMs = now - history[0].t
+    const maxAngle = Math.max(...history.map((s) => s.angle))
+    const minAngle = Math.min(...history.map((s) => s.angle))
+    const settled = spanMs >= SETTLE_WINDOW_MS && maxAngle - minAngle <= RISE_THRESHOLD_DEG
+    const risingAgain =
+      postCorridorDescendedRef.current && kneeFlexionDeg - postCorridorMinAfterDescentRef.current >= RISE_THRESHOLD_DEG
+    // Safety net beyond the two conditions above: with fast, back-to-back
+    // reps and no real pause anywhere (not at the top, not at the bottom),
+    // neither settled nor risingAgain is guaranteed to ever fire, and the
+    // window would otherwise capture indefinitely, bleeding into later reps.
+    // A full return to full extension always means this rep's motion is
+    // over regardless of what its velocity profile looked like on the way
+    // there, so it closes the window unconditionally.
+    const fellToRest = belowRest
+
+    if (settled || risingAgain || fellToRest) {
+      const thisRep = pendingRepForVisionRef.current
       const frames = visionFramesRef.current
       visionFramesRef.current = []
       const flexDrift = hub.drainFlexDriftSamples()
       const bufferStart = visionBufferStartRef.current
       visionBufferStartRef.current = null
+      visionCapturingRef.current = false
+      angleLocalMinRef.current = kneeFlexionDeg // fresh baseline for the next rise
 
-      if (bufferStart !== null) {
+      if (bufferStart !== null && thisRep !== null) {
         if (frames.length < MIN_VISION_FRAMES) {
-          // The rep's rise happened faster than the camera could keep up
-          // with — a real possibility now that the window is scoped to one
-          // lift instead of accumulating across several. Reported per-rep
+          // The rep happened faster than the camera could keep up with —
+          // a real possibility now that the window is scoped to one lift
+          // instead of accumulating across several. Reported per-rep
           // rather than silently carried into the next window, since a
           // carried-over window would no longer represent a single rep.
           setFormCheck({ status: 'insufficient_frames', frameCount: frames.length })
         } else {
-          const durationSeconds = (performance.now() - bufferStart) / 1000
+          const durationSeconds = (now - bufferStart) / 1000
           setFormCheck({ status: 'checking' })
           // Real flex/drift from the hub feeds the fused model when
           // connected; otherwise fall back to vision-only, the same as
@@ -214,7 +311,7 @@ export function LiveSession() {
         }
       }
     }
-  }, [repCount, kneeFlexionDeg, emgBicep, faultActive, hub, usingHubCurl])
+  }, [kneeFlexionDeg, inCorridor, emgBicep, faultActive, hub, usingHubCurl])
 
   if (!exercise) {
     return (
@@ -358,7 +455,9 @@ export function LiveSession() {
             {formCheck.status === 'capturing' && (
               <p className="flex items-center gap-2 text-[13px] text-ink-faint">
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                Recording this rep — keep going to the target…
+                {formCheck.phase === 'rising'
+                  ? 'Recording this rep — keep going to the target…'
+                  : 'In the target zone — hold briefly to finish scoring this rep…'}
               </p>
             )}
             {formCheck.status === 'checking' && (
