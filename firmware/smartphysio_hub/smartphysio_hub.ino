@@ -341,8 +341,14 @@ void loop() {
         statusDoc["signal"] = "strong";
         broadcastJson(statusDoc);
       }
-      const uint8_t statusPods[2] = { POD_FOREARM, POD_UPPERARM };
-      for (uint8_t i = 0; i < 2; i++) {
+      // Includes the vibration motor (POD_HAPTIC_FORM) alongside the two
+      // IMUs -- it's wired directly to this same board with no independent
+      // link to lose, so once the board itself is connected it's exactly as
+      // "online" as any other pod here. Without this, the dashboard never
+      // hears from podId 15 at all and the motor shows permanently offline
+      // even while the hub is connected.
+      const uint8_t statusPods[3] = { POD_FOREARM, POD_UPPERARM, POD_HAPTIC_FORM };
+      for (uint8_t i = 0; i < 3; i++) {
         JsonDocument statusDoc;
         statusDoc["type"] = "status";
         statusDoc["podId"] = statusPods[i];

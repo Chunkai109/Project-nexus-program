@@ -61,17 +61,17 @@ export function SensorSetup() {
   const hub = useSensorHub()
   const hubConnected = hub.connectionState === 'connected'
 
-  // While a real hub is connected, pod wiring metadata (label/location/kind)
-  // still comes from the known hardware layout — only signal/battery are
-  // live. Until a pod reports in, it reads "offline" rather than borrowing
-  // the simulated demo numbers, so it's never ambiguous which is real.
-  const displayPods = hubConnected
-    ? PODS.map((pod) => ({
-        ...pod,
-        signal: hub.pods[pod.id as PodId]?.signal ?? 'offline',
-        battery: hub.pods[pod.id as PodId]?.battery ?? 0,
-      }))
-    : PODS
+  // Pod wiring metadata (label/location/kind) always comes from the known
+  // hardware layout — only signal/battery are live, and only once a real
+  // hub is actually connected. Before that (or for any pod that hasn't
+  // reported in yet), it reads "offline" rather than the PODS array's
+  // placeholder values, so the badges never claim a signal that hasn't
+  // actually been seen.
+  const displayPods = PODS.map((pod) => ({
+    ...pod,
+    signal: hubConnected ? (hub.pods[pod.id as PodId]?.signal ?? 'offline') : 'offline',
+    battery: hubConnected ? (hub.pods[pod.id as PodId]?.battery ?? 0) : 0,
+  }))
 
   const allConnected = displayPods.every((p) => p.signal !== 'offline')
 
