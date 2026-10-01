@@ -32,15 +32,7 @@ export interface BicepCurlCounterResult {
 // max contraction every time.
 const START_CURL_LIMIT = 35
 const CONTRACTION_LIMIT = 90
-// How far drift can stray from baselineDrift before it's flagged as upper-arm
-// drift (formCheatDetected). Raised from 15 -- the fault was triggering too
-// easily on real hardware, i.e. ordinary sensor noise/natural arm wobble
-// during a rep was crossing this threshold, not just genuine form cheats.
-// Note this is the tolerance BAND around the baseline, not the baseline
-// itself -- baselineDrift is a live-measured resting reference (see its own
-// comment below), not a constant, so it isn't something to tune directly;
-// this is the actual knob for "how easily does the fault trigger."
-const DRIFT_TOLERANCE = 22
+const DRIFT_TOLERANCE = 15
 const SETTLE_SAMPLES = 50
 
 /**
