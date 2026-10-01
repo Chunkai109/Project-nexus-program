@@ -13,15 +13,54 @@ export interface BicepCurlCounterResult {
 
 // Rep-counting thresholds, independent of the firmware — the ESP32 has no
 // rep-counting or vibration-trigger logic of its own; see smartphysio_hub.ino.
-const START_CURL_LIMIT = 30
-const CONTRACTION_LIMIT = 80
-const EXTENSION_LIMIT = 20
+//
+// Deliberately INDEPENDENT of the exercise's own target corridor
+// (targetMin/targetMax in buildDefaultBicepCurlExercise(), AppDataContext.tsx)
+// -- an earlier version tied these directly to that corridor (START_CURL_LIMIT
+// = targetMin, CONTRACTION_LIMIT = targetMax), which meant recalibrating the
+// corridor silently broke rep counting twice: once when the corridor moved to
+// 150-180 while these stayed at the old 30/80/20 (rep counting got
+// permanently stuck at 0 since the real sensor's resting reading was already
+// above the stale CONTRACTION_LIMIT=80), and the 150-180 corridor itself then
+// turned out to be wrong too -- a real measured curl on this rig reads 0° at
+// full extension and 135° at full contraction, nowhere near 150-180. "Rep
+// happened at all" (below) and "hit the prescribed target zone" (the
+// exercise's own corridor, checked separately in LiveSession.tsx) are
+// different questions and now use different numbers on purpose: these three
+// span most of the real measured 0-135 range with margin for natural
+// variation, so an ordinary rep gets counted even short of a picture-perfect
+// max contraction every time.
+const START_CURL_LIMIT = 35
+const CONTRACTION_LIMIT = 90
 const DRIFT_TOLERANCE = 15
 const SETTLE_SAMPLES = 50
+
+/**
+ * Below this = arm fully extended at the bottom of a rep, on this rig's real
+ * measured 0-135 range. Exported (unlike the other thresholds above) because
+ * LiveSession.tsx reuses it for a second, unrelated purpose: marking the
+ * start of the AI Form Check's camera-frame buffering window, which now
+ * spans "from the moment flexion leaves full extension and starts rising"
+ * through "reaches the target corridor" for a single rep, instead of a fixed
+ * frame count that could span multiple reps. Sharing this constant (rather
+ * than inventing a second one) keeps "what counts as the bottom of a rep"
+ * defined in exactly one place.
+ */
+export const EXTENSION_LIMIT = 20
 
 /** Which hub pods carry flex/drift, matching POD_FOREARM/POD_UPPERARM in smartphysio_hub.ino. */
 export const CURL_FLEX_POD_ID = 2
 export const CURL_DRIFT_POD_ID = 3
+
+/**
+ * The two independent vibration motors, matching POD_HAPTIC_CORRIDOR/
+ * POD_HAPTIC_FAULT in smartphysio_hub.ino. Chosen past the sensor pods (1-3)
+ * and the frontend's virtual joint/muscle node range (lib/joints.ts,
+ * muscles.ts top out at 14) so a haptic command's podId never collides with
+ * a real or virtual sensor node.
+ */
+export const POD_HAPTIC_CORRIDOR = 15
+export const POD_HAPTIC_FAULT = 16
 
 const INITIAL_RESULT: BicepCurlCounterResult = {
   repCount: 0,
@@ -104,19 +143,25 @@ export class BicepCurlCounter {
         break
 
       case 'top':
+        // Stays latched in 'top' through any wobble above EXTENSION_LIMIT
+        // (including a real, gradual descent that hasn't reached it yet) --
+        // only a genuine full extension exits this state. An earlier version
+        // fell back to 'curling' as soon as flex dropped below
+        // START_CURL_LIMIT, meant as a safety valve for someone releasing
+        // partway and never fully extending; in practice, since
+        // START_CURL_LIMIT and EXTENSION_LIMIT are only ~10 degrees apart
+        // and real sensor samples arrive every ~20ms, an ordinary rep's
+        // descent almost always lands a sample inside that band before
+        // reaching EXTENSION_LIMIT, so this branch fired on nearly every
+        // real rep and silently discarded it (repCount permanently stuck at
+        // 0) -- confirmed by simulating a normal gradual descent through the
+        // state machine. Removed rather than widened: a real partial release
+        // just means the count is credited a little later, once the arm
+        // actually reaches full extension, instead of being dropped.
         if (flex < EXTENSION_LIMIT) {
           if (!this.formCheatDetected) this.repCount += 1
           this.formCheatDetected = false
           this.repState = 'down'
-        } else if (flex < START_CURL_LIMIT) {
-          // Released the contraction without reaching full extension (e.g.
-          // sensor drift has nudged the effective "zero" above
-          // EXTENSION_LIMIT, or they simply didn't extend all the way this
-          // time). Fall back to 'curling' instead of staying latched in
-          // 'top' forever — this one rep goes uncounted, but the very next
-          // full extension can still complete normally instead of the
-          // counter being permanently stuck at whatever count it last hit.
-          this.repState = 'curling'
         }
         break
     }

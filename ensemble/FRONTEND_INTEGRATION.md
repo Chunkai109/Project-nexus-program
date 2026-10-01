@@ -85,29 +85,31 @@ tradeoff to make.
 |---|---|
 | `flex`: one continuous array, one sample per timestep | `{type:"imu", podId:2, pitch:<flexion>}` — a separate WebSocket message per sample, one pod |
 | `drift`: same, aligned to the same timestep as `flex` | `{type:"imu", podId:3, pitch:<drift>}` — separate message, separate pod |
-| `emg`: one continuous array | **Not sent at all.** `EMG_ENABLED = false` in the firmware — no EMG hardware is wired up yet. No `"emg"` messages exist right now. |
+| `emg`: one continuous array | `{type:"emg", podId:1, vrms:<0.0-1.0>}` — a separate WebSocket message per sample, one pod. `vrms` is a noise-filtered envelope: raw ADC readings over `EMG_NOISE_THRESHOLD` (1000, out of the ESP32's 12-bit 0-4095 range) are rejected as motion/contact artifacts rather than counted, then normalized against that threshold. |
 | `vib_on`: one continuous array, sensed on-device | **Never sent by the hub in either direction that matters.** Vibration is *commanded* app→hub (`{"type":"haptic",...}`), the hub never reports back whether the motor is on. There's no sensed vibration state to read. |
 
 Concretely: `flex` maps to `hub.pods[2].pitchDeg`, `drift` maps to
 `hub.pods[3].pitchDeg` (pod IDs per `CURL_FLEX_POD_ID`/`CURL_DRIFT_POD_ID` in
-`bicepCurlCounter.ts`) — those two are real and available. `emg` and
-`vib_on` are not available from this hardware today, full stop.
+`bicepCurlCounter.ts`), and `emg` maps to `hub.pods[1].vrmsNormalized` — those
+three are real and available. `vib_on` is not available from this hardware
+today, full stop.
 
 **What this means practically**: you cannot feed the real device's live
 stream into the `ml_imu` model (or the fusion API's `imu` field) and get a
-meaningful answer. Options, none of them free:
+meaningful answer, since `vib_on` still has no real sensed source even with
+`emg` now real. Options, none of them free:
 
-1. **Send placeholder values for `emg`/`vib_on`** (e.g. `emg: 0` for every
-   sample, `vib_on` from the app's own known haptic-pulse state — see
-   `pulseActive` in `LiveSession.tsx`, which the app already tracks locally
-   since it's the one commanding the motor). This is honest about being an
-   approximation, not a fix — the model will very likely see this as
-   out-of-distribution and its own novelty gate should reject it
-   (`"unrecognized_input"`). That's the gate working correctly, not a bug to
-   route around.
-2. **Wire up the EMG hardware and set `EMG_ENABLED = true`** in the
-   firmware — this gets a real `emg` signal, but `vib_on` still has no real
-   sensed source; same caveat as above for that one field.
+1. **Send a placeholder value for `vib_on`** — the app's own known
+   haptic-pulse state (see `pulseActive` in `LiveSession.tsx`, which the app
+   already tracks locally since it's the one commanding the motor) is the
+   closest honest proxy. This is honest about being an approximation, not a
+   fix — the model will very likely see this as out-of-distribution and its
+   own novelty gate should reject it (`"unrecognized_input"`). That's the
+   gate working correctly, not a bug to route around.
+2. **Add a sensed vibration-state readback to the firmware** (e.g. an
+   always-on flag the ESP32 reports back over WebSocket while the motor is
+   driven) so `vib_on` stops being a client-side guess — no such readback
+   exists today.
 3. **Don't wire the IMU model into this specific hub at all**, and treat
    `ml_imu` as validated-but-not-yet-deployable until either the hardware or
    the model is revisited. Given `ml_imu`'s own accuracy caveats (100% CV is
@@ -130,9 +132,27 @@ integration path is clean. See Section 4.
 
 ## 3. Set up and run the API
 
+One-time setup:
+
 ```bash
 pip install -r ensemble/api/requirements.txt
-uvicorn ensemble.api.server:app --reload --port 8000
+```
+
+Then, from `frontend/`, `npm run dev` starts **both** Vite and this API
+together (via `concurrently` — see `package.json`'s `dev`/`dev:web`/`dev:api`
+scripts), each with its own colored `[vite]`/`[api]` prefix in one terminal.
+If the API fails to start (Python not installed, deps missing, wrong
+`python`/`python3` on your platform — the script assumes `python`, edit
+`dev:api` in `package.json` if yours is `python3`), Vite keeps running
+regardless; the frontend is built to degrade to a "Model Offline" state
+rather than depend on this API being up.
+
+To run just the API on its own (e.g. to see its logs without Vite's, or to
+`curl` it directly):
+
+```bash
+cd ..   # repo root, not frontend/ -- `ensemble` must be importable from cwd
+python -m uvicorn ensemble.api.server:app --reload --port 8000
 ```
 
 ```bash
@@ -148,14 +168,43 @@ real.
 
 ## 4. The API contract
 
-Unchanged from the model side — one endpoint, one fused answer:
+Two endpoints now, not one — see Section 5 for why a vision-only one was
+added rather than routing the frontend's camera-only integration through the
+fused endpoint with fabricated IMU arrays.
+
+### `POST /predict/vision` — vision only, no IMU data needed
+
+This is what `frontend/src/lib/visionModel.ts` actually calls.
+
+```ts
+interface VisionInput {
+  frames: number[][][]     // [T][33][3] MediaPipe Pose WORLD landmarks, one rep
+  duration_seconds: number // browser-measured real elapsed time, NOT derived from frame count
+}
+
+interface VisionPredictResponse {
+  exercise: "bicep_curl"
+  prediction: "Perfect" | "Drag" | "Swing" | "Half" | "Heave" | "Incomplete"
+            | "no_exercise_detected" | "unrecognized_movement" | null
+  confidence: number | null
+  good_form_score?: number   // 0-1, the headline number — absent on a gate rejection or null prediction
+  good_form_score_raw?: number
+  class_probabilities?: Record<string, number>
+  message?: string
+  num_frames?: number
+}
+```
+
+`400` errors, each with a specific message: wrong `frames` shape, fewer than
+10 vision frames.
+
+### `POST /predict` — fused vision + IMU, one answer
+
+Unchanged from the model side:
 
 ```ts
 interface PredictRequest {
-  vision: {
-    frames: number[][][]     // [T][33][3] MediaPipe Pose WORLD landmarks, one rep
-    duration_seconds: number // browser-measured real elapsed time, NOT derived from frame count
-  }
+  vision: VisionInput
   imu: {
     flex: number[]
     drift: number[]
@@ -187,79 +236,101 @@ Add `?debug=true` to get the raw per-model results back too, under
 
 ---
 
-## 5. Wiring in the vision side (the clean path)
+## 5. Wiring in the vision side (the clean path) — DONE
 
-1. Re-enable MediaPipe in the live flow — flip `ENABLE_MEDIAPIPE_VISION` to
-   `true` in `LiveSession.tsx` (or make it a real prop/setting rather than a
-   hardcoded testing flag).
-2. Buffer **world** landmarks (not the `landmarks` field `CameraViewport.tsx`
-   currently reads for its own on-screen angle math — both are on the same
-   `PoseLandmarkerResult`, just read `.worldLandmarks[0]` instead of
-   `.landmarks[0]`) for the duration of a rep:
+This is now built, not a plan. What actually shipped, for anyone extending it:
 
-```ts
-const framesRef = useRef<number[][][]>([])
-const startTimeRef = useRef<number>(0)
-
-function onFrame(video: HTMLVideoElement, timestampMs: number) {
-  const result = detectForVideo(video, timestampMs)
-  if (result?.worldLandmarks?.[0]) {
-    framesRef.current.push(result.worldLandmarks[0].map((lm) => [lm.x, lm.y, lm.z]))
-  }
-}
-```
-
-3. Pick a rep boundary to start/stop buffering. The natural hook is the same
-   one `LiveSession.tsx` already uses for `repSamples` —
-   `hub.curl.repCount` incrementing marks a completed rep (see the
-   `prevRepCount` effect in `LiveSession.tsx`). Start the buffer when
-   `repState` leaves `'down'`, stop and send when `repCount` increments.
+1. `ENABLE_MEDIAPIPE_VISION` is `true` by default in `LiveSession.tsx` — the
+   camera pipeline runs unconditionally now rather than needing a manual flip.
+2. `CameraViewport.tsx` gained an `onWorldLandmarks` prop, fired every
+   detected frame (unthrottled, unlike the existing `onVisionMetrics`) with
+   `.worldLandmarks[0]` mapped to plain `[x, y, z]` arrays — the exact input
+   shape the trained classifier expects, with no reordering needed (MediaPipe's
+   standard 33-landmark order is the same on both the JS Tasks Vision API and
+   Python `mediapipe.solutions.pose` sides).
+3. `LiveSession.tsx` buffers those frames into a ref for as long as a person
+   is in view, and flushes + classifies the buffer at the same `repCount`
+   -incrementing boundary `repSamples` already uses (not gated on
+   `hub.curl.repState` specifically, since vision mode works standalone with
+   no hub/wearable connected at all — a real, common case this project
+   supports elsewhere).
+4. The buffered frames + measured `duration_seconds` are POSTed to the
+   vision-only endpoint (see Section 4) via
+   `frontend/src/lib/visionModel.ts`'s `predictVisionForm()` — used whenever
+   no hub is connected, so there's no real IMU data to send at all. When a
+   hub *is* connected, `predictFusedForm()` is used instead — see Section 6,
+   now also built.
+5. The result renders in an "AI Form Check" card in `LiveSession.tsx`
+   (idle / checking / result / unavailable states) — `unavailable` is the
+   normal state whenever the API process (Section 3) isn't running; the UI
+   degrades to that silently rather than erroring.
 
 ---
 
-## 6. Wiring in the IMU side (the honest-approximation path)
+## 6. Wiring in the IMU side — DONE, deliberately partial
 
-Given Section 2's gap, this is the realistic version, not a drop-in:
+This is now built too, but not as a full "approximate all four fields"
+attempt — a product call was made to keep only `flex`/`drift` real and treat
+`emg`/`vib_on` as fixed, inert placeholders rather than trying to approximate
+them from other signals. What actually shipped:
 
-1. `flex`/`drift` arrays: buffer `hub.pods[2].pitchDeg` and
-   `hub.pods[3].pitchDeg` over the same rep window as the vision frames.
-   **Don't read these from `hub.pods` in a React effect** — `HubProvider`
-   already has a documented reason its own rep counter avoids that pattern
-   (`bicepCurlCounter.ts`'s class-doc: batched React state updates can
-   silently drop samples that land in the same tick). Buffer inside
-   `HubProvider`'s existing `onImu` handler instead, the same way
-   `curlCounterRef.current.updateFlex/updateDrift` is already called there —
-   e.g. a small sibling recorder class alongside `BicepCurlCounter`,
-   started/stopped the same way, exposed through `HubValue` the same way
-   `curl` already is.
-2. `emg`: no real source today (Section 2, option 1) — send `0` for every
-   sample unless you've done option 2 (wire up the hardware, flip
-   `EMG_ENABLED`).
-3. `vib_on`: no sensed source at all — the closest honest proxy is the app's
-   own `pulseActive` boolean from `LiveSession.tsx` (it already knows when
-   *it* commanded the haptic pulse), sampled at each flex/drift timestep.
-   This reflects app-commanded state, not the original training signal's
-   on-device sensed state — say so if this ships, don't present it as
-   equivalent.
-4. Expect `"unrecognized_input"` (the IMU novelty gate rejecting) to show up
-   often with placeholder `emg`, and route that in the UI as "no wearable
-   reading available for this rep," not as an error.
+1. `flex`/`drift`: real, from `hub.pods[2].pitchDeg`/`hub.pods[3].pitchDeg`.
+   Per this section's original warning, these are **not** read from
+   `hub.pods` in a React effect — `frontend/src/lib/hub/imuFlexDriftRecorder.ts`'s
+   `ImuFlexDriftRecorder` buffers them synchronously inside `HubProvider`'s
+   `onImu` handler, the same way `BicepCurlCounter` already does, and exposes
+   the buffer via `hub.drainFlexDriftSamples()` — called once per completed
+   rep from `LiveSession.tsx`, mirroring exactly how vision frames are
+   buffered and drained.
+2. `emg`: **not** wired into this call, despite now being a real, available
+   signal (`hub.pods[1].vrmsNormalized`) — sent as `0` for every sample
+   instead. This was an explicit choice: only flex/drift should influence
+   this particular prediction; EMG continues to feed Session Analytics /
+   patient-report metrics exactly as it already did before this model
+   existed (`repSamples` in `LiveSession.tsx`), untouched by this change.
+3. `vib_on`: sent as `false` for every sample — no attempt at an
+   app-commanded-state proxy (`pulseActive`) was made here, again by
+   explicit choice, to keep every non-flex/drift field a plain, inert
+   placeholder rather than a signal that could be mistaken for real.
+4. Practical result: expect `"unrecognized_input"` (the IMU novelty gate
+   rejecting) to show up often, since `emg`/`vib_on` are always degenerate
+   constants and even real flex/drift comes from different hardware than
+   the model was trained on. Surfaced in the UI as the `source` field on
+   the result (`"rejected_by_imu_gate"`), not as an error — see the "AI Form
+   Check" card in `LiveSession.tsx`.
 
 ---
 
 ## 7. What's tested vs. not
 
-**Tested (model/API side):** the API server against real HTTP requests, CORS
-preflight, all four validation error cases, the fusion logic against real
-per-model outputs. See `ensemble/README.md`.
+**Tested (model/API side):** both endpoints against real HTTP requests
+(`/predict/vision` and the fused `/predict`), CORS preflight, all validation
+error cases, the fusion logic against real per-model outputs. See
+`ensemble/README.md`.
 
-**Not tested — and now known to need real work, not just wiring:**
-- No browser has called this API yet.
-- The vision integration path (Section 5) is straightforward but unbuilt.
-- The IMU integration path (Section 6) is a genuine open question, not a
-  solved problem — the placeholder-value approach will produce results, but
-  "produces a response" and "produces a meaningful one" are different
-  claims. Don't let a 200 response be read as validation.
+**Tested (vision integration, Section 5):** a real Chromium browser calling
+`predictVisionForm()` against a live local API instance — both the success
+path (200, gate correctly rejects out-of-distribution input) and the
+API-offline path (`fetch` rejects, `LiveSession.tsx`'s "AI Form Check" card
+degrades to its `unavailable` state rather than throwing). **Not** tested
+end-to-end with a real camera + a real bicep curl in front of it — that needs
+an actual webcam and a person, not something a sandboxed test runner has.
+The MediaPipe model-asset fetch (from Google's CDN, in `usePoseLandmarker.ts`)
+is also unverified inside network-restricted sandboxes specifically — it
+works from a normal machine with normal internet access, which is the only
+environment this ships to.
+
+**Tested (fused integration, Section 6):** a real Chromium browser calling
+`predictFusedForm()` against a live local API instance — confirmed the
+request body carries real flex/drift values, `emg` as all-zero and `vib_on`
+as all-`false` placeholders, all four arrays the same length, and that it
+throws before any network call for an empty flex/drift buffer. **Not**
+tested with a real hub attached mid-curl, and — this is the important
+caveat, not a testing gap — **not validated as meaningful**: the
+placeholder-only `emg`/`vib_on` approach will produce responses, but
+"produces a response" and "produces a meaningful one" are different claims.
+Frequent `"rejected_by_imu_gate"` results are the expected outcome, not
+evidence something is broken.
 
 ---
 

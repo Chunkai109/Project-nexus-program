@@ -8,6 +8,7 @@ import {
   CURL_FLEX_POD_ID,
   type BicepCurlCounterResult,
 } from './bicepCurlCounter'
+import { ImuFlexDriftRecorder, type FlexDriftSample } from './imuFlexDriftRecorder'
 
 export interface PodLiveData {
   battery?: number
@@ -39,6 +40,8 @@ interface HubValue {
   setCalibration: (podId: PodId, calibration: EmgCalibration) => void
   /** Live rep count/state from the bicep-curl rig's flex+drift pods (see bicepCurlCounter.ts). Stays at its initial zero state until both pods have reported at least once. */
   curl: BicepCurlCounterResult
+  /** Returns every flex/drift pair buffered since the last call, and clears the buffer — for the vision+IMU fused model's imu.flex/imu.drift arrays (see visionModel.ts's predictFusedForm). Call once per completed rep. */
+  drainFlexDriftSamples: () => FlexDriftSample[]
 }
 
 const HubContext = createContext<HubValue | null>(null)
@@ -53,6 +56,8 @@ export function HubProvider({ children }: { children: ReactNode }) {
   // Stepped synchronously inside onImu below, not from a React effect keyed
   // on rendered pod state — see bicepCurlCounter.ts for why that matters.
   const curlCounterRef = useRef(new BicepCurlCounter())
+  // Same reasoning as curlCounterRef — see imuFlexDriftRecorder.ts.
+  const flexDriftRecorderRef = useRef(new ImuFlexDriftRecorder())
   const clientRef = useRef<SmartPhysioSocketClient | null>(null)
   // The onEmg callback below is created once inside getClient, so it reads
   // calibration through this ref rather than the state closure to always see
@@ -70,6 +75,7 @@ export function HubProvider({ children }: { children: ReactNode }) {
             setPods({})
             curlCounterRef.current = new BicepCurlCounter()
             setCurl(createInitialBicepCurlResult())
+            flexDriftRecorderRef.current = new ImuFlexDriftRecorder()
           }
         },
         onImu: (packet) => {
@@ -87,9 +93,11 @@ export function HubProvider({ children }: { children: ReactNode }) {
           if (packet.podId === CURL_FLEX_POD_ID) {
             const result = curlCounterRef.current.updateFlex(packet.pitchDeg)
             if (result) setCurl(result)
+            flexDriftRecorderRef.current.updateFlex(packet.pitchDeg)
           } else if (packet.podId === CURL_DRIFT_POD_ID) {
             const result = curlCounterRef.current.updateDrift(packet.pitchDeg)
             if (result) setCurl(result)
+            flexDriftRecorderRef.current.updateDrift(packet.pitchDeg)
           }
         },
         onEmg: (packet) => {
@@ -136,6 +144,8 @@ export function HubProvider({ children }: { children: ReactNode }) {
     setCalibrationState((prev) => ({ ...prev, [podId]: calib }))
   }, [])
 
+  const drainFlexDriftSamples = useCallback(() => flexDriftRecorderRef.current.drain(), [])
+
   const value = useMemo<HubValue>(
     () => ({
       supported: isWebSocketSupported(),
@@ -149,8 +159,21 @@ export function HubProvider({ children }: { children: ReactNode }) {
       sendHaptic,
       setCalibration,
       curl,
+      drainFlexDriftSamples,
     }),
-    [connectionState, errorMessage, deviceName, pods, calibration, connect, disconnect, sendHaptic, setCalibration, curl],
+    [
+      connectionState,
+      errorMessage,
+      deviceName,
+      pods,
+      calibration,
+      connect,
+      disconnect,
+      sendHaptic,
+      setCalibration,
+      curl,
+      drainFlexDriftSamples,
+    ],
   )
 
   return <HubContext.Provider value={value}>{children}</HubContext.Provider>

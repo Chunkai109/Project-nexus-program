@@ -27,7 +27,7 @@ const SAMPLE_INTERVAL_MS = 100
 
 type Phase = 'idle' | 'baseline' | 'baseline-done' | 'mvc' | 'mvc-done'
 
-const EMG_PODS = PODS.filter((p) => p.kind === 'EMG+IMU')
+const EMG_PODS = PODS.filter((p) => p.kind === 'EMG' || p.kind === 'EMG+IMU')
 
 function simulateRawSample(phase: 'baseline' | 'mvc', elapsedSec: number, seed: number): number {
   const noise = (Math.sin((elapsedSec + seed) * 13) + Math.sin((elapsedSec + seed) * 7)) * 0.012
@@ -190,7 +190,7 @@ export function CalibrationPage() {
             <div>
               <p className="text-[15px] font-medium text-ink">Ready to calibrate</p>
               <p className="mt-1 max-w-sm text-[13px] text-ink-faint">
-                First you'll relax your leg completely for 3 seconds, then push against resistance as hard as you can for
+                First you'll relax your arm completely for 3 seconds, then curl against resistance as hard as you can for
                 3 seconds.
               </p>
             </div>
@@ -204,7 +204,7 @@ export function CalibrationPage() {
         {isActivePhase && (
           <Card className="flex flex-col items-center gap-6 p-10 text-center">
             <p className="text-[15px] font-semibold text-ink">
-              {phase === 'baseline' ? 'Relax your leg completely' : 'Push against resistance — maximum effort!'}
+              {phase === 'baseline' ? 'Relax your arm completely' : 'Curl against resistance — maximum effort!'}
             </p>
             <div className="flex h-24 w-24 items-center justify-center rounded-full bg-accent/10">
               <span className="text-4xl font-semibold tabular-nums text-accent">{remainingSec}</span>

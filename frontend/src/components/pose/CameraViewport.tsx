@@ -1,23 +1,15 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Video, VideoOff, ScanFace, Loader2 } from 'lucide-react'
 import { usePoseLandmarker } from '@/lib/pose/usePoseLandmarker'
-import { computeKneeReading, type Side } from '@/lib/pose/poseMetrics'
+import { isArmVisible, type Side } from '@/lib/pose/poseMetrics'
 import { drawPoseSkeleton } from '@/lib/pose/drawPoseSkeleton'
-
-export interface VisionReading {
-  flexionDeg: number
-  valgusDeg: number
-  faultActive: boolean
-}
-
-const METRICS_EMIT_INTERVAL_MS = 90
 
 export function CameraViewport({
   children,
   fallbackSkeleton,
   monitoredSide = 'right',
-  faultThresholdDeg = 8,
-  onVisionMetrics,
+  faultActive = false,
+  onWorldLandmarks,
   poseDetectionEnabled = true,
 }: {
   /** Always-rendered overlay content (fault badge, exercise title chip, …). */
@@ -25,8 +17,17 @@ export function CameraViewport({
   /** Simulated skeleton shown only when there's no real camera to detect from. */
   fallbackSkeleton?: ReactNode
   monitoredSide?: Side
-  faultThresholdDeg?: number
-  onVisionMetrics?: (reading: VisionReading | null) => void
+  /** Whether the curling arm should be drawn in the fault color — driven by the caller's own real fault signal (e.g. the hub's upper-arm drift detection), not computed from vision here. */
+  faultActive?: boolean
+  /**
+   * Fired every detected frame with the raw MediaPipe Pose WORLD landmarks —
+   * `.worldLandmarks[0]`, not the image-space `.landmarks[0]` used for the
+   * on-screen skeleton — as a plain [x, y, z] array per landmark, or null
+   * while no person is detected. This is the exact input shape the trained
+   * bicep-curl classifier expects (see ml/src/preprocessing/landmarks.py); a
+   * caller buffers these per-rep and posts them to the vision model API.
+   */
+  onWorldLandmarks?: (landmarks: number[][] | null) => void
   /** False skips camera access and MediaPipe entirely — used to test other input sources (e.g. a real wearable) in isolation. */
   poseDetectionEnabled?: boolean
 }) {
@@ -35,7 +36,7 @@ export function CameraViewport({
   const containerRef = useRef<HTMLDivElement>(null)
   const [cameraOk, setCameraOk] = useState<boolean | null>(null)
   const [personDetected, setPersonDetected] = useState(false)
-  const { status: poseStatus, detectForVideo } = usePoseLandmarker(poseDetectionEnabled)
+  const { status: poseStatus, error: poseError, detectForVideo } = usePoseLandmarker(poseDetectionEnabled)
 
   useEffect(() => {
     if (!poseDetectionEnabled) return
@@ -70,11 +71,11 @@ export function CameraViewport({
 
   // Real detection loop: only runs once we have both a live camera frame and
   // a loaded model. Draws directly to canvas (not React state) so a ~30fps
-  // skeleton doesn't force React re-renders; only the throttled metrics
-  // callback touches React state, and only in the parent.
+  // skeleton doesn't force React re-renders; only personDetected (throttled
+  // by nothing but React's own state-change bailout) touches state here.
   useEffect(() => {
     if (!cameraOk || poseStatus !== 'ready') {
-      onVisionMetrics?.(null)
+      onWorldLandmarks?.(null)
       return
     }
 
@@ -87,7 +88,6 @@ export function CameraViewport({
     if (!ctx) return
 
     let rafId: number
-    let lastEmit = 0
 
     function resizeCanvas() {
       const dpr = window.devicePixelRatio || 1
@@ -109,29 +109,15 @@ export function CameraViewport({
         const cssHeight = container!.clientHeight
 
         if (landmarks) {
-          drawPoseSkeleton(ctx!, landmarks, {
-            width: cssWidth,
-            height: cssHeight,
-            monitoredSide,
-            faultActive: false,
-          })
-          const reading = computeKneeReading(landmarks, monitoredSide)
-          setPersonDetected(!!reading)
+          drawPoseSkeleton(ctx!, landmarks, { width: cssWidth, height: cssHeight, monitoredSide, faultActive })
+          setPersonDetected(isArmVisible(landmarks, monitoredSide))
 
-          const now = performance.now()
-          if (reading && now - lastEmit > METRICS_EMIT_INTERVAL_MS) {
-            lastEmit = now
-            const faultActive = reading.valgusDeg > faultThresholdDeg
-            // Redraw once more with the real fault color now that we know it.
-            drawPoseSkeleton(ctx!, landmarks, { width: cssWidth, height: cssHeight, monitoredSide, faultActive })
-            onVisionMetrics?.({ ...reading, faultActive })
-          } else if (!reading) {
-            onVisionMetrics?.(null)
-          }
+          const worldLandmarks = result?.worldLandmarks?.[0] ?? null
+          onWorldLandmarks?.(worldLandmarks ? worldLandmarks.map((lm) => [lm.x, lm.y, lm.z]) : null)
         } else {
           ctx!.clearRect(0, 0, cssWidth, cssHeight)
           setPersonDetected(false)
-          onVisionMetrics?.(null)
+          onWorldLandmarks?.(null)
         }
       }
       rafId = requestAnimationFrame(loop)
@@ -141,10 +127,10 @@ export function CameraViewport({
     return () => {
       cancelAnimationFrame(rafId)
       resizeObserver.disconnect()
-      onVisionMetrics?.(null)
+      onWorldLandmarks?.(null)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cameraOk, poseStatus, monitoredSide, faultThresholdDeg])
+  }, [cameraOk, poseStatus, monitoredSide, faultActive])
 
   const showRealSkeleton = cameraOk && poseStatus === 'ready'
 
@@ -168,16 +154,24 @@ export function CameraViewport({
       )}
 
       {cameraOk && poseStatus === 'unavailable' && (
-        <div className="absolute top-3 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-full bg-black/40 px-3 py-1.5 backdrop-blur-sm">
-          <VideoOff className="h-3.5 w-3.5 text-amber" />
-          <p className="text-xs text-ink-faint">Pose model unavailable — camera feed only</p>
+        <div className="absolute top-3 left-1/2 flex max-w-[90%] -translate-x-1/2 flex-col items-center gap-1 rounded-xl bg-black/60 px-3 py-2 text-center backdrop-blur-sm">
+          <div className="flex items-center gap-2">
+            <VideoOff className="h-3.5 w-3.5 flex-shrink-0 text-amber" />
+            <p className="text-xs text-ink-faint">Pose model unavailable — camera feed only</p>
+          </div>
+          {poseError && (
+            <p className="text-[10px] text-ink-faint/70">
+              {poseError} — try re-running <code>npm install</code> in frontend/ (this vendors the MediaPipe WASM
+              runtime into public/mediapipe/wasm on postinstall).
+            </p>
+          )}
         </div>
       )}
 
       {showRealSkeleton && !personDetected && (
         <div className="absolute bottom-4 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-full bg-black/40 px-3 py-1.5 backdrop-blur-sm">
           <ScanFace className="h-3.5 w-3.5 text-ink-faint" />
-          <p className="text-xs text-ink-faint">Step back so your hips, knees and ankles are all in frame</p>
+          <p className="text-xs text-ink-faint">Make sure your shoulder, elbow and wrist are all in frame</p>
         </div>
       )}
 

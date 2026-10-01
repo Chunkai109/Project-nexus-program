@@ -97,10 +97,21 @@ function loadExercisesFromLocalStorage(): Exercise[] {
  * Seeded automatically whenever there are no exercises at all, so a fresh
  * install (or an emptied exercise list) always has something to test the
  * ESP32 hub against instead of starting on an empty "no exercises yet"
- * screen. Angle config targets pods 1/2 — the two pods the rest of the app
- * treats as EMG-capable (see EMG_PODS in CalibrationPage.tsx). The 150°-180°
- * corridor is the top-of-curl contraction range; reaching it is what
- * triggers the dashboard's 1-second haptic pulse (see LiveSession.tsx).
+ * screen. Angle config targets pods 2/3 — the forearm and upper-arm IMUs
+ * (CURL_FLEX_POD_ID/CURL_DRIFT_POD_ID in bicepCurlCounter.ts) that actually
+ * drive the real hub rep counter; Pod 1 is EMG-only on this rig (see
+ * EMG_PODS in CalibrationPage.tsx), not a second angle node.
+ *
+ * The 100°-135° corridor is a measured value, not a guess: a real curl on
+ * this rig reads 0° at full extension and 135° at full contraction (an
+ * earlier 150°-180° default was never actually measured against the real
+ * sensor and doesn't fit inside its real 0-135 range at all -- it could
+ * never be reached). This corridor is the "good, deep contraction" zone
+ * that triggers the dashboard's 1-second haptic pulse on the corridor motor
+ * (Pod 15, see LiveSession.tsx) -- separate from and deliberately not tied
+ * to bicepCurlCounter.ts's own rep-counting thresholds, which span more of
+ * the full 0-135 range so an ordinary rep still gets counted even short of
+ * this corridor.
  */
 function buildDefaultBicepCurlExercise(): NewExercise {
   return {
@@ -112,7 +123,7 @@ function buildDefaultBicepCurlExercise(): NewExercise {
     therapistNote: '',
     setupInstructions: '',
     estMinutes: 5,
-    angleConfigs: [{ id: crypto.randomUUID(), nodeA: 1, nodeB: 2, targetMin: 150, targetMax: 180, faultThresholdDeg: 15 }],
+    angleConfigs: [{ id: crypto.randomUUID(), nodeA: 2, nodeB: 3, targetMin: 100, targetMax: 135, faultThresholdDeg: 15 }],
     assignedPatientId: null,
   }
 }

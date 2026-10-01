@@ -96,9 +96,12 @@ def health():
     return {"status": "ok"}
 
 
-@app.post("/predict")
-def predict(request: PredictRequest, debug: bool = False):
-    frames = np.array(request.vision.frames, dtype=float)
+def _run_vision_prediction(vision: VisionInput) -> dict:
+    """Shared by /predict and /predict/vision: validate the buffered frames
+    and run them through the vision predictor alone. Raises HTTPException
+    (400) on a malformed request -- same validation either endpoint needs.
+    """
+    frames = np.array(vision.frames, dtype=float)
     if frames.ndim != 3 or frames.shape[1:] != (33, 3):
         raise HTTPException(
             400, f"vision.frames must have shape (T, 33, 3); got {frames.shape}. "
@@ -107,6 +110,28 @@ def predict(request: PredictRequest, debug: bool = False):
         raise HTTPException(
             400, f"vision.frames has {len(frames)} frames; need at least "
                  f"{MIN_FRAMES_FOR_PREDICTION} to classify.")
+
+    _vision_predictor.start_session(use_wallclock_duration=True)
+    for frame in frames:
+        _vision_predictor.add_frame_from_array(frame)
+    return _vision_predictor.end_session(duration_seconds_override=vision.duration_seconds)
+
+
+@app.post("/predict/vision")
+def predict_vision(vision: VisionInput):
+    """Vision-only prediction -- no IMU/EMG data required. For a camera-only
+    integration (e.g. a laptop webcam with no wearable paired), forcing a
+    caller to invent imu.flex/drift/emg/vib_on just to satisfy /predict's
+    shape would mean feeding the model fabricated sensor data, which this
+    project has a standing rule against (see ensemble/README.md) -- so this
+    endpoint returns the vision model's own result directly instead.
+    """
+    return _run_vision_prediction(vision)
+
+
+@app.post("/predict")
+def predict(request: PredictRequest, debug: bool = False):
+    vision_result = _run_vision_prediction(request.vision)
 
     flex = np.array(request.imu.flex, dtype=float)
     drift = np.array(request.imu.drift, dtype=float)
@@ -118,12 +143,6 @@ def predict(request: PredictRequest, debug: bool = False):
                  f"{len(flex)}/{len(drift)}/{len(emg)}/{len(vib_on)}.")
     if len(flex) == 0:
         raise HTTPException(400, "imu.flex (and drift/emg/vib_on) must be non-empty.")
-
-    _vision_predictor.start_session(use_wallclock_duration=True)
-    for frame in frames:
-        _vision_predictor.add_frame_from_array(frame)
-    vision_result = _vision_predictor.end_session(
-        duration_seconds_override=request.vision.duration_seconds)
 
     imu_result = _imu_predictor.predict_from_arrays(flex, drift, emg, vib_on)
 

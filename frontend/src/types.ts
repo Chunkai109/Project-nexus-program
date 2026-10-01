@@ -13,8 +13,8 @@ export interface AuthUser {
 }
 
 export type PodSignal = 'strong' | 'weak' | 'offline'
-export type PodKind = 'EMG+IMU' | 'IMU+Haptics' | 'IMU'
-export type PodId = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14
+export type PodKind = 'EMG+IMU' | 'IMU+Haptics' | 'IMU' | 'EMG' | 'Haptics'
+export type PodId = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16
 
 export interface Pod {
   id: PodId
@@ -102,6 +102,8 @@ export interface RepSample {
   emgLeft: number
   emgRight: number
   faultActive: boolean
+  /** The AI Form Check model's verdict for this rep (e.g. "Perfect (92% good form)"), filled in asynchronously once the model responds — absent if no camera data was available, the model was offline, or its buffer was still accumulating and got attributed to a later rep instead. */
+  aiComment?: string
 }
 
 /** A real completed session, recorded when a patient hits "End Session & Sync Data". */

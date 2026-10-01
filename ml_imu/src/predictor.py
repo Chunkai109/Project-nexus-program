@@ -72,8 +72,8 @@ class ImuCurlPredictor:
                              emg: np.ndarray, vib_on: np.ndarray) -> dict:
         """Classify one already-complete, already-recorded rep. Runs the
         novelty gate first -- if the input doesn't statistically resemble
-        anything in the 52-row training set, returns 'unrecognized_input'
-        instead of forcing a guess among the 4 known classes."""
+        anything in the 58-row training set, returns 'unrecognized_input'
+        instead of forcing a guess among the 6 known classes."""
         feats = extract_rep_features(flex, drift, emg, vib_on)
         feats_2d = feats.reshape(1, -1)
 
@@ -88,7 +88,7 @@ class ImuCurlPredictor:
                 "confidence": None,
                 "message": (
                     "This input's sensor signature doesn't statistically resemble "
-                    "anything in the 52-row training set (any of the 4 known "
+                    "anything in the 58-row training set (any of the 6 known "
                     "classes) -- could be a different person's device fit/"
                     "calibration, a different exercise, or a sensor issue. No "
                     "quality class was guessed. Note: this detector's threshold "
