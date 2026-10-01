@@ -3,7 +3,7 @@ export type CurlRepState = 'down' | 'curling' | 'top'
 export interface BicepCurlCounterResult {
   repCount: number
   repState: CurlRepState
-  /** True when the in-progress (or just-completed) rep drifted past DRIFT_TOLERANCE from baseline. */
+  /** True when the CURRENT sample's drift exceeds DRIFT_TOLERANCE from baseline -- live, not latched (see BicepCurlCounter.step()'s own comment on why an earlier latching version was a bug). */
   formCheatDetected: boolean
   /** abs(drift - baselineDrift) as of the last sample. */
   driftError: number
@@ -123,16 +123,25 @@ export class BicepCurlCounter {
       return this.snapshot(0)
     }
 
+    // Live, not latched: recomputed fresh every sample from the current
+    // drift reading alone, so it clears the instant drift settles back
+    // under tolerance. An earlier version only ever set this true here and
+    // relied on the 'down' case below to clear it -- meaning one brief
+    // sensor-noise spike anywhere during a rep's rise latched the fault ON
+    // for the rest of that rep (through 'curling' and 'top') even after
+    // drift had long since settled back down, well under tolerance. That's
+    // a real bug, not a tolerance-tuning issue: raising DRIFT_TOLERANCE
+    // made it a little harder to trip in the first place, but did nothing
+    // about it never un-triggering mid-rep -- confirmed on real hardware by
+    // the fault badge showing "+2° Over Baseline" (well under a 15°
+    // tolerance) while still displaying as active.
     const driftError = Math.abs(drift - this.baselineDrift)
-    if (driftError > DRIFT_TOLERANCE) {
-      this.formCheatDetected = true
-    }
+    this.formCheatDetected = driftError > DRIFT_TOLERANCE
 
     switch (this.repState) {
       case 'down':
         if (flex < EXTENSION_LIMIT) {
           this.baselineDrift = 0.95 * this.baselineDrift + 0.05 * drift
-          this.formCheatDetected = false
         }
         if (flex > START_CURL_LIMIT) this.repState = 'curling'
         break
@@ -160,7 +169,6 @@ export class BicepCurlCounter {
         // actually reaches full extension, instead of being dropped.
         if (flex < EXTENSION_LIMIT) {
           if (!this.formCheatDetected) this.repCount += 1
-          this.formCheatDetected = false
           this.repState = 'down'
         }
         break
