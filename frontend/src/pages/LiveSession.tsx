@@ -114,16 +114,15 @@ export function LiveSession() {
   const [repCount, setRepCount] = useState(0)
   const prevRepCount = useRef(0)
 
-  // Real EMG from Pod 1 — the sole EMG-capable pod on this rig (bicep) —
-  // once it has actually reported a reading; otherwise the wearable
-  // simulator, same as the knee angle above. This is independent of
-  // hubConnected since a real hub (e.g. IMU-only hardware) may not have EMG
-  // wired up at all yet. Duplicated into both emgLeft/emgRight when stored
-  // in a RepSample below, since that's the shared shape every exercise's
-  // session analytics reads and this rig only has one EMG channel.
-  const emgBicepLive = hub.pods[1]?.emgActivationPct
-  const usingHubEmg = emgBicepLive !== undefined
-  const emgBicep = emgBicepLive !== undefined ? Math.round(emgBicepLive) : simulated.emgLeft
+  // EMG always comes from the wearable simulator — the real EMG pod's
+  // reading is deliberately never checked here (explicit request: the live
+  // pod wasn't working reliably, so EMG was decoupled from it entirely
+  // rather than keep debugging the live path). Duplicated into both
+  // emgLeft/emgRight when stored in a RepSample below, since that's the
+  // shared shape every exercise's session analytics reads and this rig
+  // only has one EMG channel.
+  const usingHubEmg = false
+  const emgBicep = simulated.emgLeft
 
   // AI form check (ml/'s trained bicep-curl classifier, via the ensemble
   // API's vision-only endpoint — see ensemble/FRONTEND_INTEGRATION.md
