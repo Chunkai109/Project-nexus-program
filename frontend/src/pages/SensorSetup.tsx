@@ -13,6 +13,7 @@ import { useAppData } from '@/lib/data/AppDataContext'
 import { podLabel } from '@/lib/podUtils'
 import { useSensorHub } from '@/lib/hub/HubProvider'
 import { DEFAULT_HUB_WS_URL, type PodId } from '@/lib/hub/protocol'
+import type { Pod } from '@/types'
 import { POD_HAPTIC_FORM } from '@/lib/hub/bicepCurlCounter'
 import { clsx } from 'clsx'
 
@@ -63,15 +64,28 @@ export function SensorSetup() {
 
   // Pod wiring metadata (label/location/kind) always comes from the known
   // hardware layout — only signal/battery are live, and only once a real
-  // hub is actually connected. Before that (or for any pod that hasn't
-  // reported in yet), it reads "offline" rather than the PODS array's
-  // placeholder values, so the badges never claim a signal that hasn't
-  // actually been seen.
-  const displayPods = PODS.map((pod) => ({
-    ...pod,
-    signal: hubConnected ? (hub.pods[pod.id as PodId]?.signal ?? 'offline') : 'offline',
-    battery: hubConnected ? (hub.pods[pod.id as PodId]?.battery ?? 0) : 0,
-  }))
+  // hub is actually connected. Before that (or for any sensor pod that
+  // hasn't reported in yet), it reads "offline" rather than the PODS
+  // array's placeholder values, so the badges never claim a signal that
+  // hasn't actually been seen.
+  //
+  // The motor is the one exception: it's a plain GPIO output wired directly
+  // to the same board, not a separate device with its own status report, so
+  // there's no real "is the motor itself online" signal to wait for beyond
+  // "is the hub online" -- hardcoded to strong/100 the instant hubConnected
+  // is true, rather than depending on the firmware actually broadcasting a
+  // status message for it (which needs the current .ino re-flashed to work
+  // at all, and still wouldn't mean anything a GPIO pin can't already tell
+  // you).
+  const displayPods: Pod[] = PODS.map((pod) =>
+    pod.id === (POD_HAPTIC_FORM as number)
+      ? { ...pod, signal: hubConnected ? ('strong' as const) : ('offline' as const), battery: hubConnected ? 100 : 0 }
+      : {
+          ...pod,
+          signal: hubConnected ? (hub.pods[pod.id as PodId]?.signal ?? 'offline') : 'offline',
+          battery: hubConnected ? (hub.pods[pod.id as PodId]?.battery ?? 0) : 0,
+        },
+  )
 
   const allConnected = displayPods.every((p) => p.signal !== 'offline')
 
