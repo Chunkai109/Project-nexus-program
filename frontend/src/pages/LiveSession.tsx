@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, TriangleAlert, Timer, Repeat, ScanEye, Loader2 } from 'lucide-react'
+import { ArrowLeft, TriangleAlert, Timer, Repeat, ScanEye, Loader2, ChevronDown, ChevronUp } from 'lucide-react'
 import { PageShell } from '@/components/layout/PageShell'
 import { Logo } from '@/components/layout/Logo'
 import { ThemeToggle } from '@/components/ui/ThemeToggle'
@@ -172,6 +172,7 @@ export function LiveSession() {
   const visionFramesRef = useRef<number[][][]>([])
   const visionBufferStartRef = useRef<number | null>(null)
   const [formCheck, setFormCheck] = useState<FormCheckState>({ status: 'idle' })
+  const [formCheckExpanded, setFormCheckExpanded] = useState(true)
 
   function handleWorldLandmarks(landmarks: number[][] | null) {
     if (!landmarks || !visionCapturingRef.current) return
@@ -430,80 +431,96 @@ export function LiveSession() {
           </Card>
 
           <Card className="flex flex-col gap-2.5 p-6">
-            <div className="flex items-center justify-between">
+            <button
+              type="button"
+              onClick={() => setFormCheckExpanded((v) => !v)}
+              className="flex items-center justify-between text-left"
+              aria-expanded={formCheckExpanded}
+            >
               <h3 className="text-[15px] font-semibold text-ink">AI Form Check</h3>
-              <span
-                className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${
-                  formCheck.status === 'result' ? 'bg-accent/10 text-accent' : 'bg-surface-secondary text-ink-faint'
-                }`}
-              >
-                {formCheck.status === 'unavailable' ? 'Model Offline' : usingHubCurl ? 'Vision + Hub' : 'Vision Only'}
-              </span>
-            </div>
+              <div className="flex items-center gap-2">
+                <span
+                  className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${
+                    formCheck.status === 'result' ? 'bg-accent/10 text-accent' : 'bg-surface-secondary text-ink-faint'
+                  }`}
+                >
+                  {formCheck.status === 'unavailable' ? 'Model Offline' : usingHubCurl ? 'Vision + Hub' : 'Vision Only'}
+                </span>
+                {formCheckExpanded ? (
+                  <ChevronUp className="h-4 w-4 flex-shrink-0 text-ink-faint" />
+                ) : (
+                  <ChevronDown className="h-4 w-4 flex-shrink-0 text-ink-faint" />
+                )}
+              </div>
+            </button>
 
-            {formCheck.status === 'idle' && (
-              <p className="text-[13px] text-ink-faint">
-                Start curling from full extension in view of the camera to get an AI-scored form check.
-              </p>
+            {formCheckExpanded && (
+              <>
+                {formCheck.status === 'idle' && (
+                  <p className="text-[13px] text-ink-faint">
+                    Start curling from full extension in view of the camera to get an AI-scored form check.
+                  </p>
+                )}
+                {formCheck.status === 'capturing' && (
+                  <p className="flex items-center gap-2 text-[13px] text-ink-faint">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    {formCheck.phase === 'rising'
+                      ? 'Recording this rep — keep going to the target…'
+                      : 'In the target zone — hold briefly to finish scoring this rep…'}
+                  </p>
+                )}
+                {formCheck.status === 'checking' && (
+                  <p className="flex items-center gap-2 text-[13px] text-ink-faint">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    Scoring your last rep…
+                  </p>
+                )}
+                {formCheck.status === 'insufficient_frames' && (
+                  <p className="text-[13px] text-ink-faint">
+                    That rep was too fast for the camera to score (only {formCheck.frameCount} frame
+                    {formCheck.frameCount === 1 ? '' : 's'} captured) — try pacing the lift a little slower.
+                  </p>
+                )}
+                {formCheck.status === 'unavailable' && (
+                  <p className="text-[13px] text-ink-faint">
+                    Couldn't reach the vision model API — start it with{' '}
+                    <code className="rounded bg-surface-secondary px-1 py-0.5 text-[12px]">
+                      uvicorn ensemble.api.server:app --port 8000
+                    </code>{' '}
+                    (see ensemble/README.md).
+                  </p>
+                )}
+                {formCheck.status === 'result' &&
+                  (() => {
+                    const { result } = formCheck
+                    const isGoodForm = result.prediction === 'Perfect'
+                    const isGate =
+                      result.prediction === 'no_exercise_detected' ||
+                      result.prediction === 'unrecognized_movement' ||
+                      result.prediction === 'unrecognized_input'
+                    return (
+                      <>
+                        <div className="flex items-center justify-between">
+                          <span
+                            className={`text-[17px] font-semibold ${isGoodForm ? 'text-emerald' : isGate ? 'text-ink-faint' : 'text-crimson'}`}
+                          >
+                            {result.prediction ?? 'No result'}
+                          </span>
+                          {result.good_form_score != null && (
+                            <span className="text-[13px] text-ink-faint">
+                              {Math.round(result.good_form_score * 100)}% good form
+                            </span>
+                          )}
+                        </div>
+                        {result.message && <p className="text-[12px] text-ink-faint">{result.message}</p>}
+                        {'source' in result && (
+                          <p className="text-[11px] text-ink-faint">source: {result.source}</p>
+                        )}
+                      </>
+                    )
+                  })()}
+              </>
             )}
-            {formCheck.status === 'capturing' && (
-              <p className="flex items-center gap-2 text-[13px] text-ink-faint">
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                {formCheck.phase === 'rising'
-                  ? 'Recording this rep — keep going to the target…'
-                  : 'In the target zone — hold briefly to finish scoring this rep…'}
-              </p>
-            )}
-            {formCheck.status === 'checking' && (
-              <p className="flex items-center gap-2 text-[13px] text-ink-faint">
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                Scoring your last rep…
-              </p>
-            )}
-            {formCheck.status === 'insufficient_frames' && (
-              <p className="text-[13px] text-ink-faint">
-                That rep was too fast for the camera to score (only {formCheck.frameCount} frame
-                {formCheck.frameCount === 1 ? '' : 's'} captured) — try pacing the lift a little slower.
-              </p>
-            )}
-            {formCheck.status === 'unavailable' && (
-              <p className="text-[13px] text-ink-faint">
-                Couldn't reach the vision model API — start it with{' '}
-                <code className="rounded bg-surface-secondary px-1 py-0.5 text-[12px]">
-                  uvicorn ensemble.api.server:app --port 8000
-                </code>{' '}
-                (see ensemble/README.md).
-              </p>
-            )}
-            {formCheck.status === 'result' &&
-              (() => {
-                const { result } = formCheck
-                const isGoodForm = result.prediction === 'Perfect'
-                const isGate =
-                  result.prediction === 'no_exercise_detected' ||
-                  result.prediction === 'unrecognized_movement' ||
-                  result.prediction === 'unrecognized_input'
-                return (
-                  <>
-                    <div className="flex items-center justify-between">
-                      <span
-                        className={`text-[17px] font-semibold ${isGoodForm ? 'text-emerald' : isGate ? 'text-ink-faint' : 'text-crimson'}`}
-                      >
-                        {result.prediction ?? 'No result'}
-                      </span>
-                      {result.good_form_score != null && (
-                        <span className="text-[13px] text-ink-faint">
-                          {Math.round(result.good_form_score * 100)}% good form
-                        </span>
-                      )}
-                    </div>
-                    {result.message && <p className="text-[12px] text-ink-faint">{result.message}</p>}
-                    {'source' in result && (
-                      <p className="text-[11px] text-ink-faint">source: {result.source}</p>
-                    )}
-                  </>
-                )
-              })()}
           </Card>
 
           <Card className="flex flex-col gap-5 p-6">
