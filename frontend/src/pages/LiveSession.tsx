@@ -51,6 +51,26 @@ const RISE_THRESHOLD_DEG = 10
 // genuine hold at the top isn't kept waiting.
 const SETTLE_WINDOW_MS = 1000
 
+// Dummy EMG is derived from flexion itself rather than its own independent
+// wave, so it rises as the arm curls up, peaks at full contraction, and
+// drops again as it extends back down -- same shape a real bicep's EMG
+// activation roughly follows through a curl. Normalized against this rig's
+// real calibrated flexion range (0deg = full extension, 135deg = full
+// contraction -- the same range EXTENSION_LIMIT/CONTRACTION_LIMIT/the
+// RadialGauge's default target are all keyed to), not the exercise's own
+// configurable target corridor, so it behaves the same regardless of what
+// target zone a physio has prescribed.
+const EMG_FLEX_REST_DEG = 0
+const EMG_FLEX_PEAK_DEG = 135
+
+/** Maps a flexion angle to a dummy %MVC that rises/peaks/falls with it, plus a little noise since a perfectly smooth signal would look obviously fake. */
+function emgFromFlexion(flexDeg: number): number {
+  const t = (flexDeg - EMG_FLEX_REST_DEG) / (EMG_FLEX_PEAK_DEG - EMG_FLEX_REST_DEG)
+  const pct = Math.max(0, Math.min(1, t)) * 100
+  const noise = (Math.random() - 0.5) * 4
+  return Math.round(Math.max(0, Math.min(100, pct + noise)))
+}
+
 /** Builds the human-readable verdict stored per-rep for Session Summary's "AI Form Check Notes" (see SessionSummary.tsx). */
 function describeAiResult(result: VisionPrediction | FusedPrediction): string {
   const prediction = result.prediction ?? 'No result'
@@ -114,15 +134,18 @@ export function LiveSession() {
   const [repCount, setRepCount] = useState(0)
   const prevRepCount = useRef(0)
 
-  // EMG always comes from the wearable simulator — the real EMG pod's
-  // reading is deliberately never checked here (explicit request: the live
-  // pod wasn't working reliably, so EMG was decoupled from it entirely
-  // rather than keep debugging the live path). Duplicated into both
-  // emgLeft/emgRight when stored in a RepSample below, since that's the
-  // shared shape every exercise's session analytics reads and this rig
-  // only has one EMG channel.
+  // EMG always comes from emgFromFlexion(), tracking the current flexion
+  // angle directly -- the real EMG pod's reading is deliberately never
+  // checked here (explicit request: the live pod wasn't working reliably,
+  // so EMG was decoupled from it entirely rather than keep debugging the
+  // live path), and it's no longer sourced from the wearable simulator's
+  // own independent EMG wave either (also an explicit request: dummy EMG
+  // should rise/peak/fall with flexion, not run on its own unrelated
+  // cycle). Duplicated into both emgLeft/emgRight when stored in a
+  // RepSample below, since that's the shared shape every exercise's
+  // session analytics reads and this rig only has one EMG channel.
   const usingHubEmg = false
-  const emgBicep = simulated.emgLeft
+  const emgBicep = emgFromFlexion(kneeFlexionDeg)
 
   // AI form check (ml/'s trained bicep-curl classifier, via the ensemble
   // API's vision-only endpoint — see ensemble/FRONTEND_INTEGRATION.md
