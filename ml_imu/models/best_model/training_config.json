@@ -38,12 +38,12 @@
             "max_depth": null,
             "min_samples_leaf": 1
           },
-          "cv_macro_f1_mean": 0.8222222222222223,
-          "cv_macro_f1_std": 0.022222222222222275,
+          "cv_macro_f1_mean": 0.8303030303030303,
+          "cv_macro_f1_std": 0.006060606060606055,
           "fold_macro_f1": [
             0.8333333333333334,
             0.8333333333333334,
-            0.7777777777777777,
+            0.8181818181818182,
             0.8333333333333334,
             0.8333333333333334
           ]
@@ -54,13 +54,13 @@
             "max_depth": 2,
             "min_samples_leaf": 2
           },
-          "cv_macro_f1_mean": 0.8222222222222223,
-          "cv_macro_f1_std": 0.022222222222222275,
+          "cv_macro_f1_mean": 0.8265993265993267,
+          "cv_macro_f1_std": 0.008315884872207713,
           "fold_macro_f1": [
             0.8333333333333334,
             0.8333333333333334,
-            0.7777777777777777,
-            0.8333333333333334,
+            0.8181818181818182,
+            0.8148148148148149,
             0.8333333333333334
           ]
         },
@@ -70,13 +70,13 @@
             "max_depth": 3,
             "min_samples_leaf": 2
           },
-          "cv_macro_f1_mean": 0.8222222222222223,
-          "cv_macro_f1_std": 0.022222222222222275,
+          "cv_macro_f1_mean": 0.8265993265993267,
+          "cv_macro_f1_std": 0.008315884872207713,
           "fold_macro_f1": [
             0.8333333333333334,
             0.8333333333333334,
-            0.7777777777777777,
-            0.8333333333333334,
+            0.8181818181818182,
+            0.8148148148148149,
             0.8333333333333334
           ]
         },
@@ -87,13 +87,13 @@
             "min_samples_leaf": 3,
             "max_features": "sqrt"
           },
-          "cv_macro_f1_mean": 0.8222222222222223,
-          "cv_macro_f1_std": 0.022222222222222275,
+          "cv_macro_f1_mean": 0.8265993265993267,
+          "cv_macro_f1_std": 0.008315884872207713,
           "fold_macro_f1": [
             0.8333333333333334,
             0.8333333333333334,
-            0.7777777777777777,
-            0.8333333333333334,
+            0.8181818181818182,
+            0.8148148148148149,
             0.8333333333333334
           ]
         },
@@ -103,23 +103,23 @@
             "max_depth": 4,
             "min_samples_leaf": 2
           },
-          "cv_macro_f1_mean": 0.8222222222222223,
-          "cv_macro_f1_std": 0.022222222222222275,
+          "cv_macro_f1_mean": 0.8303030303030303,
+          "cv_macro_f1_std": 0.006060606060606055,
           "fold_macro_f1": [
             0.8333333333333334,
             0.8333333333333334,
-            0.7777777777777777,
+            0.8181818181818182,
             0.8333333333333334,
             0.8333333333333334
           ]
         }
       ],
       "best_params": {
-        "n_estimators": 100,
-        "max_depth": 2,
+        "n_estimators": 300,
+        "max_depth": 4,
         "min_samples_leaf": 2
       },
-      "best_cv_macro_f1": 0.8222222222222223,
+      "best_cv_macro_f1": 0.8303030303030303,
       "hit_ceiling": false
     },
     "logistic_regression": {
@@ -128,26 +128,26 @@
           "params": {
             "C": 0.01
           },
-          "cv_macro_f1_mean": 0.8044444444444444,
-          "cv_macro_f1_std": 0.03691832827963591,
+          "cv_macro_f1_mean": 0.8092204092204092,
+          "cv_macro_f1_std": 0.014477720644099374,
           "fold_macro_f1": [
-            0.7444444444444445,
+            0.801994301994302,
             0.8333333333333334,
-            0.7777777777777777,
-            0.8333333333333334,
-            0.8333333333333334
+            0.8181818181818182,
+            0.7962962962962963,
+            0.7962962962962963
           ]
         },
         {
           "params": {
             "C": 0.1
           },
-          "cv_macro_f1_mean": 0.8222222222222223,
-          "cv_macro_f1_std": 0.022222222222222275,
+          "cv_macro_f1_mean": 0.8303030303030303,
+          "cv_macro_f1_std": 0.006060606060606055,
           "fold_macro_f1": [
             0.8333333333333334,
             0.8333333333333334,
-            0.7777777777777777,
+            0.8181818181818182,
             0.8333333333333334,
             0.8333333333333334
           ]
@@ -156,12 +156,12 @@
           "params": {
             "C": 1.0
           },
-          "cv_macro_f1_mean": 0.8222222222222223,
-          "cv_macro_f1_std": 0.022222222222222275,
+          "cv_macro_f1_mean": 0.8303030303030303,
+          "cv_macro_f1_std": 0.006060606060606055,
           "fold_macro_f1": [
             0.8333333333333334,
             0.8333333333333334,
-            0.7777777777777777,
+            0.8181818181818182,
             0.8333333333333334,
             0.8333333333333334
           ]
@@ -170,12 +170,12 @@
           "params": {
             "C": 10.0
           },
-          "cv_macro_f1_mean": 0.8222222222222223,
-          "cv_macro_f1_std": 0.022222222222222275,
+          "cv_macro_f1_mean": 0.8303030303030303,
+          "cv_macro_f1_std": 0.006060606060606055,
           "fold_macro_f1": [
             0.8333333333333334,
             0.8333333333333334,
-            0.7777777777777777,
+            0.8181818181818182,
             0.8333333333333334,
             0.8333333333333334
           ]
@@ -184,24 +184,24 @@
       "best_params": {
         "C": 0.1
       },
-      "best_cv_macro_f1": 0.8222222222222223,
+      "best_cv_macro_f1": 0.8303030303030303,
       "hit_ceiling": false
     },
     "decision_protocol": "Deployed model stays RandomForest unless Logistic Regression's best CV macro-F1 clearly exceeds RandomForest's best + 1 std -- not just a nominally higher number. Logistic Regression did not clear that bar, so RandomForest was kept."
   },
   "best_params": {
-    "n_estimators": 100,
-    "max_depth": 2,
+    "n_estimators": 300,
+    "max_depth": 4,
     "min_samples_leaf": 2
   },
   "headline_generalization_metric": {
     "name": "5-fold GroupKFold macro-F1 (group=test_id, all 35 raw sessions)",
-    "value": 0.8222222222222223,
-    "std": 0.022222222222222275,
+    "value": 0.8303030303030303,
+    "std": 0.006060606060606055,
     "fold_macro_f1": [
       0.8333333333333334,
       0.8333333333333334,
-      0.7777777777777777,
+      0.8181818181818182,
       0.8333333333333334,
       0.8333333333333334
     ],
@@ -212,7 +212,7 @@
   ],
   "ceiling_effect_warning": null,
   "class_counts": {
-    "Perfect": 15,
+    "Perfect": 25,
     "Drag": 7,
     "Swing": 5,
     "Half": 25,
@@ -220,7 +220,7 @@
     "Incomplete": 1
   },
   "groups_per_class": {
-    "Perfect": 15,
+    "Perfect": 25,
     "Drag": 7,
     "Swing": 5,
     "Half": 13,
@@ -228,25 +228,25 @@
     "Incomplete": 1
   },
   "feature_importance": {
-    "flex_range": 0.125294985611227,
-    "drift_max": 0.10963904270220258,
-    "drift_range": 0.09414044740322297,
-    "drift_mean": 0.085670762944674,
-    "drift_vel_std": 0.08134609615513369,
-    "flex_std": 0.08098003896058426,
-    "drift_min": 0.07386412656739762,
-    "flex_max": 0.057645025176541506,
-    "flex_min": 0.056330982719181744,
-    "drift_std": 0.052916960229389715,
-    "emg_std": 0.03584991521527293,
-    "emg_max": 0.033819988172731484,
-    "flex_vel_std": 0.02557359427403074,
-    "flex_vel_mean": 0.02214581292190581,
-    "drift_vel_mean": 0.0220171257841257,
-    "emg_mean": 0.01655318034240658,
-    "flex_mean": 0.012756957750910458,
-    "vib_on_frac": 0.007945624287236143,
-    "num_frames": 0.005509332781825039
+    "flex_range": 0.1259172881671395,
+    "flex_std": 0.09035142762958326,
+    "drift_vel_std": 0.08954349644908134,
+    "drift_max": 0.0801393893626328,
+    "flex_min": 0.07011173540251109,
+    "drift_range": 0.06800811922853243,
+    "drift_std": 0.06134055173118042,
+    "drift_min": 0.06046715241533865,
+    "drift_mean": 0.058840751094865563,
+    "flex_vel_std": 0.05647458347924331,
+    "flex_max": 0.04984816399350418,
+    "flex_mean": 0.03926008436342996,
+    "drift_vel_mean": 0.029423071950855584,
+    "flex_vel_mean": 0.026546431781899655,
+    "num_frames": 0.022444939277671553,
+    "emg_mean": 0.020653400290212703,
+    "emg_std": 0.01843493392748089,
+    "emg_max": 0.01672524175675971,
+    "vib_on_frac": 0.015469237698077476
   },
   "no_lstm_comparison_note": "No LSTM was trained or compared for this dataset. ml/'s vision model already established, with 34 training recordings, that a raw-landmark LSTM shows shortcut-learning symptoms and loses to RandomForest on engineered features. This dataset has fewer independent groups (35 total, several classes with only 5-8 groups), so training an LSTM here would be an even more foregone conclusion than it already was for the vision model -- skipped explicitly, not silently.",
   "seed": 42

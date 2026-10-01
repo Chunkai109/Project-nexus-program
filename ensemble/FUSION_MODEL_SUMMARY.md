@@ -43,7 +43,9 @@ real example (which the novelty gate itself currently rejects). See
 both models' results and combines them --
 - If either model's gate rejects the input, the fused result rejects too.
 - Both models' probabilities are blended over all 6 shared classes,
-  weighted **80% vision / 20% IMU**. (Earlier, IMU had no Swing/Incomplete
+  weighted **50% vision / 50% IMU -- set at the user's explicit request,
+  not because IMU earned equal trust with vision; see below and
+  `ensemble/README.md`'s design decision 2 for the full record**. (Earlier, IMU had no Swing/Incomplete
   data and those two classes bypassed IMU entirely -- now that IMU has
   real, if thin, data for them, they're fused like everything else. The
   bypass mechanism, `VISION_EXCLUSIVE_CLASSES`, is kept in the code, just
@@ -67,16 +69,20 @@ misquoted if simplified:
 | Component | Number | What it actually means |
 |---|---|---|
 | Vision model | **~88.5% CV macro-F1** | Honestly validated via 5-fold GroupKFold cross-validation across 34 independent recordings. This is the one real, trustworthy number in the whole system. |
-| IMU model | **0.822 CV macro-F1** | Better than it sounds, and worse than it sounds, in different ways. Perfect/Drag/Half/Heave (5-15 real sessions each) still separate cleanly -- 1.00 F1 each. The 0.822 average is pulled down almost entirely by **Incomplete (1 example, F1=0.00 in CV)** -- too little data for cross-validation to say anything about that class yet, not a sign the model performs badly overall. Swing (5 sessions, F1=0.91) checked out reasonably -- its recall held at 1.00 even with its most suspect feature (a possible sensor-calibration offset) removed entirely, though the shipped model still uses that feature. Earlier, this same dataset (4 classes, no Swing/Incomplete) hit a suspicious 1.000 -- a diagnosed ceiling effect, confirmed via a second model type (Logistic Regression) also hitting 100%. That ceiling is gone now; treat 0.822 as more honest, not simply "worse." |
+| IMU model | **0.830 CV macro-F1** | Better than it sounds, and worse than it sounds, in different ways. Drag/Half/Heave/Swing (5-25 real sessions each) still separate cleanly -- 1.00 F1 each. Perfect (25 examples) sits at 0.98 F1 (precision 0.96) -- a small but real dip from a clean 1.00, after a third data batch added 8 flagged-but-included recordings above the historical Perfect ceiling, and excluded 5 more whose own sensor data matched the Drag signature, not Perfect's (see `ml_imu/README.md`'s "Third data batch"). The overall average is still pulled down mostly by **Incomplete (1 example, F1=0.00 in CV)** -- too little data for cross-validation to say anything about that class, not a sign of poor overall performance. Earlier, the original 4-class version of this dataset hit a suspicious 1.000 -- a diagnosed ceiling effect, confirmed via a second model type (Logistic Regression) also hitting 100%. That ceiling is gone; treat 0.830 as more honest, not simply "better" or "worse" than the old number. |
 | Fusion layer | **No number exists** | Not "unknown" in the sense of "not yet measured carefully" -- there is currently no synchronized data (same rep, both sensors, ground truth) to measure it against at all. Any number here would be invented. |
 
 **If someone asks "what's the accuracy of the app," the only honest
 answer today is 88.5%, from the vision model alone**, with the caveat that
 it's cross-validated on a small (34-recording) dataset. The IMU and fusion
 numbers cannot be quoted as accuracy claims without misleading whoever
-you tell -- and for IMU specifically, don't round 0.822 down to "worse than
-before" or up to "resolved": Perfect/Drag/Half/Heave are as solid as ever,
-Swing is promising but unconfirmed, and Incomplete is one data point.
+you tell -- and for IMU specifically, don't round 0.830 down to "worse than
+before" or up to "resolved": Drag/Half/Heave/Swing are as solid as ever,
+Perfect took on real (if small) new ambiguity from its third data batch,
+and Incomplete is still one data point. **Also worth saying plainly: the
+50/50 fusion weight is a user-requested policy choice, not a reflection
+of IMU earning more trust** -- see this document's "How it does it"
+section above and `ensemble/README.md` for the full record.
 
 **What would change this**: real synchronized recordings (camera + IMU on
 the same reps, multiple people, natural — not staged — form) would let

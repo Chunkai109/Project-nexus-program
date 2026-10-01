@@ -33,10 +33,24 @@ Three design decisions, resolved with the user and applied here exactly:
    `vision_weight` can't express that per-class difference, so this is a
    known, documented limitation of the current weighting, not an oversight.
 
-2. Weighting: heavily favor vision (80/20 default) -- vision has an
-   honestly-validated ~88.5% CV macro-F1; IMU's headline CV macro-F1 is
-   now 0.822 (no ceiling effect, but Incomplete's single-example class
-   pulls it down honestly rather than artificially).
+2. Weighting: **50/50 (DEFAULT_VISION_WEIGHT = 0.5), set at the user's
+   explicit request.** Flagged here plainly because it does NOT reflect a
+   change in either model's validated standing: vision is still the one
+   honestly-validated number in this system (~88.5% CV macro-F1, 34
+   independent recordings); IMU's headline CV macro-F1 is 0.830 (up
+   marginally from 0.822, within noise), but that number now also
+   includes a third data batch where 5 of 15 friend-provided "Perfect"
+   recordings were excluded before training because their own Drift
+   values (21.8-28.5) matched this project's established Drag signature,
+   not Perfect's -- and 8 of the 10 kept sit above the historical Perfect
+   ceiling on that same feature, flagged but included. Moving weight
+   toward IMU was requested specifically to make "Perfect" easier to
+   trigger by influencing what IMU is trained to recognize; that request
+   and this project's pushback on it are on the record in the session
+   this change came from. The previous 80/20 default (vision favored,
+   evidence-based) is preserved as the value to revert to if this
+   weighting is reconsidered -- see git history for
+   `DEFAULT_VISION_WEIGHT`.
 
 3. Gate conflicts: if EITHER model's own gate rejects the input (vision's
    rest gate / novelty detector, or IMU's novelty gate), the ensemble
@@ -56,7 +70,8 @@ SHARED_CLASSES = ["Perfect", "Drag", "Swing", "Half", "Heave", "Incomplete"]
 VISION_EXCLUSIVE_CLASSES = []
 VISION_REJECT_PREDICTIONS = {"no_exercise_detected", "unrecognized_movement"}
 IMU_REJECT_PREDICTIONS = {"unrecognized_input"}
-DEFAULT_VISION_WEIGHT = 0.8
+# 0.5, not the evidence-based 0.8 -- see design decision 2 above.
+DEFAULT_VISION_WEIGHT = 0.5
 
 
 def _restrict_and_renormalize(class_probabilities: dict, classes: list[str]) -> dict:

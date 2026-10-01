@@ -53,8 +53,9 @@ def main():
 
     # --- Branch 1: vision gate rejection takes priority ---
     vision_rejected = mock_vision_result("no_exercise_detected", {})
-    imu_confident = mock_imu_result(
-        "Perfect", {"Perfect": 0.85, "Drag": 0.05, "Swing": 0.03, "Half": 0.03, "Heave": 0.02, "Incomplete": 0.02})
+    imu_confident = mock_imu_result("Perfect", {
+        "Perfect": 0.9, "Drag": 0.03, "Swing": 0.02, "Half": 0.03, "Heave": 0.01, "Incomplete": 0.01,
+    })
     result = fuse_predictions(vision_rejected, imu_confident)
     all_ok &= check("vision gate rejection short-circuits even a confident IMU opinion",
                      result["source"] == "rejected_by_vision_gate" and result["prediction"] == "no_exercise_detected",
@@ -71,39 +72,39 @@ def main():
                      result["source"] == "rejected_by_imu_gate" and result["prediction"] == "unrecognized_input",
                      f"got source={result['source']}, prediction={result['prediction']}")
 
-    # --- Branch 3: vision's top class is Swing -- now fused, not bypassed ---
-    # Swing used to be a VISION_EXCLUSIVE_CLASS (IMU had zero training data
-    # for it), so this used to assert a vision-only bypass. A second
-    # data-collection batch gave IMU real (if thin) Swing data, so
-    # VISION_EXCLUSIVE_CLASSES is now empty and Swing fuses like any other
-    # shared class -- this branch checks that it does, not that it's
-    # bypassed (the bypass mechanism itself has no reachable class to
-    # exercise today; see fusion.py's VISION_EXCLUSIVE_CLASSES docstring).
+    # --- Branch 3: Swing/Incomplete are no longer vision-exclusive -- IMU
+    # now has real (if thin) training data for both, so its opinion is
+    # blended in like any other class instead of being bypassed. Hand-
+    # verified math, since VISION_EXCLUSIVE_CLASSES is empty and nothing
+    # gets dropped from vision's proba before blending.
     vision_swing = mock_vision_result(
         "Swing", {"Perfect": 0.1, "Drag": 0.05, "Swing": 0.6, "Half": 0.1, "Heave": 0.1, "Incomplete": 0.05},
         good_form_score=0.11, good_form_score_raw=0.06,
     )
-    result = fuse_predictions(vision_swing, imu_confident)
-    all_ok &= check("vision's Swing top prediction is fused with IMU's opinion, not bypassed",
-                     result["source"] == "fused",
+    result = fuse_predictions(vision_swing, imu_confident, vision_weight=0.8)
+    # fused = 0.8*vision + 0.2*imu, per class (no restriction/renormalization
+    # since SHARED_CLASSES now covers all 6 vision classes):
+    expected_swing = 0.8 * 0.6 + 0.2 * 0.02  # = 0.484
+    all_ok &= check("Swing as vision's top class now goes through normal fusion, not a bypass",
+                     result["source"] == "fused" and result["prediction"] == "Swing",
                      f"got source={result['source']}, prediction={result['prediction']}")
-    all_ok &= check("fused result still carries both raw per-model results for transparency",
-                     result.get("imu_result") == imu_confident and result.get("vision_result") == vision_swing)
+    all_ok &= check("fused P(Swing) matches hand-computed expected value",
+                     abs(result["class_probabilities"]["Swing"] - expected_swing) < 1e-6,
+                     f"got {result['class_probabilities']['Swing']:.6f}, expected {expected_swing:.6f}")
 
     # --- Branch 4: real fusion over shared classes, hand-verified math ---
     vision_shared_case = mock_vision_result(
         "Perfect", {"Perfect": 0.6, "Drag": 0.1, "Swing": 0.05, "Half": 0.15, "Heave": 0.05, "Incomplete": 0.05},
         good_form_score=1.0, good_form_score_raw=0.6,
     )
-    imu_shared_case = mock_imu_result(
-        "Half", {"Perfect": 0.2, "Drag": 0.1, "Swing": 0.05, "Half": 0.5, "Heave": 0.1, "Incomplete": 0.05})
+    imu_shared_case = mock_imu_result("Half", {
+        "Perfect": 0.2, "Drag": 0.1, "Swing": 0.05, "Half": 0.55, "Heave": 0.05, "Incomplete": 0.05,
+    })
     result = fuse_predictions(vision_shared_case, imu_shared_case, vision_weight=0.8)
-    # Hand-computed expected values: SHARED_CLASSES is now all 6 classes and
-    # both mocks already sum to 1 over all 6, so no mass is dropped or
-    # renormalized (unlike when Swing/Incomplete were vision-exclusive) --
-    # fused = 0.8*vision + 0.2*imu, per class.
+    # Hand-computed expected values (SHARED_CLASSES = all 6, so no mass is
+    # dropped/renormalized from either side -- fused = 0.8*vision + 0.2*imu):
     expected_perfect = 0.8 * 0.6 + 0.2 * 0.2
-    expected_half = 0.8 * 0.15 + 0.2 * 0.5
+    expected_half = 0.8 * 0.15 + 0.2 * 0.55
     all_ok &= check("fused source is 'fused' for a normal shared-class case",
                      result["source"] == "fused", f"got source={result['source']}")
     all_ok &= check("fused P(Perfect) matches hand-computed expected value",
