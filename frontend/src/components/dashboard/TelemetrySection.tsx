@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { ChevronDown, LineChart, Ruler, Weight, ClipboardList, Pill } from 'lucide-react'
+import { ChevronDown, Ruler, Weight, ClipboardList, Pill } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { TrendChart } from '@/components/charts/TrendChart'
@@ -8,6 +8,7 @@ import { HoverExplain } from '@/components/ui/HoverExplain'
 import { useAppData } from '@/lib/data/AppDataContext'
 import { formatRelativeTime } from '@/lib/formatRelativeTime'
 import { getDummyMedicalProfile } from '@/lib/dummyMedicalProfile'
+import { getDummySessionHistory } from '@/lib/dummySessionHistory'
 import type { SymmetryPoint, TelemetryPoint } from '@/types'
 
 const RECENT_SESSIONS_FOR_SYMMETRY = 6
@@ -26,21 +27,30 @@ export function TelemetrySection({ initialPatientId }: { initialPatientId?: stri
     [sessions, patient?.id],
   )
   const latestSession = patientSessions[patientSessions.length - 1]
+  const hasRealSessions = patientSessions.length > 0
 
-  const trendData: TelemetryPoint[] = latestSession
+  // No real completed session yet -- fall back to deterministic placeholder
+  // telemetry (see dummySessionHistory.ts) so the charts below have
+  // something representative to show instead of an empty state. Stops
+  // being used the instant this patient completes a real session.
+  const dummyHistory = !hasRealSessions && patient ? getDummySessionHistory(patient.id) : null
+
+  const trendData: TelemetryPoint[] = hasRealSessions
     ? latestSession.reps.map((r) => ({
         t: r.rep,
         angle: r.angle,
         targetMin: latestSession.targetMin,
         targetMax: latestSession.targetMax,
       }))
-    : []
+    : (dummyHistory?.trendData ?? [])
 
-  const symmetryData: SymmetryPoint[] = patientSessions.slice(-RECENT_SESSIONS_FOR_SYMMETRY).map((s, i) => ({
-    session: `S${i + 1}`,
-    left: averageOf(s.reps.map((r) => r.emgLeft)),
-    right: averageOf(s.reps.map((r) => r.emgRight)),
-  }))
+  const symmetryData: SymmetryPoint[] = hasRealSessions
+    ? patientSessions.slice(-RECENT_SESSIONS_FOR_SYMMETRY).map((s, i) => ({
+        session: `S${i + 1}`,
+        left: averageOf(s.reps.map((r) => r.emgLeft)),
+        right: averageOf(s.reps.map((r) => r.emgRight)),
+      }))
+    : (dummyHistory?.symmetryData ?? [])
 
   const profile = patient ? getDummyMedicalProfile(patient.id) : null
 
@@ -126,20 +136,27 @@ export function TelemetrySection({ initialPatientId }: { initialPatientId?: stri
         <p className="rounded-xl bg-surface-secondary p-6 text-center text-[13px] text-ink-faint">
           No patients have signed in yet — telemetry will be reviewable once someone completes a session.
         </p>
-      ) : patientSessions.length === 0 ? (
-        <div className="flex flex-col items-center gap-2 rounded-xl bg-surface-secondary p-10 text-center">
-          <LineChart className="h-6 w-6 text-ink-faint" />
-          <p className="text-[14px] font-medium text-ink">No completed sessions yet</p>
-          <p className="max-w-xs text-[13px] text-ink-faint">
-            {patient?.name} hasn't finished a live session. Data appears here the moment they hit "End Session & Sync Data".
-          </p>
-        </div>
       ) : (
         <>
-          <p className="mb-4 text-[12px] text-ink-faint">
-            Latest session: <span className="font-medium text-ink-muted">{latestSession.exerciseTitle}</span> ·{' '}
-            {formatRelativeTime(latestSession.completedAt)} · {latestSession.reps.length} reps recorded
-          </p>
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+            {hasRealSessions ? (
+              <p className="text-[12px] text-ink-faint">
+                Latest session: <span className="font-medium text-ink-muted">{latestSession.exerciseTitle}</span> ·{' '}
+                {formatRelativeTime(latestSession.completedAt)} · {latestSession.reps.length} reps recorded
+              </p>
+            ) : (
+              <p className="text-[12px] text-ink-faint">
+                {patient?.name} hasn't completed a real session yet — showing placeholder demo telemetry below.
+              </p>
+            )}
+            {!hasRealSessions && dummyHistory && (
+              <HoverExplain
+                explanation={`${patient?.name} hasn't finished a live session yet, so there's no real telemetry to show — these charts are placeholder data derived from their id, not an actual recorded session. Real data appears here the moment they hit "End Session & Sync Data".`}
+              >
+                <Badge tone="amber">Demo data — not a real session</Badge>
+              </HoverExplain>
+            )}
+          </div>
           <div className="grid grid-cols-1 gap-8 xl:grid-cols-2">
             <HoverExplain explanation="Peak flexion angle on every rep of the most recent session, plotted against the prescribed target corridor (shaded band). Points outside the band mean that rep under- or over-shot the protocol's ROM target.">
               <div>
