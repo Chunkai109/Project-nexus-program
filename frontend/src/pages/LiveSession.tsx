@@ -365,7 +365,16 @@ export function LiveSession() {
             reps: repSamples,
           })
         : null
-    setTimeout(() => navigate(session ? `/patient/session-summary/${session.id}` : '/patient/exercises'), 900)
+    // recordSession() above already updated local state synchronously and
+    // fired its Supabase write in the background (see AppDataContext.tsx) --
+    // there's nothing left to actually wait on here. This short delay exists
+    // only so the "Syncing session data..." label is visible for a beat
+    // instead of flashing by; it's deliberately much shorter than it used to
+    // be, since the previous delay plus the camera/MediaPipe pose loop still
+    // running full-tilt in the background (now stopped immediately above via
+    // CameraViewport's poseDetectionEnabled={... && !ending}) made ending a
+    // session feel sluggish for no real reason.
+    setTimeout(() => navigate(session ? `/patient/session-summary/${session.id}` : '/patient/exercises'), 200)
   }
 
   const mm = String(Math.floor(simulated.elapsedSec / 60)).padStart(2, '0')
@@ -398,7 +407,7 @@ export function LiveSession() {
           <CameraViewport
             faultActive={faultActive}
             onWorldLandmarks={handleWorldLandmarks}
-            poseDetectionEnabled={ENABLE_MEDIAPIPE_VISION}
+            poseDetectionEnabled={ENABLE_MEDIAPIPE_VISION && !ending}
             fallbackSkeleton={
               <PoseOverlay squatDepth={squatDepth} faultActive={faultActive} faultDeg={faultDeg} />
             }
