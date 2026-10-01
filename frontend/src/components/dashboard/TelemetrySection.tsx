@@ -1,11 +1,13 @@
 import { useMemo, useState } from 'react'
-import { ChevronDown, LineChart } from 'lucide-react'
+import { ChevronDown, LineChart, Ruler, Weight, ClipboardList, Pill } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
+import { Badge } from '@/components/ui/Badge'
 import { TrendChart } from '@/components/charts/TrendChart'
 import { SymmetryBarChart } from '@/components/charts/SymmetryBarChart'
 import { HoverExplain } from '@/components/ui/HoverExplain'
 import { useAppData } from '@/lib/data/AppDataContext'
 import { formatRelativeTime } from '@/lib/formatRelativeTime'
+import { getDummyMedicalProfile } from '@/lib/dummyMedicalProfile'
 import type { SymmetryPoint, TelemetryPoint } from '@/types'
 
 const RECENT_SESSIONS_FOR_SYMMETRY = 6
@@ -40,33 +42,85 @@ export function TelemetrySection({ initialPatientId }: { initialPatientId?: stri
     right: averageOf(s.reps.map((r) => r.emgRight)),
   }))
 
+  const profile = patient ? getDummyMedicalProfile(patient.id) : null
+
   return (
-    <Card className="p-7">
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="text-[15px] font-semibold text-ink">Historical Telemetry Review</h2>
-          <p className="text-[13px] text-ink-faint">Multi-session trend vs. prescribed rehabilitation corridor</p>
-        </div>
-        {patients.length > 0 && (
-          <HoverExplain explanation="Switch the charts below to a different patient's telemetry history.">
-            <div className="relative flex items-center gap-2 rounded-full bg-surface-secondary px-4 py-2">
-              <span className="text-[13px] text-ink-faint">Patient:</span>
-              <select
-                value={patient?.id}
-                onChange={(e) => setPatientId(e.target.value)}
-                className="appearance-none bg-transparent pr-5 text-[13px] font-medium text-ink outline-none"
-              >
-                {patients.map((p) => (
-                  <option key={p.id} value={p.id} className="bg-surface text-ink">
-                    {p.name}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown className="pointer-events-none absolute right-3.5 h-3.5 w-3.5 text-ink-faint" />
+    <>
+      {profile && (
+        <Card className="mb-6 p-7">
+          <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+            <h2 className="text-[15px] font-semibold text-ink">Patient Profile — {patient?.name}</h2>
+            <HoverExplain explanation="This app has no real medical intake form yet — these fields are placeholder data derived from the patient's id, not an actual clinical record.">
+              <Badge tone="amber">Demo data — not a real medical record</Badge>
+            </HoverExplain>
+          </div>
+          <div className="mb-5 flex flex-wrap gap-6">
+            <div className="flex items-center gap-2">
+              <Ruler className="h-4 w-4 text-ink-faint" />
+              <span className="text-[13px] text-ink-muted">Height: {profile.heightCm} cm</span>
             </div>
-          </HoverExplain>
-        )}
-      </div>
+            <div className="flex items-center gap-2">
+              <Weight className="h-4 w-4 text-ink-faint" />
+              <span className="text-[13px] text-ink-muted">Weight: {profile.weightKg} kg</span>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+            <div>
+              <p className="mb-2 flex items-center gap-1.5 text-[12px] font-medium text-ink-faint">
+                <ClipboardList className="h-3.5 w-3.5" />
+                Medical History
+              </p>
+              <ul className="flex flex-col gap-1.5">
+                {profile.medicalHistory.map((item) => (
+                  <li key={item} className="text-[13px] text-ink-muted">
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div>
+              <p className="mb-2 flex items-center gap-1.5 text-[12px] font-medium text-ink-faint">
+                <Pill className="h-3.5 w-3.5" />
+                Prescribed Medications
+              </p>
+              <ul className="flex flex-col gap-1.5">
+                {profile.prescribedMedications.map((item) => (
+                  <li key={item} className="text-[13px] text-ink-muted">
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </Card>
+      )}
+
+      <Card className="p-7">
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-[15px] font-semibold text-ink">Historical Telemetry Review</h2>
+            <p className="text-[13px] text-ink-faint">Multi-session trend vs. prescribed rehabilitation corridor</p>
+          </div>
+          {patients.length > 0 && (
+            <HoverExplain explanation="Switch the charts below to a different patient's telemetry history.">
+              <div className="relative flex items-center gap-2 rounded-full bg-surface-secondary px-4 py-2">
+                <span className="text-[13px] text-ink-faint">Patient:</span>
+                <select
+                  value={patient?.id}
+                  onChange={(e) => setPatientId(e.target.value)}
+                  className="appearance-none bg-transparent pr-5 text-[13px] font-medium text-ink outline-none"
+                >
+                  {patients.map((p) => (
+                    <option key={p.id} value={p.id} className="bg-surface text-ink">
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-3.5 h-3.5 w-3.5 text-ink-faint" />
+              </div>
+            </HoverExplain>
+          )}
+        </div>
 
       {patients.length === 0 ? (
         <p className="rounded-xl bg-surface-secondary p-6 text-center text-[13px] text-ink-faint">
@@ -104,6 +158,7 @@ export function TelemetrySection({ initialPatientId }: { initialPatientId?: stri
           </div>
         </>
       )}
-    </Card>
+      </Card>
+    </>
   )
 }
