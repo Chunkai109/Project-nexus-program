@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, TriangleAlert, Timer, Repeat, ScanEye, Loader2 } from 'lucide-react'
+import { ArrowLeft, TriangleAlert, Timer, Repeat, ScanEye, Loader2, ChevronDown, ChevronUp } from 'lucide-react'
 import { PageShell } from '@/components/layout/PageShell'
 import { Logo } from '@/components/layout/Logo'
 import { ThemeToggle } from '@/components/ui/ThemeToggle'
@@ -50,6 +50,26 @@ const RISE_THRESHOLD_DEG = 10
 // between-sample jitter doesn't trigger it prematurely, short enough that a
 // genuine hold at the top isn't kept waiting.
 const SETTLE_WINDOW_MS = 1000
+
+// Dummy EMG is derived from flexion itself rather than its own independent
+// wave, so it rises as the arm curls up, peaks at full contraction, and
+// drops again as it extends back down -- same shape a real bicep's EMG
+// activation roughly follows through a curl. Normalized against this rig's
+// real calibrated flexion range (0deg = full extension, 135deg = full
+// contraction -- the same range EXTENSION_LIMIT/CONTRACTION_LIMIT/the
+// RadialGauge's default target are all keyed to), not the exercise's own
+// configurable target corridor, so it behaves the same regardless of what
+// target zone a physio has prescribed.
+const EMG_FLEX_REST_DEG = 0
+const EMG_FLEX_PEAK_DEG = 135
+
+/** Maps a flexion angle to a dummy %MVC that rises/peaks/falls with it, plus a little noise since a perfectly smooth signal would look obviously fake. */
+function emgFromFlexion(flexDeg: number): number {
+  const t = (flexDeg - EMG_FLEX_REST_DEG) / (EMG_FLEX_PEAK_DEG - EMG_FLEX_REST_DEG)
+  const pct = Math.max(0, Math.min(1, t)) * 100
+  const noise = (Math.random() - 0.5) * 4
+  return Math.round(Math.max(0, Math.min(100, pct + noise)))
+}
 
 /** Builds the human-readable verdict stored per-rep for Session Summary's "AI Form Check Notes" (see SessionSummary.tsx). */
 function describeAiResult(result: VisionPrediction | FusedPrediction): string {
@@ -114,16 +134,18 @@ export function LiveSession() {
   const [repCount, setRepCount] = useState(0)
   const prevRepCount = useRef(0)
 
-  // Real EMG from Pod 1 — the sole EMG-capable pod on this rig (bicep) —
-  // once it has actually reported a reading; otherwise the wearable
-  // simulator, same as the knee angle above. This is independent of
-  // hubConnected since a real hub (e.g. IMU-only hardware) may not have EMG
-  // wired up at all yet. Duplicated into both emgLeft/emgRight when stored
-  // in a RepSample below, since that's the shared shape every exercise's
+  // EMG always comes from emgFromFlexion(), tracking the current flexion
+  // angle directly -- the real EMG pod's reading is deliberately never
+  // checked here (explicit request: the live pod wasn't working reliably,
+  // so EMG was decoupled from it entirely rather than keep debugging the
+  // live path), and it's no longer sourced from the wearable simulator's
+  // own independent EMG wave either (also an explicit request: dummy EMG
+  // should rise/peak/fall with flexion, not run on its own unrelated
+  // cycle). Duplicated into both emgLeft/emgRight when stored in a
+  // RepSample below, since that's the shared shape every exercise's
   // session analytics reads and this rig only has one EMG channel.
-  const emgBicepLive = hub.pods[1]?.emgActivationPct
-  const usingHubEmg = emgBicepLive !== undefined
-  const emgBicep = emgBicepLive !== undefined ? Math.round(emgBicepLive) : simulated.emgLeft
+  const usingHubEmg = false
+  const emgBicep = emgFromFlexion(kneeFlexionDeg)
 
   // AI form check (ml/'s trained bicep-curl classifier, via the ensemble
   // API's vision-only endpoint — see ensemble/FRONTEND_INTEGRATION.md
@@ -172,6 +194,7 @@ export function LiveSession() {
   const visionFramesRef = useRef<number[][][]>([])
   const visionBufferStartRef = useRef<number | null>(null)
   const [formCheck, setFormCheck] = useState<FormCheckState>({ status: 'idle' })
+  const [formCheckExpanded, setFormCheckExpanded] = useState(true)
 
   function handleWorldLandmarks(landmarks: number[][] | null) {
     if (!landmarks || !visionCapturingRef.current) return
@@ -342,7 +365,16 @@ export function LiveSession() {
             reps: repSamples,
           })
         : null
-    setTimeout(() => navigate(session ? `/patient/session-summary/${session.id}` : '/patient/exercises'), 900)
+    // recordSession() above already updated local state synchronously and
+    // fired its Supabase write in the background (see AppDataContext.tsx) --
+    // there's nothing left to actually wait on here. This short delay exists
+    // only so the "Syncing session data..." label is visible for a beat
+    // instead of flashing by; it's deliberately much shorter than it used to
+    // be, since the previous delay plus the camera/MediaPipe pose loop still
+    // running full-tilt in the background (now stopped immediately above via
+    // CameraViewport's poseDetectionEnabled={... && !ending}) made ending a
+    // session feel sluggish for no real reason.
+    setTimeout(() => navigate(session ? `/patient/session-summary/${session.id}` : '/patient/exercises'), 200)
   }
 
   const mm = String(Math.floor(simulated.elapsedSec / 60)).padStart(2, '0')
@@ -375,7 +407,7 @@ export function LiveSession() {
           <CameraViewport
             faultActive={faultActive}
             onWorldLandmarks={handleWorldLandmarks}
-            poseDetectionEnabled={ENABLE_MEDIAPIPE_VISION}
+            poseDetectionEnabled={ENABLE_MEDIAPIPE_VISION && !ending}
             fallbackSkeleton={
               <PoseOverlay squatDepth={squatDepth} faultActive={faultActive} faultDeg={faultDeg} />
             }
@@ -430,80 +462,96 @@ export function LiveSession() {
           </Card>
 
           <Card className="flex flex-col gap-2.5 p-6">
-            <div className="flex items-center justify-between">
+            <button
+              type="button"
+              onClick={() => setFormCheckExpanded((v) => !v)}
+              className="flex items-center justify-between text-left"
+              aria-expanded={formCheckExpanded}
+            >
               <h3 className="text-[15px] font-semibold text-ink">AI Form Check</h3>
-              <span
-                className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${
-                  formCheck.status === 'result' ? 'bg-accent/10 text-accent' : 'bg-surface-secondary text-ink-faint'
-                }`}
-              >
-                {formCheck.status === 'unavailable' ? 'Model Offline' : usingHubCurl ? 'Vision + Hub' : 'Vision Only'}
-              </span>
-            </div>
+              <div className="flex items-center gap-2">
+                <span
+                  className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${
+                    formCheck.status === 'result' ? 'bg-accent/10 text-accent' : 'bg-surface-secondary text-ink-faint'
+                  }`}
+                >
+                  {formCheck.status === 'unavailable' ? 'Model Offline' : usingHubCurl ? 'Vision + Hub' : 'Vision Only'}
+                </span>
+                {formCheckExpanded ? (
+                  <ChevronUp className="h-4 w-4 flex-shrink-0 text-ink-faint" />
+                ) : (
+                  <ChevronDown className="h-4 w-4 flex-shrink-0 text-ink-faint" />
+                )}
+              </div>
+            </button>
 
-            {formCheck.status === 'idle' && (
-              <p className="text-[13px] text-ink-faint">
-                Start curling from full extension in view of the camera to get an AI-scored form check.
-              </p>
+            {formCheckExpanded && (
+              <>
+                {formCheck.status === 'idle' && (
+                  <p className="text-[13px] text-ink-faint">
+                    Start curling from full extension in view of the camera to get an AI-scored form check.
+                  </p>
+                )}
+                {formCheck.status === 'capturing' && (
+                  <p className="flex items-center gap-2 text-[13px] text-ink-faint">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    {formCheck.phase === 'rising'
+                      ? 'Recording this rep — keep going to the target…'
+                      : 'In the target zone — hold briefly to finish scoring this rep…'}
+                  </p>
+                )}
+                {formCheck.status === 'checking' && (
+                  <p className="flex items-center gap-2 text-[13px] text-ink-faint">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    Scoring your last rep…
+                  </p>
+                )}
+                {formCheck.status === 'insufficient_frames' && (
+                  <p className="text-[13px] text-ink-faint">
+                    That rep was too fast for the camera to score (only {formCheck.frameCount} frame
+                    {formCheck.frameCount === 1 ? '' : 's'} captured) — try pacing the lift a little slower.
+                  </p>
+                )}
+                {formCheck.status === 'unavailable' && (
+                  <p className="text-[13px] text-ink-faint">
+                    Couldn't reach the vision model API — start it with{' '}
+                    <code className="rounded bg-surface-secondary px-1 py-0.5 text-[12px]">
+                      uvicorn ensemble.api.server:app --port 8000
+                    </code>{' '}
+                    (see ensemble/README.md).
+                  </p>
+                )}
+                {formCheck.status === 'result' &&
+                  (() => {
+                    const { result } = formCheck
+                    const isGoodForm = result.prediction === 'Perfect'
+                    const isGate =
+                      result.prediction === 'no_exercise_detected' ||
+                      result.prediction === 'unrecognized_movement' ||
+                      result.prediction === 'unrecognized_input'
+                    return (
+                      <>
+                        <div className="flex items-center justify-between">
+                          <span
+                            className={`text-[17px] font-semibold ${isGoodForm ? 'text-emerald' : isGate ? 'text-ink-faint' : 'text-crimson'}`}
+                          >
+                            {result.prediction ?? 'No result'}
+                          </span>
+                          {result.good_form_score != null && (
+                            <span className="text-[13px] text-ink-faint">
+                              {Math.round(result.good_form_score * 100)}% good form
+                            </span>
+                          )}
+                        </div>
+                        {result.message && <p className="text-[12px] text-ink-faint">{result.message}</p>}
+                        {'source' in result && (
+                          <p className="text-[11px] text-ink-faint">source: {result.source}</p>
+                        )}
+                      </>
+                    )
+                  })()}
+              </>
             )}
-            {formCheck.status === 'capturing' && (
-              <p className="flex items-center gap-2 text-[13px] text-ink-faint">
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                {formCheck.phase === 'rising'
-                  ? 'Recording this rep — keep going to the target…'
-                  : 'In the target zone — hold briefly to finish scoring this rep…'}
-              </p>
-            )}
-            {formCheck.status === 'checking' && (
-              <p className="flex items-center gap-2 text-[13px] text-ink-faint">
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                Scoring your last rep…
-              </p>
-            )}
-            {formCheck.status === 'insufficient_frames' && (
-              <p className="text-[13px] text-ink-faint">
-                That rep was too fast for the camera to score (only {formCheck.frameCount} frame
-                {formCheck.frameCount === 1 ? '' : 's'} captured) — try pacing the lift a little slower.
-              </p>
-            )}
-            {formCheck.status === 'unavailable' && (
-              <p className="text-[13px] text-ink-faint">
-                Couldn't reach the vision model API — start it with{' '}
-                <code className="rounded bg-surface-secondary px-1 py-0.5 text-[12px]">
-                  uvicorn ensemble.api.server:app --port 8000
-                </code>{' '}
-                (see ensemble/README.md).
-              </p>
-            )}
-            {formCheck.status === 'result' &&
-              (() => {
-                const { result } = formCheck
-                const isGoodForm = result.prediction === 'Perfect'
-                const isGate =
-                  result.prediction === 'no_exercise_detected' ||
-                  result.prediction === 'unrecognized_movement' ||
-                  result.prediction === 'unrecognized_input'
-                return (
-                  <>
-                    <div className="flex items-center justify-between">
-                      <span
-                        className={`text-[17px] font-semibold ${isGoodForm ? 'text-emerald' : isGate ? 'text-ink-faint' : 'text-crimson'}`}
-                      >
-                        {result.prediction ?? 'No result'}
-                      </span>
-                      {result.good_form_score != null && (
-                        <span className="text-[13px] text-ink-faint">
-                          {Math.round(result.good_form_score * 100)}% good form
-                        </span>
-                      )}
-                    </div>
-                    {result.message && <p className="text-[12px] text-ink-faint">{result.message}</p>}
-                    {'source' in result && (
-                      <p className="text-[11px] text-ink-faint">source: {result.source}</p>
-                    )}
-                  </>
-                )
-              })()}
           </Card>
 
           <Card className="flex flex-col gap-5 p-6">

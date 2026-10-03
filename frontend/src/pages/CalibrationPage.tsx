@@ -42,11 +42,11 @@ export function CalibrationPage() {
   const { exercises } = useAppData()
   const exercise = useMemo(() => exercises.find((e) => e.id === exerciseId) ?? null, [exercises, exerciseId])
   const hub = useSensorHub()
-  // The hub itself may be connected (e.g. real IMU hardware) without EMG
-  // hardware wired up on it yet — fall back to the simulator per-pod based
-  // on whether that specific pod has ever reported a real EMG reading,
-  // rather than gating on hub connection as a whole.
-  const emgIsLive = EMG_PODS.some((pod) => hub.pods[pod.id]?.vrmsRaw !== undefined)
+  // EMG always comes from the simulator — the live pod's reading is
+  // deliberately never checked here (explicit request: the live pod wasn't
+  // working reliably, so calibration was decoupled from it entirely rather
+  // than keep debugging the live path).
+  const emgIsLive = false
 
   const [phase, setPhase] = useState<Phase>('idle')
   const [remainingMs, setRemainingMs] = useState(PHASE_DURATION_MS)
@@ -54,15 +54,6 @@ export function CalibrationPage() {
   const [baselineByPod, setBaselineByPod] = useState<Partial<Record<PodId, number>>>({})
   const [mvcByPod, setMvcByPod] = useState<Partial<Record<PodId, number>>>({})
   const samplesRef = useRef<Partial<Record<PodId, number[]>>>({})
-
-  // A live hub streams pod data continuously, giving `hub.pods` a new object
-  // identity on every message. Reading it through a ref (instead of listing
-  // it as an effect dependency) keeps the sampling interval below from being
-  // torn down and restarted on every single incoming message.
-  const hubPodsRef = useRef(hub.pods)
-  useEffect(() => {
-    hubPodsRef.current = hub.pods
-  }, [hub.pods])
 
   useEffect(() => {
     if (phase !== 'baseline' && phase !== 'mvc') return
@@ -74,7 +65,7 @@ export function CalibrationPage() {
       const elapsedSec = (performance.now() - startedAt) / 1000
       const nextLive: Partial<Record<PodId, number>> = {}
       for (const pod of EMG_PODS) {
-        const raw = hubPodsRef.current[pod.id]?.vrmsRaw ?? simulateRawSample(phase, elapsedSec, pod.id)
+        const raw = simulateRawSample(phase, elapsedSec, pod.id)
         samplesRef.current[pod.id]?.push(raw)
         nextLive[pod.id] = raw
       }

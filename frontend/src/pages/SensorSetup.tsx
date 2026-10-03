@@ -13,7 +13,8 @@ import { useAppData } from '@/lib/data/AppDataContext'
 import { podLabel } from '@/lib/podUtils'
 import { useSensorHub } from '@/lib/hub/HubProvider'
 import { DEFAULT_HUB_WS_URL, type PodId } from '@/lib/hub/protocol'
-import { POD_HAPTIC_CORRIDOR, POD_HAPTIC_FAULT } from '@/lib/hub/bicepCurlCounter'
+import type { Pod } from '@/types'
+import { POD_HAPTIC_FORM } from '@/lib/hub/bicepCurlCounter'
 import { clsx } from 'clsx'
 
 const PLACEMENT_STEPS = [
@@ -34,8 +35,8 @@ const PLACEMENT_STEPS = [
     detail: 'Secure Pod 3 on the lower tricep, close to the elbow. Together with Pod 2 this tracks forearm flexion against upper-arm drift.',
   },
   {
-    title: 'Attach the two vibration motors',
-    detail: 'Motor 1 (corridor alert) straps anywhere on the bicep part of the arm; Motor 2 (fault alert) straps anywhere on the forearm part. Only 3 sensor pods and 2 motors go on the arm in total.',
+    title: 'Attach the vibration motor',
+    detail: 'Motor 1 straps anywhere on the bicep part of the arm. It pulses only when a rep lands with correct form — not on entering the target corridor or on a detected fault. Only 3 sensor pods and 1 motor go on the arm in total.',
   },
   {
     title: 'Confirm connection',
@@ -61,17 +62,30 @@ export function SensorSetup() {
   const hub = useSensorHub()
   const hubConnected = hub.connectionState === 'connected'
 
-  // While a real hub is connected, pod wiring metadata (label/location/kind)
-  // still comes from the known hardware layout — only signal/battery are
-  // live. Until a pod reports in, it reads "offline" rather than borrowing
-  // the simulated demo numbers, so it's never ambiguous which is real.
-  const displayPods = hubConnected
-    ? PODS.map((pod) => ({
-        ...pod,
-        signal: hub.pods[pod.id as PodId]?.signal ?? 'offline',
-        battery: hub.pods[pod.id as PodId]?.battery ?? 0,
-      }))
-    : PODS
+  // Pod wiring metadata (label/location/kind) always comes from the known
+  // hardware layout — only signal/battery are live, and only once a real
+  // hub is actually connected. Before that (or for any sensor pod that
+  // hasn't reported in yet), it reads "offline" rather than the PODS
+  // array's placeholder values, so the badges never claim a signal that
+  // hasn't actually been seen.
+  //
+  // The motor is the one exception: it's a plain GPIO output wired directly
+  // to the same board, not a separate device with its own status report, so
+  // there's no real "is the motor itself online" signal to wait for beyond
+  // "is the hub online" -- hardcoded to strong/100 the instant hubConnected
+  // is true, rather than depending on the firmware actually broadcasting a
+  // status message for it (which needs the current .ino re-flashed to work
+  // at all, and still wouldn't mean anything a GPIO pin can't already tell
+  // you).
+  const displayPods: Pod[] = PODS.map((pod) =>
+    pod.id === (POD_HAPTIC_FORM as number)
+      ? { ...pod, signal: hubConnected ? ('strong' as const) : ('offline' as const), battery: hubConnected ? 100 : 0 }
+      : {
+          ...pod,
+          signal: hubConnected ? (hub.pods[pod.id as PodId]?.signal ?? 'offline') : 'offline',
+          battery: hubConnected ? (hub.pods[pod.id as PodId]?.battery ?? 0) : 0,
+        },
+  )
 
   const allConnected = displayPods.every((p) => p.signal !== 'offline')
 
@@ -79,10 +93,7 @@ export function SensorSetup() {
     setHapticSendError(null)
     if (hubConnected) {
       try {
-        await Promise.all([
-          hub.sendHaptic(POD_HAPTIC_CORRIDOR as PodId, 400),
-          hub.sendHaptic(POD_HAPTIC_FAULT as PodId, 400),
-        ])
+        await hub.sendHaptic(POD_HAPTIC_FORM as PodId, 400)
       } catch (err) {
         setHapticSendError(err instanceof Error ? err.message : 'Failed to trigger vibration.')
       }
@@ -144,18 +155,21 @@ export function SensorSetup() {
                   key={pod.id}
                   onClick={() => setActivePod(pod.id)}
                   className={clsx(
-                    'flex items-center justify-between rounded-xl px-3.5 py-2.5 text-left text-[13px] transition-colors duration-200',
+                    'flex items-start justify-between gap-3 rounded-xl px-3.5 py-2.5 text-left text-[13px] transition-colors duration-200',
                     activePod === pod.id ? 'bg-accent/8 ring-1 ring-accent/30' : 'bg-surface-secondary hover:bg-surface-hover',
                   )}
                 >
-                  <span className="flex items-center gap-2">
-                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-surface text-[10px] font-semibold text-ink">
+                  <span className="flex min-w-0 items-start gap-2">
+                    <span className="mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-surface text-[10px] font-semibold text-ink">
                       {pod.id}
                     </span>
-                    <span className="font-medium text-ink">{pod.label}</span>
-                    <span className="text-ink-faint">· {pod.location}</span>
+                    {/* Label + location wrap freely onto their own lines as needed — the badge on the right is flex-shrink-0 + whitespace-nowrap so it's never the thing squeezed into wrapping. */}
+                    <span className="min-w-0">
+                      <span className="font-medium text-ink">{pod.label}</span>{' '}
+                      <span className="text-ink-faint">· {pod.location}</span>
+                    </span>
                   </span>
-                  <span className={clsx('flex items-center gap-1 font-semibold', tone.className)}>
+                  <span className={clsx('flex flex-shrink-0 items-center gap-1 whitespace-nowrap font-semibold', tone.className)}>
                     <Icon className="h-3.5 w-3.5" />
                     {tone.text}
                   </span>
@@ -259,7 +273,7 @@ export function SensorSetup() {
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="text-sm">
                 <p className="font-semibold text-ink">
-                  {allConnected ? 'All pods & motors connected' : 'Waiting for full pod connection'}
+                  {allConnected ? 'All pods & motor connected' : 'Waiting for full pod connection'}
                 </p>
                 <p className="text-[13px] text-ink-faint">
                   ESP32-WROOM-32D hub · WebSocket stream {hubConnected ? '(live)' : '(simulated)'}
