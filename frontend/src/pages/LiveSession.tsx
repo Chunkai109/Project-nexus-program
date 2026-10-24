@@ -144,7 +144,6 @@ export function LiveSession() {
   // cycle). Duplicated into both emgLeft/emgRight when stored in a
   // RepSample below, since that's the shared shape every exercise's
   // session analytics reads and this rig only has one EMG channel.
-  const usingHubEmg = false
   const emgBicep = emgFromFlexion(kneeFlexionDeg)
 
   // AI form check (ml/'s trained bicep-curl classifier, via the ensemble
@@ -557,11 +556,6 @@ export function LiveSession() {
           <Card className="flex flex-col gap-5 p-6">
             <div className="flex items-center justify-between">
               <h3 className="text-[15px] font-semibold text-ink">EMG Activation</h3>
-              <span
-                className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${usingHubEmg ? 'bg-emerald/10 text-emerald' : 'bg-surface-secondary text-ink-faint'}`}
-              >
-                {usingHubEmg ? 'Source: Live Hub' : 'Source: Wearable Simulation'}
-              </span>
             </div>
             <EmgActivationBar label="Bicep" value={emgBicep} target={muscleEmgTarget(exercise.muscleEmgTargets, 'right-biceps-brachii')} />
           </Card>
