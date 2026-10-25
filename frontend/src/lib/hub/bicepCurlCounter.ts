@@ -35,7 +35,7 @@ const CONTRACTION_LIMIT = 90
 // Degrees of upper-arm drift from baseline before the fault fires. Raised
 // from 15 after real-hardware testing showed natural upper-arm movement
 // during a clean curl tripping it too often.
-const DRIFT_TOLERANCE = 20
+const DRIFT_TOLERANCE = 22
 const SETTLE_SAMPLES = 50
 
 /**
