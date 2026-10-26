@@ -36,7 +36,7 @@ const PLACEMENT_STEPS = [
   },
   {
     title: 'Attach the vibration motor',
-    detail: 'Motor 1 straps anywhere on the bicep part of the arm. It pulses only when a rep lands with correct form — not on entering the target corridor or on a detected fault. Only 3 sensor pods and 1 motor go on the arm in total.',
+    detail: 'Motor 1 straps anywhere on the bicep part of the arm. It gives a short pulse whenever the AI form check scores a rep as Perfect. Only 3 sensor pods and 1 motor go on the arm in total.',
   },
   {
     title: 'Confirm connection',

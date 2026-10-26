@@ -16,7 +16,8 @@ import { useAppData } from '@/lib/data/AppDataContext'
 import { useAuth } from '@/lib/AuthContext'
 import { muscleEmgTarget } from '@/lib/muscles'
 import { useSensorHub } from '@/lib/hub/HubProvider'
-import { CURL_DRIFT_POD_ID, CURL_FLEX_POD_ID, EXTENSION_LIMIT } from '@/lib/hub/bicepCurlCounter'
+import { CURL_DRIFT_POD_ID, CURL_FLEX_POD_ID, EXTENSION_LIMIT, POD_HAPTIC_FORM } from '@/lib/hub/bicepCurlCounter'
+import type { PodId } from '@/lib/hub/protocol'
 import { predictVisionForm, predictFusedForm, MIN_VISION_FRAMES, type VisionPrediction, type FusedPrediction } from '@/lib/visionModel'
 import type { RepSample } from '@/types'
 
@@ -322,6 +323,12 @@ export function LiveSession() {
               setFormCheck({ status: 'result', result })
               const comment = describeAiResult(result)
               setRepSamples((prev) => prev.map((r) => (r.rep === thisRep ? { ...r, aiComment: comment } : r)))
+              // Correct-form haptic: a short pulse on the single motor whenever
+              // the AI scores this rep Perfect. Arrives once the model responds,
+              // so it lands slightly after the rep itself finishes.
+              if (result.prediction === 'Perfect' && hub.connectionState === 'connected') {
+                hub.sendHaptic(POD_HAPTIC_FORM as PodId, 300).catch(() => {})
+              }
             })
             .catch(() => setFormCheck({ status: 'unavailable' }))
         }

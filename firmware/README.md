@@ -111,11 +111,12 @@ podId pulses it, since there's only the one motor now (previously two —
 a corridor motor and a separate fault motor — now consolidated to this
 single motor, meant to pulse on correct form).
 
-As of this writing, the only place the dashboard actually sends that command
-is the Sensor Setup screen's "Test Pod Vibration" button (a fixed test
-pulse). Live Session does not currently send any haptic commands during a
-real session — the "pulse on correct form" behavior described above is the
-intended use of this motor, not something wired up yet.
+The dashboard sends that command in two places:
+
+- Live Session, whenever the AI form check scores a rep **Perfect** — a
+  300ms pulse. It arrives once the AI model responds, so it lands slightly
+  after the rep finishes, and it needs the AI form-check API running.
+- The Sensor Setup screen's "Test Pod Vibration" button (a fixed test pulse).
 
 Whether and when to pulse is a purely dashboard-side decision — this
 firmware has no knowledge of the target corridor, the fault/cheat threshold,
