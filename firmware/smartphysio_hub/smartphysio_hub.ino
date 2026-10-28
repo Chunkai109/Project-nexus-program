@@ -289,11 +289,9 @@ void loop() {
   // This board has no autonomous vibration trigger of its own — whether and
   // when to pulse is entirely a dashboard-side decision, communicated over
   // WebSocket as an explicit "haptic" command (handleHapticCommand() above).
-  // The motor is meant to pulse only on correct form, but as of this
-  // writing nothing on the dashboard sends that trigger during a live
-  // session (LiveSession.tsx issues no haptic commands at all) — the only
-  // thing that currently pulses it is the "Test Pod Vibration" button on
-  // the Sensor Setup page.
+  // The dashboard sends one during a live session whenever the AI form check
+  // scores a rep "Perfect" (LiveSession.tsx), plus a test pulse from the
+  // Sensor Setup page's "Test Pod Vibration" button.
   bool formVibActive = false;
   if (formMotorOffAt != 0) {
     if (millis() < formMotorOffAt) {

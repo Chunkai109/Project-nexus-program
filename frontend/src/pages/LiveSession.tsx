@@ -16,7 +16,8 @@ import { useAppData } from '@/lib/data/AppDataContext'
 import { useAuth } from '@/lib/AuthContext'
 import { muscleEmgTarget } from '@/lib/muscles'
 import { useSensorHub } from '@/lib/hub/HubProvider'
-import { CURL_DRIFT_POD_ID, CURL_FLEX_POD_ID, EXTENSION_LIMIT } from '@/lib/hub/bicepCurlCounter'
+import { CURL_DRIFT_POD_ID, CURL_FLEX_POD_ID, EXTENSION_LIMIT, POD_HAPTIC_FORM } from '@/lib/hub/bicepCurlCounter'
+import type { PodId } from '@/lib/hub/protocol'
 import { predictVisionForm, predictFusedForm, MIN_VISION_FRAMES, type VisionPrediction, type FusedPrediction } from '@/lib/visionModel'
 import type { RepSample } from '@/types'
 
@@ -144,7 +145,6 @@ export function LiveSession() {
   // cycle). Duplicated into both emgLeft/emgRight when stored in a
   // RepSample below, since that's the shared shape every exercise's
   // session analytics reads and this rig only has one EMG channel.
-  const usingHubEmg = false
   const emgBicep = emgFromFlexion(kneeFlexionDeg)
 
   // AI form check (ml/'s trained bicep-curl classifier, via the ensemble
@@ -323,6 +323,12 @@ export function LiveSession() {
               setFormCheck({ status: 'result', result })
               const comment = describeAiResult(result)
               setRepSamples((prev) => prev.map((r) => (r.rep === thisRep ? { ...r, aiComment: comment } : r)))
+              // Correct-form haptic: a short pulse on the single motor whenever
+              // the AI scores this rep Perfect. Arrives once the model responds,
+              // so it lands slightly after the rep itself finishes.
+              if (result.prediction === 'Perfect' && hub.connectionState === 'connected') {
+                hub.sendHaptic(POD_HAPTIC_FORM as PodId, 300).catch(() => {})
+              }
             })
             .catch(() => setFormCheck({ status: 'unavailable' }))
         }
@@ -557,11 +563,6 @@ export function LiveSession() {
           <Card className="flex flex-col gap-5 p-6">
             <div className="flex items-center justify-between">
               <h3 className="text-[15px] font-semibold text-ink">EMG Activation</h3>
-              <span
-                className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${usingHubEmg ? 'bg-emerald/10 text-emerald' : 'bg-surface-secondary text-ink-faint'}`}
-              >
-                {usingHubEmg ? 'Source: Live Hub' : 'Source: Wearable Simulation'}
-              </span>
             </div>
             <EmgActivationBar label="Bicep" value={emgBicep} target={muscleEmgTarget(exercise.muscleEmgTargets, 'right-biceps-brachii')} />
           </Card>

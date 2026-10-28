@@ -42,11 +42,6 @@ export function CalibrationPage() {
   const { exercises } = useAppData()
   const exercise = useMemo(() => exercises.find((e) => e.id === exerciseId) ?? null, [exercises, exerciseId])
   const hub = useSensorHub()
-  // EMG always comes from the simulator — the live pod's reading is
-  // deliberately never checked here (explicit request: the live pod wasn't
-  // working reliably, so calibration was decoupled from it entirely rather
-  // than keep debugging the live path).
-  const emgIsLive = false
 
   const [phase, setPhase] = useState<Phase>('idle')
   const [remainingMs, setRemainingMs] = useState(PHASE_DURATION_MS)
@@ -161,11 +156,6 @@ export function CalibrationPage() {
         <Card className="p-7">
           <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
             <h1 className="text-[17px] font-semibold text-ink">EMG Baseline &amp; MVC Calibration</h1>
-            <span
-              className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${emgIsLive ? 'bg-emerald/10 text-emerald' : 'bg-surface-secondary text-ink-faint'}`}
-            >
-              {emgIsLive ? 'Source: Live Hub' : 'Source: Wearable Simulation'}
-            </span>
           </div>
           <p className="text-[13px] text-ink-faint">{exercise.title}</p>
           <p className="mt-4 text-[13px] leading-relaxed text-ink-muted">
