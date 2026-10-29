@@ -161,6 +161,9 @@ Work in progress and temporary files.
 /templates
 Reusable templates: test report formats, slide layouts, design checklists.
 
+/dashboard-design-consultant
+For any dashboard review or redesign, follow `dashboard-design-consultant/dashboard-consultant.md`.
+
 # Agent Behavior
 
 Before starting any task:
