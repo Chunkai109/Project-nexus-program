@@ -1,0 +1,112 @@
+# Builds the SmartPhysio Windows installer.
+#
+# - Push a tag like v1.0.0  -> builds and publishes the installer to a GitHub Release.
+#   The tag must match "version" in desktop/package.json.
+# - Run it by hand (Actions tab -> "Desktop release" -> Run workflow) -> builds the
+#   installer and attaches it to the run as a download, without publishing a release.
+#
+# Needs two repository secrets (Settings -> Secrets and variables -> Actions):
+#   SUPABASE_URL       your project URL (Supabase dashboard -> Settings -> API)
+#   SUPABASE_ANON_KEY  the public "anon" key from the same page (never the service_role key)
+name: Desktop release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check tag matches app version
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          app_version="$(node -p "require('./desktop/package.json').version")"
+          if [ "v$app_version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match desktop/package.json version $app_version. Update the version, commit, and tag again."
+            exit 1
+          fi
+
+      - name: Warn if Supabase secrets are missing
+        shell: bash
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ]; then
+            echo "::warning::SUPABASE_URL / SUPABASE_ANON_KEY secrets are not set. The app will build in local demo mode (no real accounts, data stays on each laptop)."
+          fi
+
+      # --- AI form-check server -> standalone smartphysio-ai.exe ---
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: ensemble/api/requirements.txt
+
+      - name: Build AI server
+        run: |
+          pip install -r ensemble/api/requirements.txt pyinstaller
+          pyinstaller desktop/ai-server/smartphysio-ai.spec --distpath desktop/ai-server/dist --workpath desktop/ai-server/build --noconfirm
+
+      - name: Check AI server starts
+        shell: pwsh
+        run: |
+          $proc = Start-Process -FilePath desktop/ai-server/dist/smartphysio-ai/smartphysio-ai.exe -ArgumentList '--port','8765' -PassThru -WindowStyle Hidden
+          $ok = $false
+          for ($i = 0; $i -lt 60; $i++) {
+            try { if ((Invoke-RestMethod http://127.0.0.1:8765/health).status -eq 'ok') { $ok = $true; break } } catch {}
+            Start-Sleep -Milliseconds 500
+          }
+          Stop-Process -Id $proc.Id -Force
+          if (-not $ok) { Write-Error 'Bundled AI server did not answer /health'; exit 1 }
+          Write-Host 'AI server OK'
+
+      # --- Web app ---
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: |
+            frontend/package-lock.json
+            desktop/package-lock.json
+
+      - name: Build web app
+        working-directory: frontend
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          npm ci
+          npm run build
+
+      # --- Electron installer ---
+      - name: Install desktop dependencies
+        working-directory: desktop
+        run: npm ci
+
+      - name: Build and publish installer (tag)
+        if: startsWith(github.ref, 'refs/tags/v')
+        working-directory: desktop
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npx electron-builder --win --publish always
+
+      - name: Build installer (manual run)
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        working-directory: desktop
+        run: npx electron-builder --win --publish never
+
+      - name: Attach installer to this run
+        uses: actions/upload-artifact@v4
+        with:
+          name: SmartPhysio-Windows-installer
+          path: desktop/release/*.exe
+          if-no-files-found: error
