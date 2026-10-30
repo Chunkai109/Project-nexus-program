@@ -68,6 +68,7 @@ Use these as ground truth. If the code says otherwise, the code wins. Tell me so
 * Frontend: React, TypeScript, Vite, Tailwind
 * Data: Supabase, with a localStorage fallback when Supabase isn't configured
 * Firmware: Arduino sketch, `firmware/smartphysio_hub/smartphysio_hub.ino`
+* Desktop app: Electron in `desktop/`, bundling the AI server (PyInstaller) and both portals; Windows installer built by GitHub Actions (`.github/workflows/desktop-release.yml`)
 
 # How to Work in Each Area
 
@@ -144,7 +145,7 @@ Examples:
 
 # Folder Structure
 
-Code lives in `/frontend`, `/firmware`, `/ml`, `/ml_imu` and `/ensemble`. Everything else goes in:
+Code lives in `/frontend`, `/desktop`, `/firmware`, `/ml`, `/ml_imu` and `/ensemble`. Everything else goes in:
 
 /workflows
 Agent definitions and process documents for each area (dashboard, ML, firmware, PCB, 3D, marketing).

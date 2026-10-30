@@ -19,9 +19,19 @@
  *    "unrecognized_input" is an expected, common outcome here, not a bug).
  */
 import type { FlexDriftSample } from './hub/imuFlexDriftRecorder'
+import { getDesktopBridge } from './desktop'
 
 /** Default local address the fusion API listens on — see ensemble/api/server.py's own docstring for how to start it. */
 export const DEFAULT_VISION_MODEL_URL = 'http://localhost:8000'
+
+/** The desktop app's bundled AI server when running in Electron, else VITE_VISION_MODEL_URL, else the local dev server. Read per call, since the desktop bridge is set before the page loads. */
+export function visionModelUrl(): string {
+  return (
+    getDesktopBridge()?.aiServerUrl ??
+    (import.meta.env.VITE_VISION_MODEL_URL as string | undefined) ??
+    DEFAULT_VISION_MODEL_URL
+  )
+}
 
 export const VISION_PREDICTION_CLASSES = [
   'Perfect', 'Drag', 'Swing', 'Half', 'Heave', 'Incomplete',
@@ -75,7 +85,7 @@ export const MIN_VISION_FRAMES = 10
 export async function predictVisionForm(
   frames: VisionFrames,
   durationSeconds: number,
-  baseUrl: string = DEFAULT_VISION_MODEL_URL,
+  baseUrl: string = visionModelUrl(),
 ): Promise<VisionPrediction> {
   if (frames.length < MIN_VISION_FRAMES) {
     throw new Error(`need at least ${MIN_VISION_FRAMES} buffered frames, got ${frames.length}`)
@@ -105,7 +115,7 @@ export async function predictFusedForm(
   frames: VisionFrames,
   durationSeconds: number,
   flexDrift: FlexDriftSample[],
-  baseUrl: string = DEFAULT_VISION_MODEL_URL,
+  baseUrl: string = visionModelUrl(),
 ): Promise<FusedPrediction> {
   if (frames.length < MIN_VISION_FRAMES) {
     throw new Error(`need at least ${MIN_VISION_FRAMES} buffered frames, got ${frames.length}`)

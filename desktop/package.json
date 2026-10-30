@@ -1,0 +1,78 @@
+{
+  "name": "smartphysio-desktop",
+  "productName": "SmartPhysio",
+  "version": "1.0.0",
+  "description": "SmartPhysio desktop app: patient and physiotherapist portals with the bundled AI form check.",
+  "author": "SmartPhysio team",
+  "private": true,
+  "main": "main.cjs",
+  "repository": "github:Chunkai109/Project-nexus-program",
+  "scripts": {
+    "build:web": "npm --prefix ../frontend run build",
+    "build:ai": "cd .. && pyinstaller desktop/ai-server/smartphysio-ai.spec --distpath desktop/ai-server/dist --workpath desktop/ai-server/build --noconfirm",
+    "start": "electron .",
+    "dist:win": "electron-builder --win --publish never",
+    "dist:dir": "electron-builder --dir --publish never"
+  },
+  "devDependencies": {
+    "electron": "^45.1.0",
+    "electron-builder": "^26.18.0"
+  },
+  "build": {
+    "appId": "com.smartphysio.app",
+    "productName": "SmartPhysio",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.cjs",
+      "preload.cjs",
+      "package.json",
+      "build/icon.png"
+    ],
+    "extraResources": [
+      {
+        "from": "../frontend/dist",
+        "to": "web"
+      },
+      {
+        "from": "ai-server/dist/smartphysio-ai",
+        "to": "ai-server"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.ico",
+      "artifactName": "SmartPhysio-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "SmartPhysio"
+    },
+    "mac": {
+      "category": "public.app-category.healthcare-fitness",
+      "extendInfo": {
+        "NSCameraUsageDescription": "SmartPhysio uses the camera to check your exercise form. Video stays on this computer."
+      }
+    },
+    "linux": {
+      "target": "dir",
+      "category": "MedicalSoftware"
+    },
+    "publish": {
+      "provider": "github",
+      "releaseType": "release"
+    }
+  }
+}
