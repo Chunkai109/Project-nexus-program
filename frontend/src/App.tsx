@@ -15,7 +15,8 @@ import type { UserRole } from '@/types'
 import type { ReactNode } from 'react'
 
 function RequireRole({ role, children }: { role: UserRole; children: ReactNode }) {
-  const { user } = useAuth()
+  const { user, initializing } = useAuth()
+  if (initializing) return null
   if (!user) return <Navigate to="/login" replace />
   if (user.role !== role) return <Navigate to={user.role === 'patient' ? '/patient/exercises' : '/physio'} replace />
   return <>{children}</>

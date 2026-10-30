@@ -6,6 +6,8 @@ export interface Practice {
 }
 
 export interface AuthUser {
+  /** Supabase auth user id (also the profile/patient id) with real accounts; `local:<email>` in local demo mode. */
+  id: string
   role: UserRole
   name: string
   email: string

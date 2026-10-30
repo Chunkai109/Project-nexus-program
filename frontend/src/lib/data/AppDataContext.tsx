@@ -1,7 +1,8 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import type { RealtimePostgresChangesPayload } from '@supabase/supabase-js'
+import type { PostgrestError, RealtimePostgresChangesPayload } from '@supabase/supabase-js'
 import type { AngleConfig, Exercise, PatientRecord, PodId, SessionRecord } from '@/types'
 import { supabase } from '@/lib/supabase/client'
+import { useAuth } from '@/lib/AuthContext'
 import { normalizeMuscleEmgTargets, type LegacyMuscleEmgTarget } from '@/lib/muscles'
 import {
   exerciseFromRow,
@@ -48,6 +49,34 @@ function writeJson<T>(key: string, value: T) {
   } catch {
     // Private browsing / storage quota exceeded — state still works for this tab, just won't persist or cross-sync.
   }
+}
+
+/**
+ * Sessions that couldn't be uploaded yet, per account. The laptop is on the
+ * ESP32 hub's WiFi (no internet) during a live session, so the upload at
+ * "End Session" often fails; the row waits here until the internet is back.
+ */
+function pendingSessionsKey(userId: string) {
+  return `smartphysio:pending-sessions:${userId}`
+}
+
+function readPendingSessions(userId: string): SessionRow[] {
+  return readJson<SessionRow[]>(pendingSessionsKey(userId), [])
+}
+
+function queuePendingSession(row: SessionRow) {
+  const pending = readPendingSessions(row.patient_id)
+  if (!pending.some((r) => r.id === row.id)) writeJson(pendingSessionsKey(row.patient_id), [...pending, row])
+}
+
+/** Postgres/PostgREST errors carry a code: the server answered and refused, so retrying won't help. Network failures have no code. */
+function isServerRefusal(error: PostgrestError): boolean {
+  return Boolean(error.code)
+}
+
+/** 23505 = unique violation: an earlier attempt already saved this session (only its response was lost). */
+function isAlreadySaved(error: PostgrestError): boolean {
+  return error.code === '23505'
 }
 
 /**
@@ -234,19 +263,30 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const [exercises, setExercises] = useState<Exercise[]>(() => (supabase ? [] : loadExercisesFromLocalStorage()))
   const [patients, setPatients] = useState<PatientRecord[]>(() => (supabase ? [] : readJson(PATIENTS_KEY, [])))
   const [sessions, setSessions] = useState<SessionRecord[]>(() => (supabase ? [] : readJson(SESSIONS_KEY, [])))
-  const [loading, setLoading] = useState(() => Boolean(supabase))
+  const { user } = useAuth()
+  const userId = supabase ? (user?.id ?? null) : null
+  // Which account's data has finished loading; loading is derived from it.
+  const [loadedFor, setLoadedFor] = useState<string | null>(null)
+  const loading = userId !== null && loadedFor !== userId
   const patientsRef = useRef<PatientRecord[]>(patients)
   useEffect(() => {
     patientsRef.current = patients
   }, [patients])
 
-  // --- Supabase mode: initial fetch + realtime subscriptions ---
+  // --- Supabase mode: fetch + realtime, per signed-in account ---
+  // Keyed on the signed-in user: the database's access rules only return
+  // rows that account may see, so data is reloaded whenever a different
+  // person signs in, and cleared on sign-out.
   useEffect(() => {
-    if (!supabase) return
+    if (!supabase || !userId) return
     let cancelled = false
     Promise.all([
       supabase.from('exercises').select('*').order('created_at', { ascending: true }),
-      supabase.from('patients').select('*').order('first_seen_at', { ascending: true }),
+      supabase
+        .from('profiles')
+        .select('id, name, email, first_seen_at, last_seen_at')
+        .eq('role', 'patient')
+        .order('first_seen_at', { ascending: true }),
       supabase.from('sessions').select('*').order('completed_at', { ascending: true }),
     ]).then(([exercisesRes, patientsRes, sessionsRes]) => {
       if (cancelled) return
@@ -255,24 +295,37 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       if (patientsRes.error) console.error('Failed to load patients from Supabase', patientsRes.error)
       else setPatients((patientsRes.data as PatientRow[]).map(patientFromRow))
       if (sessionsRes.error) console.error('Failed to load sessions from Supabase', sessionsRes.error)
-      else setSessions((sessionsRes.data as SessionRow[]).map(sessionFromRow))
-      setLoading(false)
+      else {
+        // Sessions still waiting to upload stay visible to the patient who recorded them.
+        const saved = (sessionsRes.data as SessionRow[]).map(sessionFromRow)
+        const savedIds = new Set(saved.map((sv) => sv.id))
+        const pending = readPendingSessions(userId).filter((r) => !savedIds.has(r.id)).map(sessionFromRow)
+        setSessions([...saved, ...pending].sort((a, b) => a.completedAt - b.completedAt))
+      }
+      setLoadedFor(userId)
     })
     return () => {
+      // Runs on sign-out or account switch: drop the previous account's data.
       cancelled = true
+      setExercises([])
+      setPatients([])
+      setSessions([])
+      setLoadedFor(null)
     }
-  }, [])
+  }, [userId])
 
   useEffect(() => {
     const client = supabase
-    if (!client) return
+    if (!client || !userId) return
     const channel = client
-      .channel('smartphysio-sync')
+      .channel(`smartphysio-sync-${userId}`)
       .on<ExerciseRow>('postgres_changes', { event: '*', schema: 'public', table: 'exercises' }, (payload) =>
         applyRealtimeChange(setExercises, payload, exerciseFromRow),
       )
-      .on<PatientRow>('postgres_changes', { event: '*', schema: 'public', table: 'patients' }, (payload) =>
-        applyRealtimeChange(setPatients, payload, patientFromRow),
+      .on<PatientRow>(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'profiles', filter: 'role=eq.patient' },
+        (payload) => applyRealtimeChange(setPatients, payload, patientFromRow),
       )
       .on<SessionRow>('postgres_changes', { event: '*', schema: 'public', table: 'sessions' }, (payload) =>
         applyRealtimeChange(setSessions, payload, sessionFromRow),
@@ -281,7 +334,44 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     return () => {
       client.removeChannel(channel)
     }
-  }, [])
+  }, [userId])
+
+  // Retry uploading queued sessions: right after sign-in, whenever the
+  // browser reports it's back online, and every 20s as a fallback.
+  useEffect(() => {
+    if (!supabase || !userId) return
+    const client = supabase
+    const uid = userId
+    let flushing = false
+    async function flush() {
+      if (flushing) return
+      const pending = readPendingSessions(uid)
+      if (pending.length === 0) return
+      flushing = true
+      const done = new Set<string>()
+      for (const row of pending) {
+        const { error } = await client.from('sessions').insert(row)
+        if (!error || isAlreadySaved(error)) {
+          done.add(row.id)
+        } else if (isServerRefusal(error)) {
+          console.error('Server refused a queued session; dropping it', error, row)
+          done.add(row.id)
+        } else {
+          break // still offline: keep the rest for the next try
+        }
+      }
+      // Re-read so sessions queued while this was running aren't lost.
+      writeJson(pendingSessionsKey(uid), readPendingSessions(uid).filter((r) => !done.has(r.id)))
+      flushing = false
+    }
+    flush()
+    window.addEventListener('online', flush)
+    const timer = window.setInterval(flush, 20_000)
+    return () => {
+      window.removeEventListener('online', flush)
+      window.clearInterval(timer)
+    }
+  }, [userId])
 
   // --- localStorage mode: cross-tab sync only (used when Supabase isn't configured) ---
   useEffect(() => {
@@ -333,7 +423,8 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   // duplicate.
   const seededDefaultRef = useRef(false)
   useEffect(() => {
-    if (seededDefaultRef.current || loading || exercises.length > 0) return
+    // With Supabase, starter exercises are created by supabase/schema.sql per practice.
+    if (supabase || seededDefaultRef.current || loading || exercises.length > 0) return
     seededDefaultRef.current = true
     for (const build of [
       buildDefaultBicepCurlExercise,
@@ -372,6 +463,8 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const registerPatientVisit = useCallback((name: string, email: string) => {
+    // With Supabase, the patient's profile is created at sign-up (database trigger).
+    if (supabase) return
     const now = Date.now()
     const existing = patientsRef.current.find((p) => p.email === email)
     const optimistic: PatientRecord = existing
@@ -384,47 +477,24 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       next[idx] = optimistic
       return next
     })
-    if (!supabase) return
-    // Upsert on email (not id): two devices registering the same new patient
-    // for the first time at once should converge on one row, not collide.
-    supabase
-      .from('patients')
-      .upsert(
-        {
-          name,
-          email,
-          first_seen_at: new Date(optimistic.firstSeenAt).toISOString(),
-          last_seen_at: new Date(now).toISOString(),
-        },
-        { onConflict: 'email' },
-      )
-      .select()
-      .single()
-      .then(({ data, error }) => {
-        if (error) {
-          console.error('Failed to sync patient to Supabase', error)
-          return
-        }
-        const canonical = patientFromRow(data as PatientRow)
-        setPatients((prev) => {
-          const idx = prev.findIndex((p) => p.email === email)
-          if (idx === -1) return [...prev, canonical]
-          const next = [...prev]
-          next[idx] = canonical
-          return next
-        })
-      })
   }, [])
 
   const recordSession = useCallback((input: NewSessionRecord) => {
     const session: SessionRecord = { ...input, id: crypto.randomUUID() }
     setSessions((prev) => [...prev, session])
     if (supabase) {
+      const row = sessionToRow(session)
       supabase
         .from('sessions')
-        .insert(sessionToRow(session))
+        .insert(row)
         .then(({ error }) => {
-          if (error) console.error('Failed to save session to Supabase', error)
+          if (!error || isAlreadySaved(error)) return
+          if (isServerRefusal(error)) {
+            console.error('Failed to save session to Supabase', error)
+            return
+          }
+          // No internet (e.g. still on the hub's WiFi): keep it and upload later.
+          queuePendingSession(row)
         })
     }
     return session
