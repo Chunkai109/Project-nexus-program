@@ -21,3 +21,7 @@ ensemble/data/synchronized_sessions/*
 ml/data/processed_*/
 ml/models/best_model_*/
 ml/results_*/
+
+# FIT1061 H2 squat dataset (Plan_A.zip): unzip locally, not committed
+fit1061_h2/data/*
+!fit1061_h2/data/.gitkeep
