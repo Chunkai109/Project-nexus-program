@@ -11,7 +11,7 @@ import { EmgActivationBar } from '@/components/charts/EmgActivationBar'
 import { useAppData } from '@/lib/data/AppDataContext'
 import { formatRelativeTime } from '@/lib/formatRelativeTime'
 import { muscleEmgTarget } from '@/lib/muscles'
-import type { SessionRecord, TelemetryPoint } from '@/types'
+import type { SessionRecord } from '@/types'
 
 function average(values: number[]): number {
   return values.length === 0 ? 0 : Math.round(values.reduce((sum, v) => sum + v, 0) / values.length)
@@ -67,13 +67,6 @@ export function SessionSummary() {
       </PageShell>
     )
   }
-
-  const trendData: TelemetryPoint[] = session.reps.map((r) => ({
-    t: r.rep,
-    angle: r.angle,
-    targetMin: session.targetMin,
-    targetMax: session.targetMax,
-  }))
 
   const totalReps = session.reps.length
   const avgAngle = average(session.reps.map((r) => r.angle))
@@ -162,7 +155,7 @@ export function SessionSummary() {
 
         <Card className="p-7">
           <p className="mb-3 text-[13px] font-medium text-ink-muted">Joint Angle Trajectory</p>
-          <TrendChart data={trendData} />
+          <TrendChart reps={session.reps} targetMin={session.targetMin} targetMax={session.targetMax} />
         </Card>
 
         <Card className="p-7">

@@ -75,13 +75,6 @@ export interface SessionMetrics {
   elapsedSec: number
 }
 
-export interface TelemetryPoint {
-  t: number
-  angle: number
-  targetMin: number
-  targetMax: number
-}
-
 export interface SymmetryPoint {
   session: string
   left: number

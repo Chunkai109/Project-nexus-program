@@ -54,7 +54,7 @@ export function TherapistDashboard() {
             <div className="mb-10">
               <h1 className="text-[28px] font-semibold tracking-tight text-ink">Patient Roster</h1>
               <p className="mt-1.5 text-[15px] text-ink-muted">
-                Patients who have signed in to SmartPhysio. Select one to review their session history.
+                Who needs you first, based on each patient's latest session. Select a patient to see their progress.
               </p>
             </div>
             <PatientRosterGrid onSelectPatient={openPatientAnalytics} />
