@@ -134,6 +134,19 @@ export function PhysioSidebar({
     }
   }, [collapsed])
 
+  const toggle = (
+    <button
+      type="button"
+      onClick={() => setCollapsed((c) => !c)}
+      aria-expanded={!collapsed}
+      aria-label={collapsed ? 'Expand menu' : 'Collapse menu'}
+      title={collapsed ? 'Expand menu' : 'Collapse menu'}
+      className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl text-ink-muted transition-colors duration-200 hover:bg-surface-secondary hover:text-ink"
+    >
+      {collapsed ? <PanelLeftOpen className="h-[18px] w-[18px]" /> : <PanelLeftClose className="h-[18px] w-[18px]" />}
+    </button>
+  )
+
   function selectAndClose(key: string) {
     onSelect(key)
     setMobileOpen(false)
@@ -184,33 +197,23 @@ export function PhysioSidebar({
       >
         {collapsed ? (
           <div className="flex flex-col items-center gap-3">
+            {toggle}
             <Logo size="sm" iconOnly />
             <ThemeToggle />
           </div>
         ) : (
-          <div className="flex items-center justify-between px-2">
-            <div>
-              <Logo size="sm" />
-              <p className="mt-1 pl-0.5 text-xs text-ink-faint">Physiotherapist Portal</p>
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex min-w-0 items-start gap-2">
+              {toggle}
+              <div className="min-w-0 pt-1">
+                <Logo size="sm" />
+                <p className="mt-1 pl-0.5 text-xs text-ink-faint">Physiotherapist Portal</p>
+              </div>
             </div>
             <ThemeToggle />
           </div>
         )}
         <SidebarNav active={active} onSelect={onSelect} collapsed={collapsed} />
-        <button
-          type="button"
-          onClick={() => setCollapsed((c) => !c)}
-          aria-expanded={!collapsed}
-          aria-label={collapsed ? 'Expand menu' : 'Collapse menu'}
-          title={collapsed ? 'Expand menu' : 'Collapse menu'}
-          className={clsx(
-            'mb-3 flex items-center gap-3 rounded-xl py-2.5 text-sm font-medium text-ink-muted transition-colors duration-200 hover:bg-surface-secondary hover:text-ink',
-            collapsed ? 'justify-center px-0' : 'px-3',
-          )}
-        >
-          {collapsed ? <PanelLeftOpen className="h-[18px] w-[18px]" /> : <PanelLeftClose className="h-[18px] w-[18px]" />}
-          {!collapsed && 'Collapse menu'}
-        </button>
         <SidebarFooter collapsed={collapsed} />
       </aside>
     </>
