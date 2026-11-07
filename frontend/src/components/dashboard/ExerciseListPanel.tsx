@@ -39,7 +39,7 @@ export function ExerciseListPanel({
   const all = sections.flatMap((s) => s.items)
   return (
     <>
-      <Card className="hidden self-start p-5 lg:col-span-4 lg:block">
+      <Card className="hidden self-start p-5 lg:col-span-4 lg:block xl:col-span-3">
         <p className="mb-3 text-[15px] font-semibold text-ink">{title}</p>
         {all.length === 0 ? (
           <p className="rounded-xl bg-surface-secondary p-4 text-center text-[13px] text-ink-muted">{emptyText}</p>

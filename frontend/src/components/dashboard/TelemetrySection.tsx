@@ -216,7 +216,7 @@ export function TelemetrySection({
             onSelect={setExerciseChoice}
             sections={listSections}
           />
-          <div className="flex min-w-0 flex-col gap-6 lg:col-span-8">
+          <div className="@container flex min-w-0 flex-col gap-6 lg:col-span-8 xl:col-span-9">
             {!latest ? (
               <Card className="p-14 text-center">
                 <p className="text-[14px] text-ink-muted">
@@ -240,7 +240,7 @@ export function TelemetrySection({
                   </HoverExplain>
                 </Card>
 
-                <div className="grid grid-cols-1 gap-6 2xl:grid-cols-2">
+                <div className="grid grid-cols-1 gap-6 @4xl:grid-cols-2">
                   <Card className="p-7">
                     <HoverExplain explanation="Peak elbow angle of every rep in the latest session against the prescribed target range, marked with the AI's verdict and any drift fault.">
                       <div>

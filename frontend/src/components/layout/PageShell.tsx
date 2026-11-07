@@ -1,10 +1,11 @@
 import { clsx } from 'clsx'
 import type { ReactNode } from 'react'
 
-export function PageShell({ children, className }: { children: ReactNode; className?: string }) {
+/** `fullWidth` drops the 1440px cap so a dashboard can use the whole screen. */
+export function PageShell({ children, className, fullWidth = false }: { children: ReactNode; className?: string; fullWidth?: boolean }) {
   return (
     <div className="min-h-screen bg-canvas text-ink">
-      <div className={clsx('mx-auto max-w-[1440px]', className)}>{children}</div>
+      <div className={clsx(fullWidth ? 'w-full' : 'mx-auto max-w-[1440px]', className)}>{children}</div>
     </div>
   )
 }

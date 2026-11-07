@@ -168,7 +168,7 @@ export function PatientExercisePlan({
         ]}
       />
 
-      <div className="lg:col-span-8">
+      <div className="min-w-0 lg:col-span-8 xl:col-span-9">
         {editing ? (
           <Card className="p-7">
             <h2 className="mb-6 text-[15px] font-semibold text-ink">

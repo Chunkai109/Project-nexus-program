@@ -1,7 +1,7 @@
 import { Activity } from 'lucide-react'
 import { clsx } from 'clsx'
 
-export function Logo({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' }) {
+export function Logo({ size = 'md', iconOnly = false }: { size?: 'sm' | 'md' | 'lg'; iconOnly?: boolean }) {
   const iconBox = { sm: 'h-7 w-7', md: 'h-8 w-8', lg: 'h-11 w-11' }[size]
   const iconSize = { sm: 14, md: 16, lg: 22 }[size]
   const text = { sm: 'text-[15px]', md: 'text-base', lg: 'text-2xl' }[size]
@@ -11,7 +11,7 @@ export function Logo({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' }) {
       <div className={clsx('flex items-center justify-center rounded-xl bg-accent', iconBox)}>
         <Activity size={iconSize} strokeWidth={2.5} className="text-white" />
       </div>
-      <span className={clsx('font-semibold tracking-tight text-ink', text)}>SmartPhysio</span>
+      {iconOnly ? <span className="sr-only">SmartPhysio</span> : <span className={clsx('font-semibold tracking-tight text-ink', text)}>SmartPhysio</span>}
     </div>
   )
 }

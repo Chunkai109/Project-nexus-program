@@ -1,11 +1,13 @@
-import { Users, Dumbbell, Settings, LogOut, Menu, X } from 'lucide-react'
+import { Users, Dumbbell, Settings, LogOut, Menu, X, PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 import { Logo } from './Logo'
 import { ThemeToggle } from '@/components/ui/ThemeToggle'
 import { HoverExplain } from '@/components/ui/HoverExplain'
 import { useAuth } from '@/lib/AuthContext'
 import { useNavigate } from 'react-router-dom'
 import { clsx } from 'clsx'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+
+const COLLAPSED_KEY = 'smartphysio:sidebar-collapsed'
 
 const NAV_ITEMS = [
   { key: 'roster', label: 'Patient Roster', icon: Users, explanation: 'View every patient who has signed in and drill into their session history.' },
@@ -13,7 +15,7 @@ const NAV_ITEMS = [
   { key: 'settings', label: 'Settings', icon: Settings, explanation: 'Practice preferences and account configuration.' },
 ] as const
 
-function SidebarNav({ active, onSelect }: { active: string; onSelect: (key: string) => void }) {
+function SidebarNav({ active, onSelect, collapsed = false }: { active: string; onSelect: (key: string) => void; collapsed?: boolean }) {
   const [hover, setHover] = useState<string | null>(null)
 
   return (
@@ -24,10 +26,14 @@ function SidebarNav({ active, onSelect }: { active: string; onSelect: (key: stri
           <HoverExplain key={key} explanation={explanation}>
             <button
               onClick={() => onSelect(key)}
+              aria-label={collapsed ? label : undefined}
+              aria-current={isActive ? 'page' : undefined}
+              title={collapsed ? label : undefined}
               onMouseEnter={() => setHover(key)}
               onMouseLeave={() => setHover(null)}
               className={clsx(
-                'flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors duration-200',
+                'flex w-full items-center gap-3 rounded-xl py-2.5 text-sm font-medium transition-colors duration-200',
+                collapsed ? 'justify-center px-0' : 'px-3',
                 isActive
                   ? 'bg-accent/10 text-accent'
                   : hover === key
@@ -35,8 +41,8 @@ function SidebarNav({ active, onSelect }: { active: string; onSelect: (key: stri
                     : 'text-ink-muted',
               )}
             >
-              <Icon className="h-[18px] w-[18px]" strokeWidth={2} />
-              {label}
+              <Icon className="h-[18px] w-[18px] flex-shrink-0" strokeWidth={2} />
+              {!collapsed && label}
             </button>
           </HoverExplain>
         )
@@ -45,9 +51,33 @@ function SidebarNav({ active, onSelect }: { active: string; onSelect: (key: stri
   )
 }
 
-function SidebarFooter() {
+function SidebarFooter({ collapsed = false }: { collapsed?: boolean }) {
   const { user, signOut } = useAuth()
   const navigate = useNavigate()
+
+  if (collapsed) {
+    return (
+      <div className="mt-auto flex flex-col items-center gap-2">
+        <div
+          className="flex h-9 w-9 items-center justify-center rounded-full bg-accent text-sm font-semibold text-white"
+          title={`${user?.name ?? 'Dr. Physio'} · ${user?.email ?? ''}`}
+        >
+          {(user?.name ?? 'P').charAt(0).toUpperCase()}
+        </div>
+        <button
+          onClick={() => {
+            signOut()
+            navigate('/login')
+          }}
+          className="rounded-full p-1.5 text-ink-faint transition-colors duration-200 hover:bg-surface-hover hover:text-crimson"
+          aria-label="Sign out"
+          title="Sign out"
+        >
+          <LogOut className="h-4 w-4" />
+        </button>
+      </div>
+    )
+  }
 
   return (
     <div className="mt-auto flex items-center gap-3 rounded-xl bg-surface-secondary px-3 py-3">
@@ -88,6 +118,21 @@ export function PhysioSidebar({
   onSelect: (key: string) => void
 }) {
   const [mobileOpen, setMobileOpen] = useState(false)
+  // Remembered per browser; a convenience only, so storage errors are ignored.
+  const [collapsed, setCollapsed] = useState(() => {
+    try {
+      return window.localStorage.getItem(COLLAPSED_KEY) === '1'
+    } catch {
+      return false
+    }
+  })
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(COLLAPSED_KEY, collapsed ? '1' : '0')
+    } catch {
+      // Storage blocked: the choice just won't be remembered.
+    }
+  }, [collapsed])
 
   function selectAndClose(key: string) {
     onSelect(key)
@@ -131,16 +176,42 @@ export function PhysioSidebar({
         </div>
       )}
 
-      <aside className="hidden h-screen w-64 flex-shrink-0 flex-col border-r border-border bg-surface px-4 py-6 lg:flex">
-        <div className="flex items-center justify-between px-2">
-          <div>
-            <Logo size="sm" />
-            <p className="mt-1 pl-0.5 text-xs text-ink-faint">Physiotherapist Portal</p>
+      <aside
+        className={clsx(
+          'sticky top-0 hidden h-screen flex-shrink-0 flex-col border-r border-border bg-surface py-6 transition-[width] duration-200 lg:flex',
+          collapsed ? 'w-[72px] px-3' : 'w-64 px-4',
+        )}
+      >
+        {collapsed ? (
+          <div className="flex flex-col items-center gap-3">
+            <Logo size="sm" iconOnly />
+            <ThemeToggle />
           </div>
-          <ThemeToggle />
-        </div>
-        <SidebarNav active={active} onSelect={onSelect} />
-        <SidebarFooter />
+        ) : (
+          <div className="flex items-center justify-between px-2">
+            <div>
+              <Logo size="sm" />
+              <p className="mt-1 pl-0.5 text-xs text-ink-faint">Physiotherapist Portal</p>
+            </div>
+            <ThemeToggle />
+          </div>
+        )}
+        <SidebarNav active={active} onSelect={onSelect} collapsed={collapsed} />
+        <button
+          type="button"
+          onClick={() => setCollapsed((c) => !c)}
+          aria-expanded={!collapsed}
+          aria-label={collapsed ? 'Expand menu' : 'Collapse menu'}
+          title={collapsed ? 'Expand menu' : 'Collapse menu'}
+          className={clsx(
+            'mb-3 flex items-center gap-3 rounded-xl py-2.5 text-sm font-medium text-ink-muted transition-colors duration-200 hover:bg-surface-secondary hover:text-ink',
+            collapsed ? 'justify-center px-0' : 'px-3',
+          )}
+        >
+          {collapsed ? <PanelLeftOpen className="h-[18px] w-[18px]" /> : <PanelLeftClose className="h-[18px] w-[18px]" />}
+          {!collapsed && 'Collapse menu'}
+        </button>
+        <SidebarFooter collapsed={collapsed} />
       </aside>
     </>
   )
