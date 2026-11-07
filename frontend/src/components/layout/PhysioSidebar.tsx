@@ -20,14 +20,6 @@ function sectionOf(tab: string): string {
   return tab
 }
 
-/** Short name of the current page, shown after the logo like GitHub's "owner / repo". */
-function pageName(tab: string): string {
-  if (tab === 'analytics') return 'Patient'
-  if (tab === 'exercise-analytics') return 'Exercise analytics'
-  if (tab === 'exercise-finetune') return 'Edit exercise'
-  return NAV_ITEMS.find((n) => n.key === tab)?.label ?? ''
-}
-
 function Avatar({ name, className }: { name: string; className?: string }) {
   return (
     <span
@@ -51,7 +43,6 @@ export function PhysioSidebar({ active, onSelect }: { active: string; onSelect: 
   const menuButtonRef = useRef<HTMLButtonElement>(null)
   const closeButtonRef = useRef<HTMLButtonElement>(null)
   const section = sectionOf(active)
-  const current = NAV_ITEMS.find((n) => n.key === section)
   const name = user?.name ?? 'Dr. Physio'
 
   // Focus moves into the drawer when it opens and back to the menu button when it closes; Esc closes it.
@@ -91,22 +82,6 @@ export function PhysioSidebar({ active, onSelect }: { active: string; onSelect: 
         <button type="button" onClick={() => go('roster')} aria-label="SmartPhysio home" className="flex-shrink-0">
           <Logo size="sm" />
         </button>
-        {pageName(active) && (
-          <nav aria-label="Breadcrumb" className="hidden min-w-0 items-center gap-2 text-[14px] sm:flex">
-            <span className="text-ink-faint">/</span>
-            {current && section !== active ? (
-              <>
-                <button type="button" onClick={() => go(section)} className="truncate text-ink-muted hover:text-ink hover:underline">
-                  {current.label}
-                </button>
-                <span className="text-ink-faint">/</span>
-                <span className="truncate font-semibold text-ink">{pageName(active)}</span>
-              </>
-            ) : (
-              <span className="truncate font-semibold text-ink">{pageName(active)}</span>
-            )}
-          </nav>
-        )}
         <div className="ml-auto flex items-center gap-2">
           <ThemeToggle />
           <span title={`${name} · ${user?.email ?? ''}`}>
