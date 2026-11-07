@@ -1,7 +1,7 @@
 {
   "name": "smartphysio-desktop",
   "productName": "SmartPhysio",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "SmartPhysio desktop app: patient and physiotherapist portals with the bundled AI form check.",
   "author": "SmartPhysio team",
   "private": true,

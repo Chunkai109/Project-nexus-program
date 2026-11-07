@@ -6,12 +6,24 @@
 // to the ESP32 hub. It also starts the bundled AI form-check server and stops
 // it when the app exits.
 
-const { app, BrowserWindow, ipcMain, session, shell } = require('electron')
+const { app, BrowserWindow, ipcMain, screen, session, shell } = require('electron')
 const { spawn, spawnSync } = require('node:child_process')
 const fs = require('node:fs')
 const http = require('node:http')
 const net = require('node:net')
 const path = require('node:path')
+
+// The Live Session screen is about this tall (CSS px). The page is zoomed out
+// just enough for it to fit without scrolling on common laptop screens
+// (1366x768, or 1920x1080 at 125-150% Windows scaling), never below
+// MIN_ZOOM so text stays readable. Ctrl +/- still adjusts it by hand.
+const LIVE_SESSION_HEIGHT = 880
+const MIN_ZOOM = 0.75
+
+function fitZoomFactor(contentHeight) {
+  const fit = Math.floor((contentHeight / LIVE_SESSION_HEIGHT) * 100) / 100
+  return Math.min(1, Math.max(MIN_ZOOM, fit))
+}
 
 // Fixed so the page keeps the same origin between launches: login sessions
 // and other localStorage data are stored per origin.
@@ -208,7 +220,17 @@ function createWindow() {
     },
   })
 
-  mainWindow.once('ready-to-show', () => mainWindow.show())
+  mainWindow.once('ready-to-show', () => {
+    mainWindow.maximize()
+    mainWindow.show()
+  })
+  mainWindow.webContents.on('did-finish-load', () => {
+    // Size against the maximized window: the screen's usable height minus
+    // this window's title bar (the page can load before maximize() applies).
+    const display = screen.getDisplayMatching(mainWindow.getBounds())
+    const titleBar = mainWindow.getBounds().height - mainWindow.getContentBounds().height
+    mainWindow.webContents.setZoomFactor(fitZoomFactor(display.workArea.height - titleBar))
+  })
 
   // Outside links open in the normal browser, never inside the app.
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
