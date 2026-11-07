@@ -56,10 +56,10 @@ export function TherapistDashboard() {
   const selectedExercise = exercises.find((e) => e.id === selectedExerciseId)
 
   return (
-    <PageShell fullWidth className="flex flex-col lg:flex-row">
+    <PageShell fullWidth className="flex flex-col">
       <PhysioSidebar active={tab} onSelect={goToTab} />
 
-      <main className="scroll-slim min-w-0 flex-1 overflow-y-auto px-4 py-6 sm:px-6 sm:py-8 lg:px-10 lg:py-10">
+      <main className="min-w-0 flex-1 px-4 py-6 sm:px-6 sm:py-8 lg:px-10 lg:py-10">
         {tab === 'roster' && (
           <>
             <div className="mb-10">

@@ -1,221 +1,195 @@
-import { Users, Dumbbell, Settings, LogOut, Menu, X, PanelLeftClose, PanelLeftOpen } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
+import { useNavigate } from 'react-router-dom'
+import { Dumbbell, LogOut, Menu, Settings, Users, X } from 'lucide-react'
+import { clsx } from 'clsx'
 import { Logo } from './Logo'
 import { ThemeToggle } from '@/components/ui/ThemeToggle'
-import { HoverExplain } from '@/components/ui/HoverExplain'
 import { useAuth } from '@/lib/AuthContext'
-import { useNavigate } from 'react-router-dom'
-import { clsx } from 'clsx'
-import { useEffect, useState } from 'react'
-
-const COLLAPSED_KEY = 'smartphysio:sidebar-collapsed'
 
 const NAV_ITEMS = [
-  { key: 'roster', label: 'Patient Roster', icon: Users, explanation: 'View every patient who has signed in and drill into their session history.' },
-  { key: 'creator', label: 'Exercise Creator', icon: Dumbbell, explanation: 'Build new exercise protocols and review existing ones.' },
-  { key: 'settings', label: 'Settings', icon: Settings, explanation: 'Practice preferences and account configuration.' },
+  { key: 'roster', label: 'Patient Roster', icon: Users, hint: 'Who needs you first' },
+  { key: 'creator', label: 'Exercise Creator', icon: Dumbbell, hint: 'Preset exercises' },
+  { key: 'settings', label: 'Settings', icon: Settings, hint: 'Practice preferences' },
 ] as const
 
-function SidebarNav({ active, onSelect, collapsed = false }: { active: string; onSelect: (key: string) => void; collapsed?: boolean }) {
-  const [hover, setHover] = useState<string | null>(null)
-
-  return (
-    <nav className="mt-8 flex flex-1 flex-col gap-1">
-      {NAV_ITEMS.map(({ key, label, icon: Icon, explanation }) => {
-        const isActive = active === key
-        return (
-          <HoverExplain key={key} explanation={explanation}>
-            <button
-              onClick={() => onSelect(key)}
-              aria-label={collapsed ? label : undefined}
-              aria-current={isActive ? 'page' : undefined}
-              title={collapsed ? label : undefined}
-              onMouseEnter={() => setHover(key)}
-              onMouseLeave={() => setHover(null)}
-              className={clsx(
-                'flex w-full items-center gap-3 rounded-xl py-2.5 text-sm font-medium transition-colors duration-200',
-                collapsed ? 'justify-center px-0' : 'px-3',
-                isActive
-                  ? 'bg-accent/10 text-accent'
-                  : hover === key
-                    ? 'bg-surface-secondary text-ink'
-                    : 'text-ink-muted',
-              )}
-            >
-              <Icon className="h-[18px] w-[18px] flex-shrink-0" strokeWidth={2} />
-              {!collapsed && label}
-            </button>
-          </HoverExplain>
-        )
-      })}
-    </nav>
-  )
+/** Pages inside a section highlight that section, e.g. a patient's page highlights Patient Roster. */
+function sectionOf(tab: string): string {
+  if (tab === 'analytics') return 'roster'
+  if (tab.startsWith('exercise-')) return 'creator'
+  return tab
 }
 
-function SidebarFooter({ collapsed = false }: { collapsed?: boolean }) {
-  const { user, signOut } = useAuth()
-  const navigate = useNavigate()
+/** Short name of the current page, shown after the logo like GitHub's "owner / repo". */
+function pageName(tab: string): string {
+  if (tab === 'analytics') return 'Patient'
+  if (tab === 'exercise-analytics') return 'Exercise analytics'
+  if (tab === 'exercise-finetune') return 'Edit exercise'
+  return NAV_ITEMS.find((n) => n.key === tab)?.label ?? ''
+}
 
-  if (collapsed) {
-    return (
-      <div className="mt-auto flex flex-col items-center gap-2">
-        <div
-          className="flex h-9 w-9 items-center justify-center rounded-full bg-accent text-sm font-semibold text-white"
-          title={`${user?.name ?? 'Dr. Physio'} · ${user?.email ?? ''}`}
-        >
-          {(user?.name ?? 'P').charAt(0).toUpperCase()}
-        </div>
-        <button
-          onClick={() => {
-            signOut()
-            navigate('/login')
-          }}
-          className="rounded-full p-1.5 text-ink-faint transition-colors duration-200 hover:bg-surface-hover hover:text-crimson"
-          aria-label="Sign out"
-          title="Sign out"
-        >
-          <LogOut className="h-4 w-4" />
-        </button>
-      </div>
-    )
-  }
-
+function Avatar({ name, className }: { name: string; className?: string }) {
   return (
-    <div className="mt-auto flex items-center gap-3 rounded-xl bg-surface-secondary px-3 py-3">
-      <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-accent text-sm font-semibold text-white">
-        {(user?.name ?? 'P').charAt(0).toUpperCase()}
-      </div>
-      <div className="min-w-0 flex-1 text-sm leading-tight">
-        <p className="truncate font-semibold text-ink">{user?.name ?? 'Dr. Physio'}</p>
-        <p className="truncate text-xs text-ink-faint">{user?.email ?? 'physio@clinic.com'}</p>
-      </div>
-      <HoverExplain explanation="Sign out of the Physiotherapist Portal and return to the login screen.">
-        <button
-          onClick={() => {
-            signOut()
-            navigate('/login')
-          }}
-          className="flex-shrink-0 rounded-full p-1.5 text-ink-faint transition-colors duration-200 hover:bg-surface-hover hover:text-crimson"
-          aria-label="Sign out"
-        >
-          <LogOut className="h-4 w-4" />
-        </button>
-      </HoverExplain>
-    </div>
+    <span
+      className={clsx('flex flex-shrink-0 items-center justify-center rounded-full bg-accent font-semibold text-white', className)}
+      aria-hidden
+    >
+      {name.charAt(0).toUpperCase()}
+    </span>
   )
 }
 
 /**
- * Persistent left sidebar on large screens; below `lg` it collapses into a
- * compact top bar with a hamburger button that opens the same nav as a
- * slide-in drawer, since a fixed 256px-wide column would eat most of a
- * phone screen otherwise.
+ * GitHub-style navigation: a slim top bar with a menu button, and a drawer
+ * that slides over the page from the left. The page underneath keeps the
+ * full width at every screen size.
  */
-export function PhysioSidebar({
-  active,
-  onSelect,
-}: {
-  active: string
-  onSelect: (key: string) => void
-}) {
-  const [mobileOpen, setMobileOpen] = useState(false)
-  // Remembered per browser; a convenience only, so storage errors are ignored.
-  const [collapsed, setCollapsed] = useState(() => {
-    try {
-      return window.localStorage.getItem(COLLAPSED_KEY) === '1'
-    } catch {
-      return false
-    }
-  })
+export function PhysioSidebar({ active, onSelect }: { active: string; onSelect: (key: string) => void }) {
+  const { user, signOut } = useAuth()
+  const navigate = useNavigate()
+  const [open, setOpen] = useState(false)
+  const menuButtonRef = useRef<HTMLButtonElement>(null)
+  const closeButtonRef = useRef<HTMLButtonElement>(null)
+  const section = sectionOf(active)
+  const current = NAV_ITEMS.find((n) => n.key === section)
+  const name = user?.name ?? 'Dr. Physio'
+
+  // Focus moves into the drawer when it opens and back to the menu button when it closes; Esc closes it.
   useEffect(() => {
-    try {
-      window.localStorage.setItem(COLLAPSED_KEY, collapsed ? '1' : '0')
-    } catch {
-      // Storage blocked: the choice just won't be remembered.
+    if (!open) return
+    closeButtonRef.current?.focus()
+    const menuButton = menuButtonRef.current
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setOpen(false)
     }
-  }, [collapsed])
+    window.addEventListener('keydown', onKey)
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      menuButton?.focus()
+    }
+  }, [open])
 
-  const toggle = (
-    <button
-      type="button"
-      onClick={() => setCollapsed((c) => !c)}
-      aria-expanded={!collapsed}
-      aria-label={collapsed ? 'Expand menu' : 'Collapse menu'}
-      title={collapsed ? 'Expand menu' : 'Collapse menu'}
-      className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl text-ink-muted transition-colors duration-200 hover:bg-surface-secondary hover:text-ink"
-    >
-      {collapsed ? <PanelLeftOpen className="h-[18px] w-[18px]" /> : <PanelLeftClose className="h-[18px] w-[18px]" />}
-    </button>
-  )
-
-  function selectAndClose(key: string) {
+  function go(key: string) {
     onSelect(key)
-    setMobileOpen(false)
+    setOpen(false)
   }
 
   return (
     <>
-      <header className="flex items-center justify-between border-b border-border bg-surface px-4 py-3 lg:hidden">
+      <header className="sticky top-0 z-30 flex h-14 flex-shrink-0 items-center gap-3 border-b border-border bg-surface px-4 sm:px-6">
         <button
-          onClick={() => setMobileOpen(true)}
-          className="rounded-full p-2 text-ink-muted transition-colors duration-200 hover:bg-surface-secondary hover:text-ink"
+          ref={menuButtonRef}
+          type="button"
+          onClick={() => setOpen(true)}
           aria-label="Open menu"
+          aria-expanded={open}
+          aria-controls="physio-nav-drawer"
+          className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg border border-border-strong text-ink-muted transition-colors duration-200 hover:bg-surface-secondary hover:text-ink"
         >
-          <Menu className="h-5 w-5" />
+          <Menu className="h-[18px] w-[18px]" />
         </button>
-        <Logo size="sm" />
-        <ThemeToggle />
+        <button type="button" onClick={() => go('roster')} aria-label="SmartPhysio home" className="flex-shrink-0">
+          <Logo size="sm" />
+        </button>
+        {pageName(active) && (
+          <nav aria-label="Breadcrumb" className="hidden min-w-0 items-center gap-2 text-[14px] sm:flex">
+            <span className="text-ink-faint">/</span>
+            {current && section !== active ? (
+              <>
+                <button type="button" onClick={() => go(section)} className="truncate text-ink-muted hover:text-ink hover:underline">
+                  {current.label}
+                </button>
+                <span className="text-ink-faint">/</span>
+                <span className="truncate font-semibold text-ink">{pageName(active)}</span>
+              </>
+            ) : (
+              <span className="truncate font-semibold text-ink">{pageName(active)}</span>
+            )}
+          </nav>
+        )}
+        <div className="ml-auto flex items-center gap-2">
+          <ThemeToggle />
+          <span title={`${name} · ${user?.email ?? ''}`}>
+            <Avatar name={name} className="h-8 w-8 text-[13px]" />
+          </span>
+        </div>
       </header>
 
-      {mobileOpen && (
-        <div className="fixed inset-0 z-40 lg:hidden">
-          <div className="absolute inset-0 bg-black/40" onClick={() => setMobileOpen(false)} />
-          <aside className="relative flex h-full w-72 max-w-[80vw] flex-col bg-surface px-4 py-6 shadow-ambient-lg">
-            <div className="flex items-center justify-between px-2">
-              <div>
-                <Logo size="sm" />
-                <p className="mt-1 pl-0.5 text-xs text-ink-faint">Physiotherapist Portal</p>
+      {open &&
+        createPortal(
+          <div className="fixed inset-0 z-40">
+            <div className="absolute inset-0 bg-black/40" onClick={() => setOpen(false)} />
+            <aside
+              id="physio-nav-drawer"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Main menu"
+              className="absolute inset-y-0 left-0 flex w-80 max-w-[85vw] flex-col bg-surface shadow-[var(--shadow-ambient-lg)]"
+            >
+              <div className="flex items-start justify-between px-5 pt-5">
+                <div>
+                  <Logo size="sm" />
+                  <p className="mt-1 pl-0.5 text-xs text-ink-faint">Physiotherapist Portal</p>
+                </div>
+                <button
+                  ref={closeButtonRef}
+                  type="button"
+                  onClick={() => setOpen(false)}
+                  aria-label="Close menu"
+                  className="flex h-9 w-9 items-center justify-center rounded-lg border border-border-strong text-ink-muted transition-colors duration-200 hover:bg-surface-secondary hover:text-ink"
+                >
+                  <X className="h-[18px] w-[18px]" />
+                </button>
               </div>
-              <button
-                onClick={() => setMobileOpen(false)}
-                className="rounded-full p-2 text-ink-muted transition-colors duration-200 hover:bg-surface-secondary hover:text-ink"
-                aria-label="Close menu"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <SidebarNav active={active} onSelect={selectAndClose} />
-            <SidebarFooter />
-          </aside>
-        </div>
-      )}
 
-      <aside
-        className={clsx(
-          'sticky top-0 hidden h-screen flex-shrink-0 flex-col border-r border-border bg-surface py-6 transition-[width] duration-200 lg:flex',
-          collapsed ? 'w-[72px] px-3' : 'w-64 px-4',
-        )}
-      >
-        {collapsed ? (
-          <div className="flex flex-col items-center gap-3">
-            {toggle}
-            <Logo size="sm" iconOnly />
-            <ThemeToggle />
-          </div>
-        ) : (
-          <div className="flex items-start justify-between gap-2">
-            <div className="flex min-w-0 items-start gap-2">
-              {toggle}
-              <div className="min-w-0 pt-1">
-                <Logo size="sm" />
-                <p className="mt-1 pl-0.5 text-xs text-ink-faint">Physiotherapist Portal</p>
+              <nav aria-label="Main" className="mt-6 flex flex-col gap-0.5 px-3">
+                {NAV_ITEMS.map(({ key, label, icon: Icon, hint }) => {
+                  const selected = key === section
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => go(key)}
+                      aria-current={selected ? 'page' : undefined}
+                      title={hint}
+                      className={clsx(
+                        'relative flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-[14px] transition-colors duration-150',
+                        selected ? 'bg-surface-secondary font-semibold text-ink' : 'text-ink-muted hover:bg-surface-secondary hover:text-ink',
+                      )}
+                    >
+                      {selected && <span className="absolute -left-3 top-1.5 bottom-1.5 w-1 rounded-r bg-accent" aria-hidden />}
+                      <Icon className="h-[18px] w-[18px] flex-shrink-0" strokeWidth={2} />
+                      {label}
+                    </button>
+                  )
+                })}
+              </nav>
+
+              <div className="mt-auto border-t border-border px-5 py-4">
+                <div className="flex items-center gap-3">
+                  <Avatar name={name} className="h-9 w-9 text-sm" />
+                  <div className="min-w-0 flex-1 text-sm leading-tight">
+                    <p className="truncate font-semibold text-ink">{name}</p>
+                    <p className="truncate text-xs text-ink-faint">{user?.email ?? 'physio@clinic.com'}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      signOut()
+                      navigate('/login')
+                    }}
+                    className="flex-shrink-0 rounded-full p-1.5 text-ink-faint transition-colors duration-200 hover:bg-surface-hover hover:text-crimson"
+                    aria-label="Sign out"
+                    title="Sign out"
+                  >
+                    <LogOut className="h-4 w-4" />
+                  </button>
+                </div>
               </div>
-            </div>
-            <ThemeToggle />
-          </div>
+            </aside>
+          </div>,
+          document.body,
         )}
-        <SidebarNav active={active} onSelect={onSelect} collapsed={collapsed} />
-        <SidebarFooter collapsed={collapsed} />
-      </aside>
     </>
   )
 }
