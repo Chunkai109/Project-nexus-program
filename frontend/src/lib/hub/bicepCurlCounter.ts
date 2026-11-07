@@ -3,7 +3,7 @@ export type CurlRepState = 'down' | 'curling' | 'top'
 export interface BicepCurlCounterResult {
   repCount: number
   repState: CurlRepState
-  /** True when the CURRENT sample's drift exceeds DRIFT_TOLERANCE from baseline -- live, not latched (see BicepCurlCounter.step()'s own comment on why an earlier latching version was a bug). */
+  /** True when the CURRENT sample's drift exceeds the drift tolerance from baseline -- live, not latched (see BicepCurlCounter.step()'s own comment on why an earlier latching version was a bug). */
   formCheatDetected: boolean
   /** abs(drift - baselineDrift) as of the last sample. */
   driftError: number
@@ -32,10 +32,11 @@ export interface BicepCurlCounterResult {
 // max contraction every time.
 const START_CURL_LIMIT = 35
 const CONTRACTION_LIMIT = 90
-// Degrees of upper-arm drift from baseline before the fault fires. Raised
-// from 15 after real-hardware testing showed natural upper-arm movement
-// during a clean curl tripping it too often.
-const DRIFT_TOLERANCE = 22
+// Default degrees of upper-arm drift from baseline before the fault fires.
+// Raised from 15 after real-hardware testing showed natural upper-arm
+// movement during a clean curl tripping it too often. Each patient plan can
+// set its own limit (Exercise.driftToleranceDeg) via setDriftTolerance().
+export const DEFAULT_DRIFT_TOLERANCE = 22
 const SETTLE_SAMPLES = 50
 
 /**
@@ -98,6 +99,12 @@ export class BicepCurlCounter {
   private formCheatDetected = false
   private latestFlex: number | null = null
   private latestDrift: number | null = null
+  private driftTolerance = DEFAULT_DRIFT_TOLERANCE
+
+  /** Degrees of upper-arm drift allowed before the fault fires (from the patient's plan). */
+  setDriftTolerance(deg: number) {
+    this.driftTolerance = deg
+  }
 
   /** Call whenever the flex pod (CURL_FLEX_POD_ID) reports a new reading. Returns the updated result once a drift reading has also been seen at least once, else null. */
   updateFlex(flex: number): BicepCurlCounterResult | null {
@@ -133,13 +140,13 @@ export class BicepCurlCounter {
     // sensor-noise spike anywhere during a rep's rise latched the fault ON
     // for the rest of that rep (through 'curling' and 'top') even after
     // drift had long since settled back down, well under tolerance. That's
-    // a real bug, not a tolerance-tuning issue: raising DRIFT_TOLERANCE
+    // a real bug, not a tolerance-tuning issue: raising the drift tolerance
     // made it a little harder to trip in the first place, but did nothing
     // about it never un-triggering mid-rep -- confirmed on real hardware by
     // the fault badge showing "+2° Over Baseline" (well under a 15°
     // tolerance) while still displaying as active.
     const driftError = Math.abs(drift - this.baselineDrift)
-    this.formCheatDetected = driftError > DRIFT_TOLERANCE
+    this.formCheatDetected = driftError > this.driftTolerance
 
     switch (this.repState) {
       case 'down':

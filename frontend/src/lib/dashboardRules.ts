@@ -9,9 +9,10 @@ export interface DashboardRules {
   /** A patient "needs attention" if their latest session hits any of these. */
   needsAttention: {
     goodFormBelowPct: number
-    goodFormDropPts: number
     driftFaultsAtLeast: number
   }
+  /** "Check camera" when the AI scored this share of the last session's reps or fewer. */
+  checkCameraScoredAtMost: number
   /** A patient is "inactive" after this many days with no session. */
   inactiveAfterDays: number
 }
@@ -20,9 +21,9 @@ export const PLACEHOLDER_RULES: DashboardRules = {
   goodFormVerdicts: ['Perfect'],
   needsAttention: {
     goodFormBelowPct: 60,
-    goodFormDropPts: 10,
     driftFaultsAtLeast: 3,
   },
+  checkCameraScoredAtMost: 0.5,
   inactiveAfterDays: 7,
 }
 

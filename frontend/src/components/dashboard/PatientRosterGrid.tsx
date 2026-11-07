@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { AlertTriangle, CheckCircle2, ChevronRight, Clock, HelpCircle, UserRound } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, ChevronRight, Circle, Clock, UserRound } from 'lucide-react'
 import { clsx } from 'clsx'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
@@ -7,23 +7,41 @@ import { useAppData } from '@/lib/data/AppDataContext'
 import { formatRelativeTime, hashColor } from '@/lib/formatRelativeTime'
 import { PLACEHOLDER_RULES, RULES_ARE_PLACEHOLDERS } from '@/lib/dashboardRules'
 import { historyFor, summarizePatient, type PatientStatus } from '@/lib/sessionStats'
+import { HoverExplain } from '@/components/ui/HoverExplain'
+import { DemoGoodFormChange } from './PlanTags'
 
-const STATUS: Record<PatientStatus, { label: string; icon: typeof CheckCircle2; className: string; order: number }> = {
+/** Status shown as icon + text (never colour alone). `dot` marks the ● statuses. */
+const STATUS: Record<PatientStatus, { label: string; icon: typeof CheckCircle2; className: string; order: number; dot?: boolean; explanation?: string }> = {
   'needs-attention': { label: 'Needs attention', icon: AlertTriangle, className: 'text-crimson', order: 0 },
-  inactive: { label: 'Inactive', icon: Clock, className: 'text-amber', order: 1 },
-  'not-scored': { label: 'Not scored', icon: HelpCircle, className: 'text-ink-muted', order: 2 },
+  'check-camera': {
+    label: 'Check camera',
+    icon: Circle,
+    dot: true,
+    className: 'text-amber',
+    order: 1,
+    explanation: "The camera or AI missed most reps, so form wasn't judged. Check the camera position before the next session.",
+  },
+  inactive: { label: 'Inactive', icon: Circle, dot: true, className: 'text-ink-muted', order: 2 },
   'on-track': { label: 'On track', icon: CheckCircle2, className: 'text-emerald', order: 3 },
-  'no-sessions': { label: 'No sessions yet', icon: Clock, className: 'text-ink-faint', order: 4 },
+  'no-sessions': { label: 'No sessions yet', icon: Clock, className: 'text-ink-muted', order: 4 },
 }
 
-function GoodFormCell({ pct, change }: { pct: number | null | undefined; change: number | null }) {
-  if (pct == null) return <span className="text-ink-faint">—</span>
+function GoodFormCell({ pct, unscored, change }: { pct: number | null | undefined; unscored: number; change: number | null }) {
+  if (pct == null) {
+    return (
+      <span className="block">
+        <span className="text-ink-muted">—</span>
+        {unscored > 0 && <span className="block text-[12px] text-ink-muted">The AI didn't score any reps</span>}
+      </span>
+    )
+  }
   return (
-    <span>
-      <span className="font-semibold text-ink">{pct}%</span>
-      {change !== null && change !== 0 && (
-        <span className={clsx('ml-1.5 text-[12px] font-medium', change > 0 ? 'text-emerald' : 'text-crimson')}>
-          {change > 0 ? '▲' : '▼'} {Math.abs(change)} {Math.abs(change) === 1 ? 'pt' : 'pts'}
+    <span className="block">
+      <span className="font-semibold tabular-nums text-ink">{pct}%</span>
+      <span className="block text-[12px] tabular-nums text-ink-muted">{unscored} not scored</span>
+      {change !== null && (
+        <span className="mt-0.5 block text-[12px]">
+          <DemoGoodFormChange change={change} />
         </span>
       )}
     </span>
@@ -61,7 +79,7 @@ export function PatientRosterGrid({ onSelectPatient }: { onSelectPatient?: (pati
     )
   }
 
-  const { goodFormBelowPct, goodFormDropPts, driftFaultsAtLeast } = PLACEHOLDER_RULES.needsAttention
+  const { goodFormBelowPct, driftFaultsAtLeast } = PLACEHOLDER_RULES.needsAttention
 
   return (
     <div>
@@ -102,11 +120,16 @@ export function PatientRosterGrid({ onSelectPatient }: { onSelectPatient?: (pati
               <ChevronRight className="h-4 w-4 text-ink-faint md:order-last" />
 
               <span className="col-span-2 md:col-span-1">
-                <span className={clsx('flex items-center gap-1.5 font-semibold', status.className)}>
-                  <Icon className="h-4 w-4 flex-shrink-0" />
-                  {status.label}
-                </span>
-                {summary.reasons.length > 0 && <span className="mt-0.5 block text-[12px] text-ink-faint">{summary.reasons.join(' · ')}</span>}
+                {(() => {
+                  const label = (
+                    <span className={clsx('flex items-center gap-1.5 font-semibold', status.className)}>
+                      <Icon className={clsx('flex-shrink-0', status.dot ? 'h-2.5 w-2.5 fill-current' : 'h-4 w-4')} aria-hidden />
+                      {status.label}
+                    </span>
+                  )
+                  return status.explanation ? <HoverExplain explanation={status.explanation}>{label}</HoverExplain> : label
+                })()}
+                {summary.reasons.length > 0 && <span className="mt-0.5 block text-[12px] text-ink-muted">{summary.reasons.join(' · ')}</span>}
               </span>
               <span className="col-span-2 text-ink-muted md:col-span-1">
                 <span className="text-ink-faint md:hidden">Last session: </span>
@@ -114,7 +137,11 @@ export function PatientRosterGrid({ onSelectPatient }: { onSelectPatient?: (pati
               </span>
               <span className="col-span-2 md:col-span-1">
                 <span className="text-ink-faint md:hidden">Good form: </span>
-                <GoodFormCell pct={summary.latest?.goodFormPct} change={summary.goodFormChange} />
+                <GoodFormCell
+                  pct={summary.latest?.goodFormPct}
+                  unscored={summary.latest?.unscored ?? 0}
+                  change={summary.demoGoodFormChange}
+                />
               </span>
               <span className="col-span-2 text-ink-muted md:col-span-1">
                 <span className="text-ink-faint md:hidden">Drift faults: </span>
@@ -127,9 +154,9 @@ export function PatientRosterGrid({ onSelectPatient }: { onSelectPatient?: (pati
       {RULES_ARE_PLACEHOLDERS && (
         <p className="mt-3 text-[12px] leading-relaxed text-ink-faint">
           <span className="font-medium text-amber">Placeholder rules</span> until a physiotherapist confirms them: <b>Needs attention</b>{' '}
-          if the last session's good form is under {goodFormBelowPct}%, dropped {goodFormDropPts}+ pts, or had {driftFaultsAtLeast}+ drift
-          faults. <b>Inactive</b> after {PLACEHOLDER_RULES.inactiveAfterDays} days without a session. Good form = reps the AI scored{' '}
-          {PLACEHOLDER_RULES.goodFormVerdicts.join(' or ')}.
+          if the last session had {driftFaultsAtLeast}+ drift faults or good form under {goodFormBelowPct}%. <b>Check camera</b> if the AI
+          scored half the reps or fewer. <b>Inactive</b> after {PLACEHOLDER_RULES.inactiveAfterDays} days without a session. Good form = reps
+          the AI scored {PLACEHOLDER_RULES.goodFormVerdicts.join(' or ')}, out of the reps it scored.
         </p>
       )}
     </div>

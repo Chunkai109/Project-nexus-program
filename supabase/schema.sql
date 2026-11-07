@@ -13,8 +13,9 @@
 --     Dashboard → Authentication → Users → Add user, then run
 --       select make_physio('physio@clinic.com', 'apex', 'Dr. Name');
 --     in this SQL Editor. That function can't be called from the app.
---   • Patients see only their own profile, sessions, and the exercises
---     assigned to them (or to everyone) in their practice.
+--   • Patients see only their own profile, sessions, and the exercise
+--     plans assigned to them. Presets (unassigned exercises) are for
+--     physios only.
 --   • Physios see the patients, sessions and exercises of their own
 --     practice, and manage exercises for that practice only.
 --   • Someone who isn't signed in sees nothing.
@@ -152,12 +153,36 @@ create table exercises (
   setup_instructions text not null default '',
   est_minutes integer not null,
   angle_configs jsonb not null default '[]',
+  -- null = a preset; set = that patient's own plan (only they see it).
   assigned_patient_id uuid references profiles (id) on delete set null,
-  created_at timestamptz not null default now()
+  -- The preset a patient plan was copied from (null once that preset is deleted).
+  based_on_preset_id uuid references exercises (id) on delete set null,
+  -- Upper-arm drift (degrees) allowed before the live drift fault fires.
+  drift_tolerance_deg integer not null default 22,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  -- The preset's updated_at when the plan was copied.
+  preset_snapshot_at timestamptz
 );
+
+-- Migration for a database created before per-patient plans. Run these
+-- instead of this whole file if you want to keep your existing data:
+--
+--   alter table exercises add column based_on_preset_id uuid references exercises (id) on delete set null;
+--   alter table exercises add column drift_tolerance_deg integer not null default 22;
+--   alter table exercises add column updated_at timestamptz not null default now();
+--   alter table exercises add column preset_snapshot_at timestamptz;
+--   update exercises set updated_at = created_at;
+--   -- Removing a plan must keep its past sessions:
+--   alter table sessions drop constraint sessions_exercise_id_fkey;
+--   -- Patients see only their own plans, not presets:
+--   drop policy "read practice exercises" on exercises;
+--   create policy "read practice exercises" on exercises for select to authenticated
+--     using (practice_id = public.my_practice() and (public.my_role() = 'physio' or assigned_patient_id = auth.uid()));
 
 create index exercises_practice_idx on exercises (practice_id);
 create index exercises_assigned_patient_id_idx on exercises (assigned_patient_id);
+create index exercises_based_on_preset_id_idx on exercises (based_on_preset_id);
 
 -- ---------------------------------------------------------------
 -- sessions — one completed live session.
@@ -168,7 +193,8 @@ create table sessions (
   id uuid primary key default gen_random_uuid(),
   patient_id uuid not null default auth.uid() references profiles (id) on delete cascade,
   patient_name text not null,
-  exercise_id uuid not null references exercises (id) on delete cascade,
+  -- No foreign key on purpose: removing a patient's plan keeps its past sessions.
+  exercise_id uuid not null,
   exercise_title text not null,
   completed_at timestamptz not null,
   duration_sec integer not null,
@@ -216,7 +242,6 @@ create policy "read practice exercises" on exercises
     practice_id = public.my_practice()
     and (
       public.my_role() = 'physio'
-      or assigned_patient_id is null
       or assigned_patient_id = auth.uid()
     )
   );

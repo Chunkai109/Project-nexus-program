@@ -16,7 +16,8 @@ export function PatientExercises() {
   const { exercises, patients } = useAppData()
   const myPatientId = patients.find((p) => p.email === user?.email)?.id
   const visibleExercises = useMemo(
-    () => exercises.filter((ex) => ex.assignedPatientId == null || ex.assignedPatientId === myPatientId),
+    // Only plans made for this patient. Presets are physio-only.
+    () => (myPatientId ? exercises.filter((ex) => ex.assignedPatientId === myPatientId) : []),
     [exercises, myPatientId],
   )
 
@@ -32,7 +33,7 @@ export function PatientExercises() {
             <h1 className="text-[28px] font-semibold tracking-tight text-ink">Prescribed Exercises</h1>
             <p className="mt-1.5 text-[15px] text-ink-muted">
               {visibleExercises.length === 0
-                ? 'Your physiotherapist hasn\'t published any protocols yet.'
+                ? "Your physiotherapist hasn't assigned an exercise yet."
                 : `Your physiotherapist has assigned ${visibleExercises.length} protocol${visibleExercises.length === 1 ? '' : 's'} for this week.`}
             </p>
           </div>
@@ -46,7 +47,7 @@ export function PatientExercises() {
             <CalendarClock className="h-8 w-8 text-ink-faint" />
             <p className="text-[15px] font-medium text-ink">No exercises assigned yet</p>
             <p className="max-w-sm text-[13px] text-ink-faint">
-              Once your physiotherapist creates a protocol in their dashboard, it will appear here automatically.
+              Your physiotherapist hasn't assigned an exercise yet. It will appear here as soon as they do.
             </p>
           </Card>
         ) : (

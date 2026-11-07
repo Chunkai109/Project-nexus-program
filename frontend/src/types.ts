@@ -56,9 +56,20 @@ export interface Exercise {
   estMinutes: number
   /** Every angle confirmed for this exercise; the first is the primary pair a live session tracks. */
   angleConfigs: AngleConfig[]
-  /** Patient this exercise is assigned to, or null to assign it to every patient. */
+  /**
+   * null = a preset (a general exercise in the Exercise Creator).
+   * Set = a patient plan: this patient's own copy, the only exercises a patient sees.
+   */
   assignedPatientId: string | null
+  /** The preset a patient plan was copied from. null for presets, for plans made without one, and once that preset is deleted. */
+  basedOnPresetId: string | null
+  /** Upper-arm drift (degrees from baseline) allowed before the live drift fault fires. Default 22. */
+  driftToleranceDeg: number
   createdAt: number
+  /** Set on every save. */
+  updatedAt: number
+  /** The preset's updatedAt when this plan was copied, to tell if the preset changed since. null when not made from a preset. */
+  presetSnapshotAt: number | null
 }
 
 export interface SessionMetrics {

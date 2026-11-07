@@ -2,7 +2,8 @@ import type { AngleConfig, Exercise, PatientRecord, RepSample, SessionRecord } f
 import { normalizeMuscleEmgTargets, type LegacyMuscleEmgTarget } from '@/lib/muscles'
 
 /** Defined here (not in AppDataContext, which imports this file) to avoid a circular import; re-exported from AppDataContext for existing callers. */
-export type NewExercise = Omit<Exercise, 'id' | 'createdAt'>
+/** The editable fields of an exercise. Ids, timestamps and preset links are set by AppDataContext. */
+export type NewExercise = Omit<Exercise, 'id' | 'createdAt' | 'updatedAt' | 'basedOnPresetId' | 'presetSnapshotAt'>
 export type NewSessionRecord = Omit<SessionRecord, 'id'>
 
 /** Row shapes as they exist in Postgres (snake_case) — see supabase/schema.sql. */
@@ -27,7 +28,11 @@ export interface ExerciseRow {
   est_minutes: number
   angle_configs: AngleConfig[]
   assigned_patient_id: string | null
+  based_on_preset_id: string | null
+  drift_tolerance_deg: number | null
   created_at: string
+  updated_at: string | null
+  preset_snapshot_at: string | null
 }
 
 export interface SessionRow {
@@ -66,7 +71,12 @@ export function exerciseFromRow(row: ExerciseRow): Exercise {
     estMinutes: row.est_minutes,
     angleConfigs: row.angle_configs,
     assignedPatientId: row.assigned_patient_id,
+    basedOnPresetId: row.based_on_preset_id ?? null,
+    driftToleranceDeg: row.drift_tolerance_deg ?? 22,
     createdAt: new Date(row.created_at).getTime(),
+    // Columns may be missing until the migration in supabase/schema.sql has been run.
+    updatedAt: new Date(row.updated_at ?? row.created_at).getTime(),
+    presetSnapshotAt: row.preset_snapshot_at ? new Date(row.preset_snapshot_at).getTime() : null,
   }
 }
 
@@ -86,7 +96,7 @@ export function sessionFromRow(row: SessionRow): SessionRecord {
 }
 
 /** Columns derived from a NewExercise patch, shared by insert and update payloads. */
-export function exercisePatchToRow(patch: NewExercise) {
+export function exercisePatchToRow(patch: NewExercise, updatedAt: number) {
   return {
     title: patch.title,
     muscle_groups: patch.muscleGroups,
@@ -98,6 +108,8 @@ export function exercisePatchToRow(patch: NewExercise) {
     est_minutes: patch.estMinutes,
     angle_configs: patch.angleConfigs,
     assigned_patient_id: patch.assignedPatientId,
+    drift_tolerance_deg: patch.driftToleranceDeg,
+    updated_at: new Date(updatedAt).toISOString(),
   }
 }
 
@@ -105,7 +117,9 @@ export function exerciseToRow(exercise: Exercise) {
   return {
     id: exercise.id,
     created_at: new Date(exercise.createdAt).toISOString(),
-    ...exercisePatchToRow(exercise),
+    based_on_preset_id: exercise.basedOnPresetId,
+    preset_snapshot_at: exercise.presetSnapshotAt === null ? null : new Date(exercise.presetSnapshotAt).toISOString(),
+    ...exercisePatchToRow(exercise, exercise.updatedAt),
   }
 }
 

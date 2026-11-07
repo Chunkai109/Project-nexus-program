@@ -1,5 +1,5 @@
 import { useState, type Dispatch, type SetStateAction } from 'react'
-import { ArrowLeft, ArrowRight, Bold, Check, ChevronDown, Italic, List, Save, X } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, ArrowRight, Bold, Check, ChevronDown, Italic, List, Loader2, Save, X } from 'lucide-react'
 import { clsx } from 'clsx'
 import { Button } from '@/components/ui/Button'
 import { Breadcrumb } from '@/components/ui/Breadcrumb'
@@ -12,8 +12,9 @@ import { MuscleGroupPicker } from '@/components/body/MuscleGroupPicker'
 import { JOINT_PRESETS, jointPresetForPair } from '@/lib/joints'
 import { MUSCLE_GROUPS, muscleLabel } from '@/lib/muscles'
 import { podLabel } from '@/lib/podUtils'
-import type { ExerciseFormState } from '@/lib/useExerciseForm'
-import type { AngleConfig, PatientRecord } from '@/types'
+import { DRIFT_LIMIT_MAX, DRIFT_LIMIT_MIN, DRIFT_LIMIT_WARN_BELOW, parseDriftLimit, type ExerciseFormState } from '@/lib/useExerciseForm'
+import { NotUsedYetTag } from './PlanTags'
+import type { AngleConfig, Exercise } from '@/types'
 
 const MUSCLE_TAGS = MUSCLE_GROUPS.map((g) => g.label)
 
@@ -23,6 +24,65 @@ const fieldClass =
 const WIZARD_STEPS = [{ label: 'Basics' }, { label: 'Angle Configuration' }, { label: 'EMG Activation' }]
 
 type WizardStep = 'basics' | 'angles' | 'emg'
+
+/** 'preset' = a general exercise in the Exercise Creator; 'patientPlan' = one patient's own copy. */
+export type ExerciseFormMode = 'preset' | 'patientPlan'
+
+function clip(text: string): string {
+  const t = text.trim()
+  if (!t) return '—'
+  return t.length > 40 ? `${t.slice(0, 40)}…` : t
+}
+
+/** Grey "Preset: 10" line under a patient-plan field that differs from its preset. */
+function PresetHint({ show, value }: { show: boolean; value: string | number }) {
+  if (!show) return null
+  return <p className="mt-1.5 text-[12px] text-ink-muted">Preset: {value}</p>
+}
+
+/** Upper-arm drift limit: whole degrees, 1–90, with a warning (not a block) below 20°. */
+function DriftLimitField({ value, onChange, presetValue }: { value: string; onChange: (v: string) => void; presetValue?: number }) {
+  const parsed = parseDriftLimit(value)
+  const invalid = parsed === null
+  const low = parsed !== null && parsed < DRIFT_LIMIT_WARN_BELOW
+  return (
+    <div className="mt-6 rounded-xl bg-surface-secondary p-4">
+      <label htmlFor="drift-limit" className="mb-2 block text-[13px] font-medium text-ink-muted">
+        Upper-arm drift limit
+      </label>
+      <div className="flex w-32 items-center gap-2">
+        <input
+          id="drift-limit"
+          type="text"
+          inputMode="numeric"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          aria-invalid={invalid}
+          aria-describedby="drift-limit-help drift-limit-msg"
+          className={clsx(fieldClass, 'bg-surface tabular-nums', invalid && 'ring-crimson/60')}
+        />
+        <span className="text-[14px] text-ink-muted">°</span>
+      </div>
+      <p id="drift-limit-help" className="mt-2 text-[12px] text-ink-muted">
+        Upper-arm movement from 0° to this value is allowed. The fault fires above it.
+      </p>
+      <PresetHint show={presetValue !== undefined && parsed !== presetValue} value={`${presetValue}°`} />
+      <div id="drift-limit-msg" aria-live="polite">
+        {invalid && (
+          <p className="mt-2 text-[12px] font-medium text-crimson">
+            Enter a whole number of degrees between {DRIFT_LIMIT_MIN} and {DRIFT_LIMIT_MAX}.
+          </p>
+        )}
+        {low && (
+          <p className="mt-2 flex items-center gap-1.5 text-[12px] font-medium text-amber">
+            <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
+            Below {DRIFT_LIMIT_WARN_BELOW}° fired on normal movement in rig testing.
+          </p>
+        )}
+      </div>
+    </div>
+  )
+}
 
 /**
  * A 3-step wizard behind creating or fine-tuning an exercise — basics, then
@@ -34,7 +94,10 @@ type WizardStep = 'basics' | 'angles' | 'emg'
 export function ExerciseFormFields({
   form,
   setForm,
-  patients,
+  mode = 'preset',
+  compareTo,
+  saving = false,
+  saveError,
   toggleTag,
   selectDraftJoint,
   draftValid,
@@ -53,7 +116,11 @@ export function ExerciseFormFields({
 }: {
   form: ExerciseFormState
   setForm: Dispatch<SetStateAction<ExerciseFormState>>
-  patients: PatientRecord[]
+  mode?: ExerciseFormMode
+  /** patientPlan mode: the preset this plan came from, to show "Preset: …" under changed fields. */
+  compareTo?: Exercise | null
+  saving?: boolean
+  saveError?: string | null
   toggleTag: (tag: string) => void
   selectDraftJoint: (jointId: string) => void
   draftValid: boolean
@@ -73,10 +140,14 @@ export function ExerciseFormFields({
   const [step, setStep] = useState<WizardStep>('basics')
   const stepIndex = step === 'basics' ? 0 : step === 'angles' ? 1 : 2
   const draftJoint = JOINT_PRESETS.find((p) => p.id === form.draftJointId)
+  const loadedConfig = draftJoint ? undefined : form.angleConfigs.find((c) => c.id === form.draftConfigId)
+  const draftLabel = draftJoint ? draftJoint.label : loadedConfig ? `${podLabel(loadedConfig.nodeA)} ↔ ${podLabel(loadedConfig.nodeB)}` : null
   const confirmedJointIds = new Set(
     form.angleConfigs.map((c) => jointPresetForPair(c.nodeA, c.nodeB)?.id).filter((id): id is string => id != null),
   )
   const draftGroup = MUSCLE_GROUPS.find((g) => g.id === form.draftMuscleGroupId)
+  const isPlan = mode === 'patientPlan'
+  const preset = isPlan ? (compareTo ?? null) : null
 
   return (
     <div>
@@ -95,32 +166,6 @@ export function ExerciseFormFields({
                     placeholder="e.g. Bilateral Squat Rehab"
                     className={fieldClass}
                   />
-                </label>
-              </HoverExplain>
-
-              <HoverExplain explanation="Restrict this exercise to one patient, or leave as All Patients so everyone who signs in sees it.">
-                <label className="block">
-                  <span className="mb-2 block text-[13px] font-medium text-ink-muted">Assign to Patient</span>
-                  <div className="relative">
-                    <select
-                      value={form.assignedPatientId ?? ''}
-                      onChange={(e) => setForm((f) => ({ ...f, assignedPatientId: e.target.value || null }))}
-                      className={clsx(fieldClass, 'appearance-none pr-9')}
-                    >
-                      <option value="">All Patients</option>
-                      {patients.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.name} · {p.email}
-                        </option>
-                      ))}
-                    </select>
-                    <ChevronDown className="pointer-events-none absolute right-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-faint" />
-                  </div>
-                  {patients.length === 0 && (
-                    <p className="mt-1.5 text-[12px] text-ink-faint">
-                      No patients have signed in yet — this exercise will be visible to whoever signs in until you assign it.
-                    </p>
-                  )}
                 </label>
               </HoverExplain>
 
@@ -160,6 +205,7 @@ export function ExerciseFormFields({
                       onChange={(e) => setForm((f) => ({ ...f, sets: Number(e.target.value) }))}
                       className={fieldClass}
                     />
+                    <PresetHint show={!!preset && form.sets !== preset.sets} value={preset?.sets ?? ''} />
                   </label>
                 </HoverExplain>
                 <HoverExplain explanation="Number of reps per set the patient should complete.">
@@ -172,6 +218,7 @@ export function ExerciseFormFields({
                       onChange={(e) => setForm((f) => ({ ...f, reps: Number(e.target.value) }))}
                       className={fieldClass}
                     />
+                    <PresetHint show={!!preset && form.reps !== preset.reps} value={preset?.reps ?? ''} />
                   </label>
                 </HoverExplain>
                 <HoverExplain explanation="Estimated time to complete this exercise, shown to the patient before they start.">
@@ -184,6 +231,7 @@ export function ExerciseFormFields({
                       onChange={(e) => setForm((f) => ({ ...f, estMinutes: Number(e.target.value) }))}
                       className={fieldClass}
                     />
+                    <PresetHint show={!!preset && form.estMinutes !== preset.estMinutes} value={preset?.estMinutes ?? ''} />
                   </label>
                 </HoverExplain>
               </div>
@@ -199,6 +247,10 @@ export function ExerciseFormFields({
                     rows={4}
                     className={clsx(fieldClass, 'resize-none')}
                     placeholder="e.g. Focus on symmetric weight distribution."
+                  />
+                  <PresetHint
+                    show={!!preset && form.therapistNote.trim() !== preset.therapistNote.trim()}
+                    value={clip(preset?.therapistNote ?? '')}
                   />
                 </label>
               </HoverExplain>
@@ -228,6 +280,10 @@ export function ExerciseFormFields({
                     />
                   </HoverExplain>
                 </div>
+                <PresetHint
+                  show={!!preset && form.setupInstructions.trim() !== preset.setupInstructions.trim()}
+                  value={clip(preset?.setupInstructions ?? '')}
+                />
               </label>
             </div>
           </div>
@@ -255,8 +311,8 @@ export function ExerciseFormFields({
                 height={280}
               />
               <div className="mt-4 text-center text-[13px]">
-                {!draftJoint && <span className="text-ink-faint">No joint selected yet</span>}
-                {draftJoint && <span className="font-medium text-accent">{draftJoint.label} selected</span>}
+                {!draftLabel && <span className="text-ink-faint">No joint selected yet</span>}
+                {draftLabel && <span className="font-medium text-accent">{draftLabel} selected</span>}
               </div>
             </div>
 
@@ -268,7 +324,7 @@ export function ExerciseFormFields({
                 max={180}
                 targetMin={form.draftMin}
                 targetMax={form.draftMax}
-                label={draftJoint ? draftJoint.label : 'Select a joint to preview'}
+                label={draftLabel ?? 'Select a joint to preview'}
                 size={160}
               />
               <HoverExplain
@@ -293,7 +349,16 @@ export function ExerciseFormFields({
               >
                 <div className="w-full">
                   <Slider
-                    label="Fault Angle Threshold"
+                    label={
+                      isPlan ? (
+                        <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                          <span className="whitespace-nowrap">Fault Angle Threshold</span>
+                          <NotUsedYetTag />
+                        </span>
+                      ) : (
+                        'Fault Angle Threshold'
+                      )
+                    }
                     value={form.draftFaultThresholdDeg}
                     min={1}
                     max={30}
@@ -359,6 +424,11 @@ export function ExerciseFormFields({
                 A live skeleton segment turns <span className="font-medium text-crimson">red</span> when deviation exceeds each
                 confirmed angle's own fault threshold.
               </div>
+              <DriftLimitField
+                value={form.driftToleranceInput}
+                onChange={(v) => setForm((f) => ({ ...f, driftToleranceInput: v }))}
+                presetValue={preset?.driftToleranceDeg}
+              />
             </div>
           </div>
         )}
@@ -386,9 +456,10 @@ export function ExerciseFormFields({
             </div>
 
             <div className="flex flex-col items-center gap-2 rounded-xl bg-surface-secondary p-6">
-              <p className="mb-1 self-start text-[11px] font-semibold uppercase tracking-wide text-ink-faint">
-                Target EMG Activation
-              </p>
+              <div className="mb-1 flex items-center gap-2 self-start">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-ink-faint">Target EMG Activation</p>
+                {isPlan && <NotUsedYetTag />}
+              </div>
               {draftGroup ? (
                 <>
                   <HoverExplain className="w-full" explanation="Choose which specific muscle (within the selected group) to set a target activation for.">
@@ -490,7 +561,12 @@ export function ExerciseFormFields({
         )}
       </div>
 
-      <div className="mt-8 flex items-center justify-between border-t border-border pt-6">
+      {saveError && (
+        <p role="alert" className="mt-8 rounded-lg bg-crimson/10 px-4 py-3 text-[13px] font-medium text-crimson">
+          {saveError}
+        </p>
+      )}
+      <div className={clsx('flex items-center justify-between border-t border-border pt-6', saveError ? 'mt-4' : 'mt-8')}>
         <div>
           {step !== 'basics' && (
             <HoverExplain explanation="Return to the previous step without losing what you've entered.">
@@ -503,8 +579,8 @@ export function ExerciseFormFields({
         </div>
         <div className="flex gap-2">
           {onCancel && (
-            <HoverExplain explanation="Discard this exercise and return to the Exercise Protocols list.">
-              <Button variant="ghost" size="sm" onClick={onCancel}>
+            <HoverExplain explanation={isPlan ? 'Close the editor without saving.' : 'Discard this exercise and return to the Exercise Protocols list.'}>
+              <Button variant="ghost" size="sm" onClick={onCancel} disabled={saving}>
                 <X className="h-3.5 w-3.5" />
                 Cancel
               </Button>
@@ -512,15 +588,20 @@ export function ExerciseFormFields({
           )}
           {step !== 'emg' ? (
             <HoverExplain explanation="Continue to the next step of the wizard.">
-              <Button size="sm" onClick={() => setStep(step === 'basics' ? 'angles' : 'emg')} disabled={step === 'basics' && !form.title.trim()}>
+              <Button size="sm" onClick={() => setStep(step === 'basics' ? 'angles' : 'emg')} disabled={
+                  (step === 'basics' && !form.title.trim()) || (step === 'angles' && parseDriftLimit(form.driftToleranceInput) === null)
+                }
+              >
                 Next
                 <ArrowRight className="h-3.5 w-3.5" />
               </Button>
             </HoverExplain>
           ) : (
-            <HoverExplain explanation="Save this exercise so it appears on the patient's exercise list immediately.">
-              <Button size="sm" onClick={onSave} disabled={!canSave}>
-                <Save className="h-3.5 w-3.5" />
+            <HoverExplain
+              explanation={isPlan ? "Save this plan so it appears on the patient's exercise list." : 'Save this preset. Patients only see it once you add it to their Exercise plan.'}
+            >
+              <Button size="sm" onClick={onSave} disabled={!canSave || saving} aria-busy={saving}>
+                {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
                 {saveLabel}
               </Button>
             </HoverExplain>

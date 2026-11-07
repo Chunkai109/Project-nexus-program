@@ -16,7 +16,7 @@ import { useAppData } from '@/lib/data/AppDataContext'
 import { useAuth } from '@/lib/AuthContext'
 import { muscleEmgTarget } from '@/lib/muscles'
 import { useSensorHub } from '@/lib/hub/HubProvider'
-import { CURL_DRIFT_POD_ID, CURL_FLEX_POD_ID, EXTENSION_LIMIT, POD_HAPTIC_FORM } from '@/lib/hub/bicepCurlCounter'
+import { CURL_DRIFT_POD_ID, CURL_FLEX_POD_ID, DEFAULT_DRIFT_TOLERANCE, EXTENSION_LIMIT, POD_HAPTIC_FORM } from '@/lib/hub/bicepCurlCounter'
 import type { PodId } from '@/lib/hub/protocol'
 import { predictVisionForm, predictFusedForm, MIN_VISION_FRAMES, type VisionPrediction, type FusedPrediction } from '@/lib/visionModel'
 import type { RepSample } from '@/types'
@@ -90,6 +90,14 @@ export function LiveSession() {
   const hub = useSensorHub()
 
   const primaryAngle = exercise?.angleConfigs[0] ?? null
+
+  // This plan's upper-arm drift limit drives the live drift fault; back to the default when the session ends or this page closes.
+  const driftToleranceDeg = exercise?.driftToleranceDeg ?? DEFAULT_DRIFT_TOLERANCE
+  const { setDriftTolerance } = hub
+  useEffect(() => {
+    setDriftTolerance(driftToleranceDeg)
+    return () => setDriftTolerance(DEFAULT_DRIFT_TOLERANCE)
+  }, [setDriftTolerance, driftToleranceDeg])
 
   const simulated = useSensorStream(!ending, primaryAngle?.targetMin ?? null, primaryAngle?.targetMax ?? null)
   const squatDepth = Math.max(0, Math.min(1, 1 - (simulated.kneeFlexionDeg - 70) / 60))
@@ -355,6 +363,7 @@ export function LiveSession() {
 
   function handleEnd() {
     setEnding(true)
+    setDriftTolerance(DEFAULT_DRIFT_TOLERANCE)
     if (!exercise) return
     const patient = patients.find((p) => p.email === user?.email)
     const session =

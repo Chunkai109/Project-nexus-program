@@ -3,7 +3,8 @@ import { Card } from '@/components/ui/Card'
 import { HoverExplain } from '@/components/ui/HoverExplain'
 import { formatRelativeTime } from '@/lib/formatRelativeTime'
 import { PLACEHOLDER_RULES, RULES_ARE_PLACEHOLDERS } from '@/lib/dashboardRules'
-import type { SessionStats } from '@/lib/sessionStats'
+import { demoGoodFormChange, type SessionStats } from '@/lib/sessionStats'
+import { DemoGoodFormChange } from './PlanTags'
 
 type Better = 'higher' | 'lower'
 
@@ -28,9 +29,9 @@ function HeadlineCard({ label, value, change, detail, explanation }: { label: st
     <HoverExplain explanation={explanation}>
       <Card className="flex h-full flex-col p-5">
         <p className="text-[13px] font-medium text-ink-muted">{label}</p>
-        <p className="mt-1.5 text-[30px] font-semibold leading-none tracking-tight text-ink">{value}</p>
-        <p className="mt-2.5 text-[12px]">{change}</p>
-        <p className="mt-auto pt-2 text-[11px] text-ink-faint">{detail}</p>
+        <p className="mt-1.5 text-[30px] font-semibold leading-none tracking-tight tabular-nums text-ink">{value}</p>
+        <div className="mt-2.5 text-[12px]">{change}</div>
+        <p className="mt-auto pt-2 text-[12px] tabular-nums text-ink-muted">{detail}</p>
       </Card>
     </HoverExplain>
   )
@@ -45,8 +46,20 @@ export function HeadlineCards({ latest, previous, sessionCount }: { latest: Sess
         <HeadlineCard
           label="Good-form reps"
           value={latest.goodFormPct === null ? '—' : `${latest.goodFormPct}%`}
-          change={<Change current={latest.goodFormPct} previous={prev?.goodFormPct} unit="pts" better="higher" />}
-          detail={`AI scored ${latest.aiScored} of ${latest.totalReps} reps`}
+          change={
+            latest.goodFormPct === null ? (
+              <span className="text-ink-muted">No comparison</span>
+            ) : !previous ? (
+              <span className="text-ink-faint">First session</span>
+            ) : (
+              <DemoGoodFormChange change={demoGoodFormChange(latest.session.patientId, latest.session.id)} />
+            )
+          }
+          detail={
+            latest.aiScored === 0
+              ? "The AI didn't score any reps"
+              : `${latest.goodForm} ${goodFormLabel} of ${latest.aiScored} scored reps · ${latest.unscored} of ${latest.totalReps} not scored`
+          }
           explanation={`Share of the AI-scored reps in the last session that the AI rated ${goodFormLabel}. Reps the AI didn't score are left out.`}
         />
         <HeadlineCard
@@ -68,13 +81,13 @@ export function HeadlineCards({ latest, previous, sessionCount }: { latest: Sess
           value={String(sessionCount)}
           change={<span className="text-ink-faint">Last session {formatRelativeTime(latest.session.completedAt)}</span>}
           detail={latest.session.exerciseTitle}
-          explanation="Completed sessions on record for this patient."
+          explanation="Completed sessions of this exercise on record for this patient."
         />
       </div>
       {RULES_ARE_PLACEHOLDERS && (
         <p className="mt-3 text-[12px] text-ink-faint">
-          <span className="font-medium text-amber">Placeholder rule:</span> good form = reps the AI scored {goodFormLabel}, until a
-          physiotherapist confirms the rule.
+          <span className="font-medium text-amber">Placeholder rule:</span> good form = reps the AI scored {goodFormLabel}, out of the reps
+          it scored, until a physiotherapist confirms the rule.
         </p>
       )}
     </div>

@@ -16,6 +16,8 @@ export function ProgressChart({ stats, height = 240 }: { stats: SessionStats[]; 
     label: shortDate(s.session.completedAt),
     exercise: s.session.exerciseTitle,
     goodFormPct: s.goodFormPct,
+    scored: s.aiScored,
+    unscored: s.unscored,
     inRangePct: s.inRangePct,
   }))
 
@@ -50,7 +52,12 @@ export function ProgressChart({ stats, height = 240 }: { stats: SessionStats[]; 
             const exercise = (items?.[0]?.payload as { exercise?: string } | undefined)?.exercise
             return exercise ? `${label} · ${exercise}` : String(label)
           }}
-          formatter={(value, name) => [value == null ? 'No AI verdicts' : `${value}%`, name]}
+          formatter={(value, name, item) => {
+            if (name !== 'Good form') return [`${value}%`, name]
+            const p = item.payload as { scored: number; unscored: number }
+            const basis = `Based on ${p.scored} scored reps · ${p.unscored} not scored`
+            return [value == null ? `No AI verdicts (${basis})` : `${value}% (${basis})`, name]
+          }}
         />
         {SERIES.map((s) => (
           <Line

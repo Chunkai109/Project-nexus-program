@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { PageShell } from '@/components/layout/PageShell'
 import { PhysioSidebar } from '@/components/layout/PhysioSidebar'
 import { ProtocolBuilder } from '@/components/dashboard/ProtocolBuilder'
@@ -18,6 +19,16 @@ export function TherapistDashboard() {
   const [selectedPatientId, setSelectedPatientId] = useState<string | undefined>()
   const [selectedExerciseId, setSelectedExerciseId] = useState<string | undefined>()
   const [pendingDeleteExercise, setPendingDeleteExercise] = useState(false)
+  // Set while a patient plan editor has unsaved changes; leaving the patient page asks first.
+  const planDirtyRef = useRef(false)
+  const [pendingTab, setPendingTab] = useState<string | null>(null)
+  const handlePlanDirty = useCallback((dirty: boolean) => {
+    planDirtyRef.current = dirty
+  }, [])
+  function goToTab(next: string) {
+    if (tab === 'analytics' && next !== 'analytics' && planDirtyRef.current) setPendingTab(next)
+    else setTab(next)
+  }
 
   function openPatientAnalytics(patientId: string) {
     setSelectedPatientId(patientId)
@@ -46,7 +57,7 @@ export function TherapistDashboard() {
 
   return (
     <PageShell className="flex flex-col lg:flex-row">
-      <PhysioSidebar active={tab} onSelect={setTab} />
+      <PhysioSidebar active={tab} onSelect={goToTab} />
 
       <main className="scroll-slim flex-1 overflow-y-auto px-4 py-6 sm:px-6 sm:py-8 lg:px-10 lg:py-10">
         {tab === 'roster' && (
@@ -94,7 +105,7 @@ export function TherapistDashboard() {
                       Cancel
                     </Button>
                   </HoverExplain>
-                  <HoverExplain explanation="Permanently delete this exercise. Patients it's assigned to will no longer see it.">
+                  <HoverExplain explanation="Permanently delete this preset. Patient plans copied from it stay as they are.">
                     <Button variant="danger" size="sm" onClick={confirmDeleteExercise}>
                       <Trash2 className="h-3.5 w-3.5" />
                       Delete
@@ -103,7 +114,7 @@ export function TherapistDashboard() {
                 </div>
               ) : (
                 <div className="flex items-center gap-2">
-                  <HoverExplain explanation="Open this exercise's fields to change its thresholds, targets, or assignment.">
+                  <HoverExplain explanation="Open this preset's fields to change its thresholds or targets. Patient plans copied from it don't change.">
                     <Button size="sm" onClick={() => openExerciseFineTune(selectedExerciseId)}>
                       <Pencil className="h-3.5 w-3.5" />
                       Edit Exercise
@@ -147,16 +158,21 @@ export function TherapistDashboard() {
         {tab === 'analytics' && (
           <>
             <HoverExplain explanation="Return to the Patient Roster list." className="mb-6">
-              <Button variant="ghost" size="sm" onClick={() => setTab('roster')}>
+              <Button variant="ghost" size="sm" onClick={() => goToTab('roster')}>
                 <ArrowLeft className="h-3.5 w-3.5" />
                 Back to Patient Roster
               </Button>
             </HoverExplain>
             <div className="mb-10">
-              <h1 className="text-[28px] font-semibold tracking-tight text-ink">Session Analytics</h1>
-              <p className="mt-1.5 text-[15px] text-ink-muted">Deep-dive into a single patient's telemetry history.</p>
+              <h1 className="text-[28px] font-semibold tracking-tight text-ink">Patient</h1>
+              <p className="mt-1.5 text-[15px] text-ink-muted">Progress and the exercise plan for one patient.</p>
             </div>
-            <TelemetrySection key={selectedPatientId} initialPatientId={selectedPatientId} />
+            <TelemetrySection
+              key={selectedPatientId}
+              initialPatientId={selectedPatientId}
+              onDirtyChange={handlePlanDirty}
+              onOpenCreator={() => goToTab('creator')}
+            />
           </>
         )}
 
@@ -173,6 +189,19 @@ export function TherapistDashboard() {
           </>
         )}
       </main>
+      <ConfirmDialog
+        open={pendingTab !== null}
+        message="Discard unsaved changes?"
+        cancelLabel="Keep editing"
+        confirmLabel="Discard"
+        danger
+        onCancel={() => setPendingTab(null)}
+        onConfirm={() => {
+          planDirtyRef.current = false
+          if (pendingTab) setTab(pendingTab)
+          setPendingTab(null)
+        }}
+      />
     </PageShell>
   )
 }

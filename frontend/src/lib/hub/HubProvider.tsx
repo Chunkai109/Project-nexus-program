@@ -3,6 +3,7 @@ import { isWebSocketSupported, SmartPhysioSocketClient, type HubConnectionState 
 import { DEFAULT_HUB_WS_URL, emgActivationPercent, type PodId, type SignalLevel } from './protocol'
 import {
   BicepCurlCounter,
+  DEFAULT_DRIFT_TOLERANCE,
   createInitialBicepCurlResult,
   CURL_DRIFT_POD_ID,
   CURL_FLEX_POD_ID,
@@ -36,6 +37,8 @@ interface HubValue {
   connect: (url?: string) => Promise<void>
   disconnect: () => void
   sendHaptic: (podId: PodId, durationMs: number) => Promise<void>
+  /** Degrees of upper-arm drift allowed before the drift fault fires. Kept across reconnects. */
+  setDriftTolerance: (deg: number) => void
   /** Sets the per-pod EMG baseline/MVC captured by the calibration routine; subsequent "emg" messages for that pod are normalized against it. */
   setCalibration: (podId: PodId, calibration: EmgCalibration) => void
   /** Live rep count/state from the bicep-curl rig's flex+drift pods (see bicepCurlCounter.ts). Stays at its initial zero state until both pods have reported at least once. */
@@ -56,6 +59,8 @@ export function HubProvider({ children }: { children: ReactNode }) {
   // Stepped synchronously inside onImu below, not from a React effect keyed
   // on rendered pod state — see bicepCurlCounter.ts for why that matters.
   const curlCounterRef = useRef(new BicepCurlCounter())
+  // Re-applied to every new counter (they're recreated on disconnect).
+  const driftToleranceRef = useRef(DEFAULT_DRIFT_TOLERANCE)
   // Same reasoning as curlCounterRef — see imuFlexDriftRecorder.ts.
   const flexDriftRecorderRef = useRef(new ImuFlexDriftRecorder())
   const clientRef = useRef<SmartPhysioSocketClient | null>(null)
@@ -74,6 +79,7 @@ export function HubProvider({ children }: { children: ReactNode }) {
           if (state === 'disconnected' || state === 'error') {
             setPods({})
             curlCounterRef.current = new BicepCurlCounter()
+            curlCounterRef.current.setDriftTolerance(driftToleranceRef.current)
             setCurl(createInitialBicepCurlResult())
             flexDriftRecorderRef.current = new ImuFlexDriftRecorder()
           }
@@ -139,6 +145,11 @@ export function HubProvider({ children }: { children: ReactNode }) {
     [getClient],
   )
 
+  const setDriftTolerance = useCallback((deg: number) => {
+    driftToleranceRef.current = deg
+    curlCounterRef.current.setDriftTolerance(deg)
+  }, [])
+
   const setCalibration = useCallback((podId: PodId, calib: EmgCalibration) => {
     calibrationRef.current = { ...calibrationRef.current, [podId]: calib }
     setCalibrationState((prev) => ({ ...prev, [podId]: calib }))
@@ -157,6 +168,7 @@ export function HubProvider({ children }: { children: ReactNode }) {
       connect,
       disconnect,
       sendHaptic,
+      setDriftTolerance,
       setCalibration,
       curl,
       drainFlexDriftSamples,
@@ -170,6 +182,7 @@ export function HubProvider({ children }: { children: ReactNode }) {
       connect,
       disconnect,
       sendHaptic,
+      setDriftTolerance,
       setCalibration,
       curl,
       drainFlexDriftSamples,

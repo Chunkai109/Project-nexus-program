@@ -8,6 +8,7 @@ import { ExerciseFormFields } from './ExerciseFormFields'
 import { useAppData } from '@/lib/data/AppDataContext'
 import { useExerciseForm } from '@/lib/useExerciseForm'
 import { podLabel } from '@/lib/podUtils'
+import { presetUsage } from '@/lib/planCompare'
 import type { AngleConfig } from '@/types'
 
 export function describeAngleConfigs(configs: AngleConfig[]): string {
@@ -17,13 +18,16 @@ export function describeAngleConfigs(configs: AngleConfig[]): string {
 }
 
 /**
- * Creates new exercises and lists existing ones; tapping a row opens that
+ * Creates and lists presets (exercises not assigned to anyone). Patients
+ * never see a preset directly: the physio copies it into a patient's own
+ * plan from that patient's Exercise plan tab. Tapping a row opens that
  * exercise's Optimization Analytics page (editing and deleting now live
  * there instead of inline icons here, to avoid duplicating the same actions
  * in two places).
  */
 export function ProtocolBuilder({ onSelectExercise }: { onSelectExercise: (exerciseId: string) => void }) {
-  const { exercises, patients, addExercise } = useAppData()
+  const { exercises, addExercise } = useAppData()
+  const presets = exercises.filter((e) => e.assignedPatientId === null)
   const [mode, setMode] = useState<'list' | 'form'>('list')
   const [saved, setSaved] = useState(false)
   const {
@@ -62,13 +66,13 @@ export function ProtocolBuilder({ onSelectExercise }: { onSelectExercise: (exerc
     return (
       <Card className="p-7">
         <div className="mb-6">
-          <h2 className="text-[15px] font-semibold text-ink">New Exercise</h2>
+          <h2 className="text-[15px] font-semibold text-ink">New Preset</h2>
           <p className="text-[13px] text-ink-faint">Define biomechanical thresholds prescribed for this exercise</p>
         </div>
         <ExerciseFormFields
           form={form}
           setForm={setForm}
-          patients={patients}
+          mode="preset"
           toggleTag={toggleTag}
           selectDraftJoint={selectDraftJoint}
           draftValid={draftValid}
@@ -83,7 +87,7 @@ export function ProtocolBuilder({ onSelectExercise }: { onSelectExercise: (exerc
           canSave={canSave}
           onSave={handleSave}
           onCancel={() => setMode('list')}
-          saveLabel="Save Protocol"
+          saveLabel="Save Preset"
         />
       </Card>
     )
@@ -95,12 +99,10 @@ export function ProtocolBuilder({ onSelectExercise }: { onSelectExercise: (exerc
         <div>
           <h2 className="text-[15px] font-semibold text-ink">Exercise Protocols</h2>
           <p className="text-[13px] text-ink-faint">
-            {exercises.length === 0
-              ? 'Nothing created yet — patients see exactly what you publish here.'
-              : `${exercises.length} protocol${exercises.length === 1 ? '' : 's'} visible to patients right now.`}
+            Build preset exercises. Tailor them for each patient from the patient's Exercise plan tab.
           </p>
         </div>
-        <HoverExplain explanation="Opens the 3-step wizard (Basics, Angle Configuration, EMG Activation) to create a new exercise protocol.">
+        <HoverExplain explanation="Opens the 3-step wizard (Basics, Angle Configuration, EMG Activation) to create a new preset.">
           <Button size="sm" onClick={startCreate}>
             <Plus className="h-3.5 w-3.5" />
             New Exercise
@@ -108,17 +110,17 @@ export function ProtocolBuilder({ onSelectExercise }: { onSelectExercise: (exerc
         </HoverExplain>
       </div>
 
-      {exercises.length === 0 ? (
+      {presets.length === 0 ? (
         <div className="flex flex-col items-center gap-2 rounded-xl bg-surface-secondary py-14 text-center">
-          <p className="text-[14px] font-medium text-ink">No exercises yet</p>
+          <p className="text-[14px] font-medium text-ink">No presets yet</p>
           <p className="max-w-xs text-[13px] text-ink-faint">
-            Create your first protocol and it will immediately appear on the patient's exercise list.
+            Create a preset, then add it to a patient from their Exercise plan tab.
           </p>
         </div>
       ) : (
         <div className="flex flex-col gap-3">
-          {exercises.map((ex) => {
-            const assignedPatient = patients.find((p) => p.id === ex.assignedPatientId)
+          {presets.map((ex) => {
+            const used = presetUsage(ex.id, exercises)
             return (
               <HoverExplain key={ex.id} explanation={`Open ${ex.title}'s Optimization Analytics — edit or delete it from there.`}>
                 <button
@@ -130,11 +132,9 @@ export function ProtocolBuilder({ onSelectExercise }: { onSelectExercise: (exerc
                     <p className="truncate text-[14px] font-semibold text-ink">{ex.title}</p>
                     <div className="mt-1 flex flex-wrap items-center gap-2">
                       <Badge tone="accent">{ex.sets}×{ex.reps}</Badge>
-                      {assignedPatient ? (
-                        <Badge tone="violet">{assignedPatient.name}</Badge>
-                      ) : (
-                        <span className="text-[12px] text-ink-faint">All Patients</span>
-                      )}
+                      <span className="text-[12px] text-ink-muted">
+                        {used === 0 ? 'Not used yet' : `Used by ${used} patient${used === 1 ? '' : 's'}`}
+                      </span>
                     </div>
                     <p className="mt-1 truncate text-[13px] text-ink-faint">{describeAngleConfigs(ex.angleConfigs)}</p>
                   </div>

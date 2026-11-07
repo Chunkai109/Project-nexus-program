@@ -1,3 +1,5 @@
+import type { ReactNode } from 'react'
+
 export function Slider({
   label,
   value,
@@ -8,7 +10,7 @@ export function Slider({
   onChange,
   tone = 'accent',
 }: {
-  label: string
+  label: ReactNode
   value: number
   min: number
   max: number
@@ -22,9 +24,9 @@ export function Slider({
 
   return (
     <div>
-      <div className="mb-2 flex items-center justify-between text-sm">
+      <div className="mb-2 flex items-center justify-between gap-3 text-sm">
         <span className="text-ink-muted">{label}</span>
-        <span className="font-semibold text-ink">
+        <span className="flex-shrink-0 whitespace-nowrap font-semibold text-ink">
           {value}
           {unit}
         </span>

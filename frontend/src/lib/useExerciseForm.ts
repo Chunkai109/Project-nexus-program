@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { JOINT_PRESETS, jointPresetForPair } from '@/lib/joints'
-import type { NewExercise } from '@/lib/data/AppDataContext'
+import { DEFAULT_DRIFT_TOLERANCE_DEG, type NewExercise } from '@/lib/data/AppDataContext'
 import type { AngleConfig, Exercise, MuscleEmgTarget, PodId } from '@/types'
 
 export interface ExerciseFormState {
@@ -14,8 +14,12 @@ export interface ExerciseFormState {
   estMinutes: number
   angleConfigs: AngleConfig[]
   assignedPatientId: string | null
+  /** Kept as typed text so the field can show a validation message instead of silently coercing. */
+  driftToleranceInput: string
   /** The joint currently being defined, before it's confirmed into angleConfigs. */
   draftJointId: string | null
+  /** The confirmed angle loaded back for editing, so one with no matching joint (e.g. the curl rig's pods 2↔3) can still be re-confirmed. */
+  draftConfigId: string | null
   draftMin: number
   draftMax: number
   draftFaultThresholdDeg: number
@@ -37,7 +41,9 @@ function blankForm(): ExerciseFormState {
     estMinutes: 10,
     angleConfigs: [],
     assignedPatientId: null,
+    driftToleranceInput: String(DEFAULT_DRIFT_TOLERANCE_DEG),
     draftJointId: null,
+    draftConfigId: null,
     draftMin: 90,
     draftMax: 110,
     draftFaultThresholdDeg: 8,
@@ -47,7 +53,7 @@ function blankForm(): ExerciseFormState {
   }
 }
 
-function formFromExercise(ex: Exercise): ExerciseFormState {
+export function formFromExercise(ex: Exercise): ExerciseFormState {
   return {
     title: ex.title,
     muscleGroups: ex.muscleGroups,
@@ -59,7 +65,9 @@ function formFromExercise(ex: Exercise): ExerciseFormState {
     estMinutes: ex.estMinutes,
     angleConfigs: ex.angleConfigs,
     assignedPatientId: ex.assignedPatientId,
+    driftToleranceInput: String(ex.driftToleranceDeg),
     draftJointId: null,
+    draftConfigId: null,
     draftMin: 90,
     draftMax: 110,
     draftFaultThresholdDeg: 8,
@@ -67,6 +75,19 @@ function formFromExercise(ex: Exercise): ExerciseFormState {
     draftMuscleId: null,
     draftMuscleEmgPct: 65,
   }
+}
+
+export const DRIFT_LIMIT_MIN = 1
+export const DRIFT_LIMIT_MAX = 90
+/** Below this, rig testing saw the drift fault fire on normal movement. */
+export const DRIFT_LIMIT_WARN_BELOW = 20
+
+/** The drift limit as a whole number of degrees, or null if the text isn't a whole number from 1 to 90. */
+export function parseDriftLimit(input: string): number | null {
+  const text = input.trim()
+  if (!/^\d+$/.test(text)) return null
+  const n = Number(text)
+  return n >= DRIFT_LIMIT_MIN && n <= DRIFT_LIMIT_MAX ? n : null
 }
 
 /** Same two joints regardless of which node was tapped first. */
@@ -101,19 +122,31 @@ export function useExerciseForm(initial?: Exercise) {
     setForm((f) => ({
       ...f,
       draftJointId: jointId,
+      draftConfigId: null,
       draftMin: preset.defaultTargetMin,
       draftMax: preset.defaultTargetMax,
       draftFaultThresholdDeg: 8,
     }))
   }
 
-  const draftValid = form.draftJointId != null
-  const canSave = form.title.trim().length > 0 && form.angleConfigs.length > 0
+  const draftValid = form.draftJointId != null || form.draftConfigId != null
+  const driftLimit = parseDriftLimit(form.driftToleranceInput)
+  const canSave = form.title.trim().length > 0 && form.angleConfigs.length > 0 && driftLimit !== null
 
   function confirmAngle() {
     setForm((f) => {
       const preset = JOINT_PRESETS.find((p) => p.id === f.draftJointId)
-      if (!preset) return f
+      const cleared = { draftJointId: null, draftConfigId: null, draftMin: 90, draftMax: 110, draftFaultThresholdDeg: 8 }
+      if (!preset) {
+        // A loaded angle with no matching joint: update it in place.
+        if (f.draftConfigId == null) return f
+        const angleConfigs = f.angleConfigs.map((c) =>
+          c.id === f.draftConfigId
+            ? { ...c, targetMin: f.draftMin, targetMax: f.draftMax, faultThresholdDeg: f.draftFaultThresholdDeg }
+            : c,
+        )
+        return { ...f, angleConfigs, ...cleared }
+      }
       const existingIndex = f.angleConfigs.findIndex((c) => sameNodePair(c, preset.nodeA, preset.nodeB))
       const newConfig: AngleConfig = {
         id: existingIndex >= 0 ? f.angleConfigs[existingIndex].id : crypto.randomUUID(),
@@ -127,12 +160,16 @@ export function useExerciseForm(initial?: Exercise) {
         existingIndex >= 0
           ? f.angleConfigs.map((c, i) => (i === existingIndex ? newConfig : c))
           : [...f.angleConfigs, newConfig]
-      return { ...f, angleConfigs, draftJointId: null, draftMin: 90, draftMax: 110, draftFaultThresholdDeg: 8 }
+      return { ...f, angleConfigs, ...cleared }
     })
   }
 
   function removeAngleConfig(id: string) {
-    setForm((f) => ({ ...f, angleConfigs: f.angleConfigs.filter((c) => c.id !== id) }))
+    setForm((f) => ({
+      ...f,
+      angleConfigs: f.angleConfigs.filter((c) => c.id !== id),
+      draftConfigId: f.draftConfigId === id ? null : f.draftConfigId,
+    }))
   }
 
   function loadAngleIntoDraft(c: AngleConfig) {
@@ -140,6 +177,7 @@ export function useExerciseForm(initial?: Exercise) {
     setForm((f) => ({
       ...f,
       draftJointId: preset?.id ?? null,
+      draftConfigId: c.id,
       draftMin: c.targetMin,
       draftMax: c.targetMax,
       draftFaultThresholdDeg: c.faultThresholdDeg,
@@ -192,6 +230,7 @@ export function useExerciseForm(initial?: Exercise) {
       estMinutes: form.estMinutes,
       angleConfigs: form.angleConfigs,
       assignedPatientId: form.assignedPatientId,
+      driftToleranceDeg: driftLimit ?? DEFAULT_DRIFT_TOLERANCE_DEG,
     }
   }
 
@@ -199,6 +238,7 @@ export function useExerciseForm(initial?: Exercise) {
     form,
     setForm,
     resetForm,
+    driftLimit,
     toggleTag,
     selectDraftJoint,
     draftValid,

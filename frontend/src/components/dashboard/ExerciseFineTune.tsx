@@ -10,7 +10,7 @@ import { useExerciseForm } from '@/lib/useExerciseForm'
  * Analytics page.
  */
 export function ExerciseFineTune({ exerciseId }: { exerciseId: string }) {
-  const { exercises, patients, updateExercise } = useAppData()
+  const { exercises, updateExercise } = useAppData()
   const exercise = exercises.find((e) => e.id === exerciseId)
   const {
     form,
@@ -30,6 +30,8 @@ export function ExerciseFineTune({ exerciseId }: { exerciseId: string }) {
     buildPayload,
   } = useExerciseForm(exercise)
   const [saved, setSaved] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
 
   if (!exercise) {
     return (
@@ -39,11 +41,19 @@ export function ExerciseFineTune({ exerciseId }: { exerciseId: string }) {
     )
   }
 
-  function handleSave() {
-    if (!canSave) return
-    updateExercise(exerciseId, buildPayload())
-    setSaved(true)
-    setTimeout(() => setSaved(false), 1500)
+  async function handleSave() {
+    if (!canSave || saving) return
+    setSaving(true)
+    setSaveError(null)
+    try {
+      await updateExercise(exerciseId, buildPayload())
+      setSaved(true)
+      setTimeout(() => setSaved(false), 1500)
+    } catch {
+      setSaveError("Couldn't save. Your changes are still here, try again.")
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -58,7 +68,9 @@ export function ExerciseFineTune({ exerciseId }: { exerciseId: string }) {
       <ExerciseFormFields
         form={form}
         setForm={setForm}
-        patients={patients}
+        mode="preset"
+        saving={saving}
+        saveError={saveError}
         toggleTag={toggleTag}
         selectDraftJoint={selectDraftJoint}
         draftValid={draftValid}

@@ -29,6 +29,8 @@ import {
  * the same browser, so local/offline development still works unmodified.
  */
 
+export const DEFAULT_DRIFT_TOLERANCE_DEG = 22
+
 const EXERCISES_KEY = 'smartphysio:exercises'
 const PATIENTS_KEY = 'smartphysio:patients'
 const SESSIONS_KEY = 'smartphysio:sessions'
@@ -98,7 +100,11 @@ type LegacyExerciseFields = Partial<{
   targetEmgMvc: number
 }>
 
-function normalizeExercise(raw: Omit<Exercise, 'muscleEmgTargets'> & LegacyExerciseFields & { muscleEmgTargets?: LegacyMuscleEmgTarget[] }): Exercise {
+type StoredExercise = Omit<Exercise, 'muscleEmgTargets' | 'basedOnPresetId' | 'driftToleranceDeg' | 'updatedAt' | 'presetSnapshotAt'> &
+  Partial<Pick<Exercise, 'basedOnPresetId' | 'driftToleranceDeg' | 'updatedAt' | 'presetSnapshotAt'>> &
+  LegacyExerciseFields & { muscleEmgTargets?: LegacyMuscleEmgTarget[] }
+
+function normalizeExercise(raw: StoredExercise): Exercise {
   const { nodeA, nodeB, targetRomMin, targetRomMax, faultThresholdDeg: legacyFaultThresholdDeg, targetEmgMvc, muscleEmgTargets: rawMuscleEmgTargets, ...rest } = raw
   const angleConfigs: AngleConfig[] = raw.angleConfigs
     ? raw.angleConfigs.map((c) => ({ ...c, faultThresholdDeg: c.faultThresholdDeg ?? legacyFaultThresholdDeg ?? 8 }))
@@ -115,11 +121,21 @@ function normalizeExercise(raw: Omit<Exercise, 'muscleEmgTargets'> & LegacyExerc
         ]
       : []
   const muscleEmgTargets = normalizeMuscleEmgTargets(rawMuscleEmgTargets, targetEmgMvc)
-  return { ...rest, angleConfigs, muscleEmgTargets, assignedPatientId: raw.assignedPatientId ?? null }
+  return {
+    ...rest,
+    angleConfigs,
+    muscleEmgTargets,
+    // Exercises saved before per-patient plans: an assigned one becomes that patient's own plan.
+    assignedPatientId: raw.assignedPatientId ?? null,
+    basedOnPresetId: raw.basedOnPresetId ?? null,
+    driftToleranceDeg: raw.driftToleranceDeg ?? DEFAULT_DRIFT_TOLERANCE_DEG,
+    updatedAt: raw.updatedAt ?? raw.createdAt,
+    presetSnapshotAt: raw.presetSnapshotAt ?? null,
+  }
 }
 
 function loadExercisesFromLocalStorage(): Exercise[] {
-  return readJson<Exercise[]>(EXERCISES_KEY, []).map(normalizeExercise)
+  return readJson<StoredExercise[]>(EXERCISES_KEY, []).map(normalizeExercise)
 }
 
 /**
@@ -154,6 +170,7 @@ function buildDefaultBicepCurlExercise(): NewExercise {
     estMinutes: 5,
     angleConfigs: [{ id: crypto.randomUUID(), nodeA: 2, nodeB: 3, targetMin: 100, targetMax: 135, faultThresholdDeg: 15 }],
     assignedPatientId: null,
+    driftToleranceDeg: DEFAULT_DRIFT_TOLERANCE_DEG,
   }
 }
 
@@ -181,6 +198,7 @@ function buildDefaultSquatsExercise(): NewExercise {
       { id: crypto.randomUUID(), nodeA: 2, nodeB: 4, targetMin: 90, targetMax: 110, faultThresholdDeg: 15 },
     ],
     assignedPatientId: null,
+    driftToleranceDeg: DEFAULT_DRIFT_TOLERANCE_DEG,
   }
 }
 
@@ -199,6 +217,7 @@ function buildDefaultPushUpExercise(): NewExercise {
       { id: crypto.randomUUID(), nodeA: 10, nodeB: 12, targetMin: 20, targetMax: 145, faultThresholdDeg: 15 },
     ],
     assignedPatientId: null,
+    driftToleranceDeg: DEFAULT_DRIFT_TOLERANCE_DEG,
   }
 }
 
@@ -217,6 +236,7 @@ function buildDefaultShoulderPressExercise(): NewExercise {
       { id: crypto.randomUUID(), nodeA: 8, nodeB: 10, targetMin: 30, targetMax: 150, faultThresholdDeg: 15 },
     ],
     assignedPatientId: null,
+    driftToleranceDeg: DEFAULT_DRIFT_TOLERANCE_DEG,
   }
 }
 
@@ -229,7 +249,10 @@ interface AppDataValue {
   /** True until the initial Supabase fetch resolves. Always false when Supabase isn't configured. */
   loading: boolean
   addExercise: (input: NewExercise) => Exercise
-  updateExercise: (id: string, patch: NewExercise) => void
+  /** Copies a preset into a new plan for one patient. Resolves once saved; rejects if the save failed (nothing is added then). */
+  createPlanFromPreset: (presetId: string, patientId: string, fields: NewExercise) => Promise<Exercise>
+  /** Resolves once saved; rejects if the save failed (local state is left unchanged then). */
+  updateExercise: (id: string, patch: NewExercise) => Promise<void>
   deleteExercise: (id: string) => void
   registerPatientVisit: (name: string, email: string) => void
   recordSession: (input: NewSessionRecord) => SessionRecord
@@ -401,8 +424,21 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     if (!supabase) writeJson(SESSIONS_KEY, sessions)
   }, [sessions])
 
+  const exercisesRef = useRef<Exercise[]>(exercises)
+  useEffect(() => {
+    exercisesRef.current = exercises
+  }, [exercises])
+
   const addExercise = useCallback((input: NewExercise) => {
-    const exercise: Exercise = { ...input, id: crypto.randomUUID(), createdAt: Date.now() }
+    const now = Date.now()
+    const exercise: Exercise = {
+      ...input,
+      id: crypto.randomUUID(),
+      basedOnPresetId: null,
+      createdAt: now,
+      updatedAt: now,
+      presetSnapshotAt: null,
+    }
     setExercises((prev) => [...prev, exercise])
     if (supabase) {
       supabase
@@ -436,21 +472,47 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     }
   }, [loading, exercises.length, addExercise])
 
-  const updateExercise = useCallback((id: string, patch: NewExercise) => {
-    setExercises((prev) => prev.map((e) => (e.id === id ? { ...e, ...patch } : e)))
-    if (supabase) {
-      supabase
-        .from('exercises')
-        .update(exercisePatchToRow(patch))
-        .eq('id', id)
-        .then(({ error }) => {
-          if (error) console.error('Failed to update exercise in Supabase', error)
-        })
+  const createPlanFromPreset = useCallback(async (presetId: string, patientId: string, fields: NewExercise) => {
+    const preset = exercisesRef.current.find((e) => e.id === presetId)
+    if (!preset) throw new Error('Preset not found')
+    const now = Date.now()
+    const plan: Exercise = {
+      ...fields,
+      id: crypto.randomUUID(),
+      assignedPatientId: patientId,
+      basedOnPresetId: presetId,
+      presetSnapshotAt: preset.updatedAt,
+      createdAt: now,
+      updatedAt: now,
     }
+    if (supabase) {
+      const { error } = await supabase.from('exercises').insert(exerciseToRow(plan))
+      if (error) {
+        console.error('Failed to save patient plan to Supabase', error)
+        throw error
+      }
+    }
+    // Added after the save so a failed save never shows a plan that isn't stored.
+    // The realtime echo of the insert converges by id, so this can't duplicate.
+    setExercises((prev) => (prev.some((e) => e.id === plan.id) ? prev : [...prev, plan]))
+    return plan
+  }, [])
+
+  const updateExercise = useCallback(async (id: string, patch: NewExercise) => {
+    const updatedAt = Date.now()
+    if (supabase) {
+      const { error } = await supabase.from('exercises').update(exercisePatchToRow(patch, updatedAt)).eq('id', id)
+      if (error) {
+        console.error('Failed to update exercise in Supabase', error)
+        throw error
+      }
+    }
+    setExercises((prev) => prev.map((e) => (e.id === id ? { ...e, ...patch, updatedAt } : e)))
   }, [])
 
   const deleteExercise = useCallback((id: string) => {
-    setExercises((prev) => prev.filter((e) => e.id !== id))
+    // Plans copied from a deleted preset keep working as their own plan (the database does the same with "on delete set null").
+    setExercises((prev) => prev.filter((e) => e.id !== id).map((e) => (e.basedOnPresetId === id ? { ...e, basedOnPresetId: null } : e)))
     if (supabase) {
       supabase
         .from('exercises')
@@ -507,12 +569,13 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       sessions,
       loading,
       addExercise,
+      createPlanFromPreset,
       updateExercise,
       deleteExercise,
       registerPatientVisit,
       recordSession,
     }),
-    [exercises, patients, sessions, loading, addExercise, updateExercise, deleteExercise, registerPatientVisit, recordSession],
+    [exercises, patients, sessions, loading, addExercise, createPlanFromPreset, updateExercise, deleteExercise, registerPatientVisit, recordSession],
   )
 
   return <AppDataContext.Provider value={value}>{children}</AppDataContext.Provider>
