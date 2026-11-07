@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/Button'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { ExerciseFormFields } from './ExerciseFormFields'
 import { NotUsedYetTag } from './PlanTags'
+import { ExerciseListPanel } from './ExerciseListPanel'
 import { useAppData } from '@/lib/data/AppDataContext'
 import { formFromExercise, useExerciseForm, type ExerciseFormState } from '@/lib/useExerciseForm'
 import { changesLabel, compareRows, countChanges } from '@/lib/planCompare'
@@ -148,62 +149,24 @@ export function PatientExercisePlan({
 
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-      {/* List: a column on wide screens, a row of chips below 1024px. */}
-      <Card className="hidden p-5 lg:col-span-4 lg:block">
-        <div className="mb-3 flex items-center justify-between gap-2">
-          <p className="text-[15px] font-semibold text-ink">Exercises ({plans.length})</p>
-        </div>
-        {plans.length === 0 ? (
-          <p className="rounded-xl bg-surface-secondary p-4 text-center text-[13px] text-ink-muted">No exercises assigned yet.</p>
-        ) : (
-          <ul className="flex flex-col gap-1" aria-label={`${patient.name}'s exercises`}>
-            {plans.map((plan) => {
-              const isSel = plan.id === highlightedId
+      <ExerciseListPanel
+        title={`Exercises (${plans.length})`}
+        ariaLabel={`${patient.name}'s exercises`}
+        emptyText="No exercises assigned yet."
+        selectedId={highlightedId}
+        onSelect={selectPlan}
+        footer={addMenu}
+        sections={[
+          {
+            items: plans.map((plan) => {
               const preset = presetOf(plan)
               const n = countChanges(plan, preset)
               const tail = !plan.basedOnPresetId || !preset ? 'own plan' : n === 0 ? 'as preset' : changesLabel(n)
-              return (
-                <li key={plan.id}>
-                  <button
-                    type="button"
-                    onClick={() => selectPlan(plan.id)}
-                    aria-current={isSel ? 'true' : undefined}
-                    className={clsx(
-                      'w-full rounded-r-lg border-l-[3px] px-3 py-2.5 text-left transition-colors duration-150',
-                      isSel ? 'border-accent bg-accent/10' : 'border-transparent hover:bg-surface-secondary',
-                    )}
-                  >
-                    <span className="block truncate text-[14px] font-semibold text-ink">{plan.title}</span>
-                    <span className="block text-[12px] tabular-nums text-ink-muted">
-                      {plan.sets}×{plan.reps} · {tail}
-                    </span>
-                  </button>
-                </li>
-              )
-            })}
-          </ul>
-        )}
-        <div className="mt-4">{addMenu}</div>
-      </Card>
-
-      <div className="flex flex-wrap items-center gap-2 lg:hidden" aria-label={`${patient.name}'s exercises`}>
-        {plans.length === 0 && <span className="whitespace-nowrap text-[13px] text-ink-muted">No exercises assigned yet.</span>}
-        {plans.map((plan) => (
-          <button
-            key={plan.id}
-            type="button"
-            onClick={() => selectPlan(plan.id)}
-            aria-current={plan.id === highlightedId ? 'true' : undefined}
-            className={clsx(
-              'max-w-[220px] flex-shrink-0 truncate rounded-full px-3.5 py-1.5 text-[13px] font-medium',
-              plan.id === highlightedId ? 'bg-accent/10 text-accent' : 'bg-surface-secondary text-ink-muted',
-            )}
-          >
-            {plan.title}
-          </button>
-        ))}
-        <div className="flex-shrink-0">{addMenu}</div>
-      </div>
+              return { id: plan.id, title: plan.title, detail: `${plan.sets}×${plan.reps} · ${tail}` }
+            }),
+          },
+        ]}
+      />
 
       <div className="lg:col-span-8">
         {editing ? (

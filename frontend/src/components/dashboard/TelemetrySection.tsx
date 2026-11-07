@@ -10,6 +10,7 @@ import { HeadlineCards } from '@/components/dashboard/HeadlineCards'
 import { HoverExplain } from '@/components/ui/HoverExplain'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { PatientExercisePlan } from '@/components/dashboard/PatientExercisePlan'
+import { ExerciseListPanel } from '@/components/dashboard/ExerciseListPanel'
 import { useAppData } from '@/lib/data/AppDataContext'
 import { formatRelativeTime } from '@/lib/formatRelativeTime'
 import { historyFor, sessionStats } from '@/lib/sessionStats'
@@ -36,7 +37,7 @@ export function TelemetrySection({
   onDirtyChange?: (dirty: boolean) => void
   onOpenCreator: () => void
 }) {
-  const { patients, sessions } = useAppData()
+  const { patients, sessions, exercises } = useAppData()
   const [patientId, setPatientId] = useState<string | undefined>(initialPatientId)
   const patient = patients.find((p) => p.id === patientId) ?? patients[0]
   const [tab, setTab] = useState<PatientTab>('progress')
@@ -63,16 +64,54 @@ export function TelemetrySection({
     [patient, sessions],
   )
 
-  // Exercises this patient has sessions for, most recent first, each labelled by its latest session's title.
-  const exerciseOptions = useMemo(() => {
-    const latestById = new Map<string, { id: string; title: string; at: number }>()
+  // The left-hand list: this patient's plan (same order as the Exercise plan
+  // tab), then "Earlier exercises" for sessions whose exercise isn't in the
+  // plan any more (a removed plan, an old preset, or demo data).
+  const listSections = useMemo(() => {
+    const byExercise = new Map<string, { count: number; last: number; title: string }>()
     for (const s of allHistory) {
-      const prev = latestById.get(s.exerciseId)
-      if (!prev || s.completedAt >= prev.at) latestById.set(s.exerciseId, { id: s.exerciseId, title: s.exerciseTitle, at: s.completedAt })
+      const prev = byExercise.get(s.exerciseId)
+      byExercise.set(s.exerciseId, {
+        count: (prev?.count ?? 0) + 1,
+        last: Math.max(prev?.last ?? 0, s.completedAt),
+        title: !prev || s.completedAt >= prev.last ? s.exerciseTitle : prev.title,
+      })
     }
-    return [...latestById.values()].sort((a, b) => b.at - a.at)
-  }, [allHistory])
-  const exerciseId = exerciseOptions.find((o) => o.id === exerciseChoice)?.id ?? exerciseOptions[0]?.id ?? null
+    const detail = (id: string) => {
+      const h = byExercise.get(id)
+      if (!h) return 'No sessions yet'
+      return `${h.count} session${h.count === 1 ? '' : 's'} · last ${formatRelativeTime(h.last)}`
+    }
+    const plans = patient ? exercises.filter((e) => e.assignedPatientId === patient.id).sort((a, b) => b.createdAt - a.createdAt) : []
+    const planIds = new Set(plans.map((p) => p.id))
+    const earlier = [...byExercise.entries()]
+      .filter(([id]) => !planIds.has(id))
+      .sort((a, b) => b[1].last - a[1].last)
+      .map(([id, h]) => ({
+        id,
+        title: isDemo ? 'Demo session' : h.title,
+        detail: isDemo ? `Demo data · ${detail(id)}` : detail(id),
+      }))
+    return [
+      {
+        items: plans.map((p) => ({
+          id: p.id,
+          title: p.title,
+          detail: detail(p.id),
+        })),
+      },
+      {
+        label: plans.length > 0 ? 'Earlier exercises' : undefined,
+        items: earlier,
+      },
+    ]
+  }, [allHistory, exercises, patient, isDemo])
+  const listItems = listSections.flatMap((sec) => sec.items)
+  // Default: the exercise of the most recent session, else the newest plan.
+  const latestExerciseId = allHistory[allHistory.length - 1]?.exerciseId
+  const exerciseId =
+    listItems.find((i) => i.id === exerciseChoice)?.id ?? listItems.find((i) => i.id === latestExerciseId)?.id ?? listItems[0]?.id ?? null
+  const selectedTitle = listItems.find((i) => i.id === exerciseId)?.title
   const history = useMemo(() => allHistory.filter((s) => s.exerciseId === exerciseId), [allHistory, exerciseId])
   const stats = useMemo(() => history.map((s) => sessionStats(s)), [history])
   const latest = stats[stats.length - 1]
@@ -131,9 +170,6 @@ export function TelemetrySection({
               <ChevronDown className="pointer-events-none absolute right-3.5 h-3.5 w-3.5 text-ink-faint" />
             </div>
           </HoverExplain>
-          {tab === 'progress' && exerciseOptions.length > 0 && (
-            <ExercisePicker isDemo={isDemo} options={exerciseOptions} value={exerciseId} onChange={setExerciseChoice} />
-          )}
         </div>
       </Card>
 
@@ -165,43 +201,67 @@ export function TelemetrySection({
         }}
       />
 
-      {tab === 'progress' && latest && (
-        <div role="tabpanel" id="patient-tabpanel-progress" aria-labelledby="patient-tab-progress" className="flex flex-col gap-6">
-          <HeadlineCards latest={latest} previous={previous} sessionCount={stats.length} />
+      {tab === 'progress' && (
+        <div
+          role="tabpanel"
+          id="patient-tabpanel-progress"
+          aria-labelledby="patient-tab-progress"
+          className="grid grid-cols-1 gap-6 lg:grid-cols-12"
+        >
+          <ExerciseListPanel
+            title={`Exercises (${listItems.length})`}
+            ariaLabel={`${patient?.name ?? 'Patient'}'s exercises`}
+            emptyText="No exercises or sessions yet."
+            selectedId={exerciseId}
+            onSelect={setExerciseChoice}
+            sections={listSections}
+          />
+          <div className="flex min-w-0 flex-col gap-6 lg:col-span-8">
+            {!latest ? (
+              <Card className="p-14 text-center">
+                <p className="text-[14px] text-ink-muted">
+                  {selectedTitle ? `No sessions with ${selectedTitle} yet.` : 'No sessions yet.'} Progress shows here after the patient
+                  finishes one.
+                </p>
+              </Card>
+            ) : (
+              <>
+                <HeadlineCards latest={latest} previous={previous} sessionCount={stats.length} />
 
-          <Card className="p-7">
-            <HoverExplain explanation="Good-form % and in-target-range % for each session, oldest to newest. Rising lines mean the patient is improving.">
-              <div>
-                <p className="text-[15px] font-semibold text-ink">Progress across sessions</p>
-                <p className="mb-4 text-[13px] text-ink-faint">{shownSessions === 1 ? 'Only 1 session so far' : `Last ${shownSessions} sessions`}, one dot per session</p>
-                <ProgressChart stats={stats.slice(-PROGRESS_SESSIONS)} />
-              </div>
-            </HoverExplain>
-          </Card>
+                <Card className="p-7">
+                  <HoverExplain explanation="Good-form % and in-target-range % for each session, oldest to newest. Rising lines mean the patient is improving.">
+                    <div>
+                      <p className="text-[15px] font-semibold text-ink">Progress across sessions</p>
+                      <p className="mb-4 text-[13px] text-ink-faint">
+                        {shownSessions === 1 ? 'Only 1 session so far' : `Last ${shownSessions} sessions`}, one dot per session
+                      </p>
+                      <ProgressChart stats={stats.slice(-PROGRESS_SESSIONS)} />
+                    </div>
+                  </HoverExplain>
+                </Card>
 
-          <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-            <Card className="p-7">
-              <HoverExplain explanation="Peak elbow angle of every rep in the latest session against the prescribed target range, marked with the AI's verdict and any drift fault.">
-                <div>
-                  <p className="text-[15px] font-semibold text-ink">Rep angles, latest session</p>
-                  <p className="mb-4 text-[13px] text-ink-faint">Peak angle per rep vs the target range</p>
-                  <TrendChart
-                    reps={latest.session.reps}
-                    targetMin={latest.session.targetMin}
-                    targetMax={latest.session.targetMax}
-                  />
+                <div className="grid grid-cols-1 gap-6 2xl:grid-cols-2">
+                  <Card className="p-7">
+                    <HoverExplain explanation="Peak elbow angle of every rep in the latest session against the prescribed target range, marked with the AI's verdict and any drift fault.">
+                      <div>
+                        <p className="text-[15px] font-semibold text-ink">Rep angles, latest session</p>
+                        <p className="mb-4 text-[13px] text-ink-faint">Peak angle per rep vs the target range</p>
+                        <TrendChart reps={latest.session.reps} targetMin={latest.session.targetMin} targetMax={latest.session.targetMax} />
+                      </div>
+                    </HoverExplain>
+                  </Card>
+                  <Card className="p-7">
+                    <HoverExplain explanation="How the AI form check rated each rep in the latest session. The most common fault is usually the thing to coach.">
+                      <div>
+                        <p className="text-[15px] font-semibold text-ink">AI verdicts, latest session</p>
+                        <p className="mb-4 text-[13px] text-ink-faint">What the AI saw, most common first</p>
+                        <VerdictBreakdownChart session={latest.session} />
+                      </div>
+                    </HoverExplain>
+                  </Card>
                 </div>
-              </HoverExplain>
-            </Card>
-            <Card className="p-7">
-              <HoverExplain explanation="How the AI form check rated each rep in the latest session. The most common fault is usually the thing to coach.">
-                <div>
-                  <p className="text-[15px] font-semibold text-ink">AI verdicts, latest session</p>
-                  <p className="mb-4 text-[13px] text-ink-faint">What the AI saw, most common first</p>
-                  <VerdictBreakdownChart session={latest.session} />
-                </div>
-              </HoverExplain>
-            </Card>
+              </>
+            )}
           </div>
         </div>
       )}
@@ -209,61 +269,24 @@ export function TelemetrySection({
   )
 }
 
-function ExercisePicker({
-  isDemo,
-  options,
-  value,
-  onChange,
-}: {
-  isDemo: boolean
-  options: { id: string; title: string }[]
-  value: string | null
-  onChange: (id: string) => void
-}) {
-  const pill = 'flex items-center gap-2 rounded-full bg-surface-secondary px-4 py-2 text-[13px]'
-  if (isDemo || options.length === 1) {
-    return (
-      <div className={pill}>
-        <span className="text-ink-muted">Exercise:</span>
-        <span className="font-medium text-ink">{isDemo ? 'Demo session' : options[0].title}</span>
-      </div>
-    )
-  }
-  return (
-    <HoverExplain explanation="Show progress for one exercise at a time. Sessions done and the vs-last-session changes count this exercise only.">
-      <div className={clsx(pill, 'relative')}>
-        <label htmlFor="progress-exercise" className="text-ink-muted">
-          Exercise:
-        </label>
-        <select
-          id="progress-exercise"
-          value={value ?? ''}
-          onChange={(e) => onChange(e.target.value)}
-          className="max-w-[220px] appearance-none truncate bg-transparent pr-5 font-medium text-ink outline-none"
-        >
-          {options.map((o) => (
-            <option key={o.id} value={o.id} className="bg-surface text-ink">
-              {o.title}
-            </option>
-          ))}
-        </select>
-        <ChevronDown className="pointer-events-none absolute right-3.5 h-3.5 w-3.5 text-ink-faint" />
-      </div>
-    </HoverExplain>
-  )
-}
-
 /** "Progress" / "Exercise plan" tabs. Arrow keys, Home and End move between them. */
 function PatientTabs({ tab, onChange }: { tab: PatientTab; onChange: (tab: PatientTab) => void }) {
-  const refs = useRef<Record<PatientTab, HTMLButtonElement | null>>({ progress: null, plan: null })
+  const refs = useRef<Record<PatientTab, HTMLButtonElement | null>>({
+    progress: null,
+    plan: null,
+  })
   function onKeyDown(e: KeyboardEvent<HTMLButtonElement>) {
     const i = TABS.findIndex((t) => t.key === tab)
     const next =
-      e.key === 'ArrowRight' ? TABS[(i + 1) % TABS.length]
-      : e.key === 'ArrowLeft' ? TABS[(i - 1 + TABS.length) % TABS.length]
-      : e.key === 'Home' ? TABS[0]
-      : e.key === 'End' ? TABS[TABS.length - 1]
-      : null
+      e.key === 'ArrowRight'
+        ? TABS[(i + 1) % TABS.length]
+        : e.key === 'ArrowLeft'
+          ? TABS[(i - 1 + TABS.length) % TABS.length]
+          : e.key === 'Home'
+            ? TABS[0]
+            : e.key === 'End'
+              ? TABS[TABS.length - 1]
+              : null
     if (!next) return
     e.preventDefault()
     refs.current[next.key]?.focus()
