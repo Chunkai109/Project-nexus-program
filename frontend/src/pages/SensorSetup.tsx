@@ -69,8 +69,8 @@ export function SensorSetup() {
 
   if (!exercise) {
     return (
-      <PageShell>
-        <main className="flex min-h-screen flex-col items-center justify-center gap-4 px-6 text-center">
+      <PageShell fullWidth>
+        <main className="flex min-h-app flex-col items-center justify-center gap-4 px-6 text-center">
           <p className="text-[17px] font-semibold text-ink">Exercise not found</p>
           <p className="max-w-sm text-[14px] text-ink-faint">
             This protocol may have been removed by your physiotherapist. Head back to your exercise list to see what's currently assigned.
@@ -85,7 +85,7 @@ export function SensorSetup() {
   }
 
   return (
-    <PageShell>
+    <PageShell fullWidth>
       <SensorSetupView
         exercise={exercise}
         rows={rows}

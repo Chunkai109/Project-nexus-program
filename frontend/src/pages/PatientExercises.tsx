@@ -35,7 +35,7 @@ export function PatientExercises() {
   }, [exercises, sessions, myPatientId])
 
   return (
-    <PageShell>
+    <PageShell fullWidth>
       <ExerciseSelectionView
         header={<PatientTopNav />}
         tabs={<PatientNavTabs />}

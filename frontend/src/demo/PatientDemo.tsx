@@ -176,7 +176,7 @@ export function PatientDemo() {
   const previous = [...sessions].reverse().find((s) => s.id !== latest.id && s.exerciseId === latest.exerciseId) ?? null
 
   return (
-    <PageShell fullWidth={screen === 'live'}>
+    <PageShell fullWidth>
       <DemoChrome />
       {screen === 'exercises' && (
         <ExerciseSelectionView

@@ -2,6 +2,7 @@ import { LogOut, Wifi, WifiOff } from 'lucide-react'
 import { Logo } from '@/components/layout/Logo'
 import { ThemeToggle } from '@/components/ui/ThemeToggle'
 import { Breadcrumb } from '@/components/ui/Breadcrumb'
+import { PatientContainer } from './PatientContainer'
 
 export type HubState = 'connected' | 'connecting' | 'disconnected' | 'error'
 
@@ -41,7 +42,8 @@ export function PatientHeader({
   onSignOut?: () => void
 }) {
   return (
-    <header className="translucent-header sticky top-0 z-20 flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3 sm:px-6 lg:px-10">
+    <header className="translucent-header sticky top-0 z-20 border-b border-border">
+      <PatientContainer className="flex flex-wrap items-center justify-between gap-3 py-3">
       <Logo size="sm" />
       <div className="flex flex-wrap items-center gap-3">
         <HubChip state={hubState} />
@@ -67,6 +69,7 @@ export function PatientHeader({
           </button>
         )}
       </div>
+      </PatientContainer>
     </header>
   )
 }
@@ -74,15 +77,17 @@ export function PatientHeader({
 const FLOW_STEPS = [{ label: 'Sensors' }, { label: 'Check' }, { label: 'Exercise' }]
 
 /** Top bar for the three in-session screens: where you are in the flow. */
-export function SessionHeader({ step, right }: { step: 0 | 1 | 2; right?: React.ReactNode }) {
+export function SessionHeader({ step, right, wide = false }: { step: 0 | 1 | 2; right?: React.ReactNode; wide?: boolean }) {
   return (
-    <header className="translucent-header sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-border px-4 py-3 sm:px-6 lg:px-10">
+    <header className="translucent-header sticky top-0 z-20 border-b border-border">
+      <PatientContainer wide={wide} className="flex items-center justify-between gap-3 py-3">
       <Logo size="sm" />
       <Breadcrumb steps={FLOW_STEPS} activeIndex={step} />
       <div className="flex items-center gap-3">
         {right}
         <ThemeToggle />
       </div>
+      </PatientContainer>
     </header>
   )
 }

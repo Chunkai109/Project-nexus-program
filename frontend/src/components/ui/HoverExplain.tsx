@@ -42,8 +42,12 @@ export function HoverExplain({
   function measure() {
     const rect = ref.current?.getBoundingClientRect()
     if (!rect) return
-    const left = Math.min(Math.max(MARGIN, rect.left), window.innerWidth - WIDTH - MARGIN)
-    setPosition({ top: rect.bottom + GAP, left })
+    // In the browser the app is scaled with CSS zoom (see useAppZoom). The
+    // measured rect and the window width are then in screen pixels, while this
+    // box is positioned in the page's own unzoomed pixels, so divide by the zoom.
+    const zoom = Number(getComputedStyle(document.documentElement).getPropertyValue('--app-zoom')) || 1
+    const left = Math.min(Math.max(MARGIN, rect.left / zoom), window.innerWidth / zoom - WIDTH - MARGIN)
+    setPosition({ top: rect.bottom / zoom + GAP, left })
   }
 
   function handleEnter() {

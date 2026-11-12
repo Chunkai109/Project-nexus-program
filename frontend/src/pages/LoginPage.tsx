@@ -76,7 +76,7 @@ export function LoginPage() {
   }
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center bg-canvas px-4 py-16">
+    <div className="relative flex min-h-app items-center justify-center bg-canvas px-4 py-16">
       <ThemeToggle className="absolute right-6 top-6" />
 
       <Card className="w-full max-w-[440px] p-12" elevated>

@@ -25,8 +25,8 @@ export function SessionSummary() {
 
   if (!session) {
     return (
-      <PageShell>
-        <main className="flex min-h-screen flex-col items-center justify-center gap-4 px-6 text-center">
+      <PageShell fullWidth>
+        <main className="flex min-h-app flex-col items-center justify-center gap-4 px-6 text-center">
           <p className="text-[17px] font-semibold text-ink">Session not found</p>
           <p className="max-w-sm text-[14px] text-ink-faint">
             This session record may no longer be available. Head back to your exercise list to start a new one.
@@ -47,7 +47,7 @@ export function SessionSummary() {
     session.reps.length === 0 ? null : Math.round(session.reps.reduce((sum, r) => sum + r.emgLeft, 0) / session.reps.length)
 
   return (
-    <PageShell>
+    <PageShell fullWidth>
       <SessionSummaryView stats={stats} previous={previous} avgEffortPct={avgEffortPct} onDone={() => navigate('/patient/exercises')} />
     </PageShell>
   )

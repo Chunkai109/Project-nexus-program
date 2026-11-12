@@ -9,6 +9,7 @@ import { Details, SimulatedTag } from './PatientBits'
 import { formatClock } from './format'
 import { TIP_RULES, sessionTip } from './sessionTip'
 import { aiClassOf, isInRange, type SessionStats } from '@/lib/sessionStats'
+import { PatientContainer } from './PatientContainer'
 
 /** "▲ 12 pts vs last time", coloured by whether it is an improvement, always with an arrow and words. */
 function VsLast({ now, before, unit, better }: { now: number | null; before: number | null | undefined; unit: 'pts' | 'count'; better: 'higher' | 'lower' }) {
@@ -60,16 +61,19 @@ export function SessionSummaryView({
   return (
     <>
       {banner}
-      <header className="translucent-header sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-border px-4 py-3 sm:px-6 lg:px-10">
+      <header className="translucent-header sticky top-0 z-20 border-b border-border">
+        <PatientContainer className="flex items-center justify-between gap-3 py-3">
         <Logo size="sm" />
         <span className="inline-flex items-center gap-2 text-[16px] font-semibold text-emerald-ink">
           <CheckCircle2 className="h-5 w-5" aria-hidden />
           Session finished
         </span>
         <ThemeToggle />
+        </PatientContainer>
       </header>
 
-      <main className="mx-auto flex max-w-5xl flex-col gap-6 px-4 py-6 sm:px-6 sm:py-8 lg:px-10 lg:py-10">
+      <main>
+        <PatientContainer className="flex flex-col gap-6 py-6 sm:py-8 lg:py-10">
         <div>
           <h1 className="text-[30px] font-bold tracking-tight text-ink">{session.exerciseTitle}</h1>
           <p className="mt-1 text-[17px] text-ink-muted">
@@ -198,6 +202,7 @@ export function SessionSummaryView({
           Back to today's exercises
           <ArrowRight className="h-5 w-5" aria-hidden />
         </Button>
+      </PatientContainer>
       </main>
     </>
   )

@@ -7,6 +7,7 @@ import { SessionHeader } from './PatientHeader'
 import { Details } from './PatientBits'
 import { formatClock } from './format'
 import { setProgress, type VerdictDisplay } from './liveVerdict'
+import { PatientContainer } from './PatientContainer'
 
 /** The full elbow range on this rig: 0° straight, 135° fully curled. */
 const ANGLE_MAX = 135
@@ -131,6 +132,7 @@ export function LiveSessionView({
   return (
     <>
       <SessionHeader
+        wide
         step={2}
         right={
           <span className="hidden items-center gap-1.5 text-[15px] font-semibold text-ink-muted md:inline-flex">
@@ -138,7 +140,8 @@ export function LiveSessionView({
           </span>
         }
       />
-      <main className="mx-auto flex max-w-[1500px] flex-col gap-3 px-4 py-3 sm:px-6 lg:px-8">
+      <main>
+        <PatientContainer wide className="flex flex-col gap-3 py-3">
         {/* One fixed-height status line, so the layout never jumps when a fault appears. */}
         <div className="flex min-h-[52px] items-stretch" aria-live="assertive">
           {driftFault.active ? (
@@ -214,6 +217,7 @@ export function LiveSessionView({
         </div>
 
         {details && <Details summary="Details for a helper">{details}</Details>}
+      </PatientContainer>
       </main>
     </>
   )

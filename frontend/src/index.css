@@ -93,7 +93,8 @@
   }
 
   #root {
-    min-height: 100svh;
+    /* 100vh is the window; inside a zoomed page it must be divided by the zoom (see useAppZoom). */
+    min-height: calc(100svh / var(--app-zoom, 1));
   }
 
   /* One visible keyboard focus ring everywhere. */
@@ -111,6 +112,11 @@
       transition-duration: 0.01ms !important;
     }
   }
+}
+
+/* Full window height that stays correct when the app is zoomed with CSS zoom (browser). */
+@utility min-h-app {
+  min-height: calc(100vh / var(--app-zoom, 1));
 }
 
 @layer components {

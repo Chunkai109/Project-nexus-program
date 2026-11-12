@@ -3,6 +3,7 @@ import { CalendarClock, CheckCircle2, Circle, Clock, MessageSquareQuote, Play, T
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import type { Exercise, SessionRecord } from '@/types'
+import { PatientContainer } from './PatientContainer'
 
 export interface ExerciseToday {
   exercise: Exercise
@@ -33,7 +34,8 @@ export function ExerciseSelectionView({
   return (
     <>
       {header}
-      <main className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8 lg:px-10 lg:py-10">
+      <main>
+        <PatientContainer className="py-6 sm:py-8 lg:py-10">
         {tabs}
         <div className="mb-8">
           <h1 className="text-[30px] font-bold tracking-tight text-ink">Today's exercises</h1>
@@ -55,7 +57,7 @@ export function ExerciseSelectionView({
             </p>
           </Card>
         ) : (
-          <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+          <div className="grid grid-cols-1 gap-5 lg:grid-cols-2 xl:grid-cols-3">
             {ordered.map(({ exercise: ex, doneToday }) => (
               <Card key={ex.id} className="flex flex-col p-6 sm:p-7">
                 <div className="flex items-start justify-between gap-3">
@@ -84,7 +86,7 @@ export function ExerciseSelectionView({
                   {ex.angleConfigs[0] && (
                     <span className="inline-flex items-center gap-1.5">
                       <Target className="h-4 w-4 text-accent" aria-hidden />
-                      Curl to {ex.angleConfigs[0].targetMin}–{ex.angleConfigs[0].targetMax}°
+                      Target {ex.angleConfigs[0].targetMin}–{ex.angleConfigs[0].targetMax}°
                     </span>
                   )}
                 </div>
@@ -92,7 +94,7 @@ export function ExerciseSelectionView({
                 {ex.therapistNote && (
                   <div className="mt-4 flex gap-2.5 rounded-xl bg-surface-secondary p-4">
                     <MessageSquareQuote className="mt-0.5 h-5 w-5 flex-shrink-0 text-ink-faint" aria-hidden />
-                    <p className="text-[16px] leading-relaxed text-ink">
+                    <p className="max-w-[60ch] text-[16px] leading-relaxed text-ink">
                       <span className="block text-[13px] font-semibold text-ink-muted">Note from your physiotherapist</span>
                       {ex.therapistNote}
                     </p>
@@ -114,6 +116,7 @@ export function ExerciseSelectionView({
             ))}
           </div>
         )}
+      </PatientContainer>
       </main>
     </>
   )

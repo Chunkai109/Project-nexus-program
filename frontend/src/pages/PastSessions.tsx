@@ -10,6 +10,7 @@ import { useAppData } from '@/lib/data/AppDataContext'
 import { useAuth } from '@/lib/AuthContext'
 import { formatRelativeTime } from '@/lib/formatRelativeTime'
 import { sessionStats } from '@/lib/sessionStats'
+import { PatientContainer } from '@/components/patient/PatientContainer'
 
 export function PastSessions() {
   const navigate = useNavigate()
@@ -26,10 +27,11 @@ export function PastSessions() {
   )
 
   return (
-    <PageShell>
+    <PageShell fullWidth>
       <PatientTopNav />
 
-      <main className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8 lg:px-10 lg:py-10">
+      <main>
+        <PatientContainer className="py-6 sm:py-8 lg:py-10">
         <PatientNavTabs />
 
         <div className="mb-8">
@@ -80,6 +82,7 @@ export function PastSessions() {
             })}
           </div>
         )}
+      </PatientContainer>
       </main>
     </PageShell>
   )

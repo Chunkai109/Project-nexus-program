@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/Button'
 import { ProgressBar } from '@/components/ui/ProgressBar'
 import { SessionHeader } from './PatientHeader'
 import { Details, SimulatedTag, StatusLabel } from './PatientBits'
+import { PatientContainer } from './PatientContainer'
 
 export type EffortPhase = 'idle' | 'baseline' | 'baseline-done' | 'mvc' | 'mvc-done'
 
@@ -80,7 +81,8 @@ export function CalibrationView({
   return (
     <>
       <SessionHeader step={1} />
-      <main className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-6 sm:px-6 sm:py-8 lg:px-10 lg:py-10">
+      <main>
+        <PatientContainer className="flex flex-col gap-6 py-6 sm:py-8 lg:py-10">
         <div>
           <p className="text-[15px] font-semibold text-ink-muted">{exerciseTitle}</p>
           <h1 className="text-[30px] font-bold tracking-tight text-ink">Check your arm reading</h1>
@@ -224,6 +226,7 @@ export function CalibrationView({
             </Button>
           </div>
         </div>
+      </PatientContainer>
       </main>
     </>
   )

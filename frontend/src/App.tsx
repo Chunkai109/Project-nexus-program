@@ -12,6 +12,7 @@ import { LiveSession } from '@/pages/LiveSession'
 import { SessionSummary } from '@/pages/SessionSummary'
 import { TherapistDashboard } from '@/pages/TherapistDashboard'
 import { PatientDemo } from '@/demo/PatientDemo'
+import { useAppZoom } from '@/components/layout/useAppZoom'
 import type { UserRole } from '@/types'
 import type { ReactNode } from 'react'
 
@@ -89,6 +90,8 @@ function AppRoutes() {
 }
 
 function App() {
+  // Scales the whole app to the window; covers the demo route too.
+  useAppZoom()
   return (
     <ThemeProvider>
       <Routes>

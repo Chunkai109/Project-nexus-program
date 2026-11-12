@@ -7,6 +7,7 @@ import { SensorPlacementPicker } from '@/components/body/SensorPlacementPicker'
 import { SessionHeader, type HubState } from './PatientHeader'
 import { Details, StatusLabel, type StatusTone } from './PatientBits'
 import type { Exercise, Pod } from '@/types'
+import { PatientContainer } from './PatientContainer'
 
 /** One row of the pod list. `battery` is null when the pod hasn't reported one. */
 export interface PodRow {
@@ -78,7 +79,8 @@ export function SensorSetupView({
   return (
     <>
       <SessionHeader step={0} />
-      <main className="mx-auto grid max-w-6xl grid-cols-1 gap-6 px-4 py-6 sm:px-6 sm:py-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:px-10 lg:py-10">
+      <main>
+        <PatientContainer className="grid grid-cols-1 gap-6 py-6 sm:py-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:py-10">
         <div className="lg:col-span-2">
           <p className="text-[15px] font-semibold text-ink-muted">{exercise.title}</p>
           <h1 className="text-[30px] font-bold tracking-tight text-ink">Put on your sensors</h1>
@@ -278,6 +280,7 @@ export function SensorSetupView({
             <ArrowRight className="h-5 w-5" aria-hidden />
           </Button>
         </div>
+      </PatientContainer>
       </main>
     </>
   )
