@@ -23,7 +23,7 @@ function sectionOf(tab: string): string {
 function Avatar({ name, className }: { name: string; className?: string }) {
   return (
     <span
-      className={clsx('flex flex-shrink-0 items-center justify-center rounded-full bg-accent font-semibold text-white', className)}
+      className={clsx('flex flex-shrink-0 items-center justify-center rounded-full bg-accent font-semibold text-accent-ink', className)}
       aria-hidden
     >
       {name.charAt(0).toUpperCase()}
@@ -153,7 +153,7 @@ export function PhysioSidebar({ active, onSelect }: { active: string; onSelect: 
                       signOut()
                       navigate('/login')
                     }}
-                    className="flex-shrink-0 rounded-full p-1.5 text-ink-faint transition-colors duration-200 hover:bg-surface-hover hover:text-crimson"
+                    className="flex-shrink-0 rounded-full p-1.5 text-ink-faint transition-colors duration-200 hover:bg-surface-hover hover:text-crimson-ink"
                     aria-label="Sign out"
                     title="Sign out"
                   >

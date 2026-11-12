@@ -69,12 +69,12 @@ function DriftLimitField({ value, onChange, presetValue }: { value: string; onCh
       <PresetHint show={presetValue !== undefined && parsed !== presetValue} value={`${presetValue}°`} />
       <div id="drift-limit-msg" aria-live="polite">
         {invalid && (
-          <p className="mt-2 text-[12px] font-medium text-crimson">
+          <p className="mt-2 text-[12px] font-medium text-crimson-ink">
             Enter a whole number of degrees between {DRIFT_LIMIT_MIN} and {DRIFT_LIMIT_MAX}.
           </p>
         )}
         {low && (
-          <p className="mt-2 flex items-center gap-1.5 text-[12px] font-medium text-amber">
+          <p className="mt-2 flex items-center gap-1.5 text-[12px] font-medium text-amber-ink">
             <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
             Below {DRIFT_LIMIT_WARN_BELOW}° fired on normal movement in rig testing.
           </p>
@@ -297,7 +297,7 @@ export function ExerciseFormFields({
                 <span
                   className={clsx(
                     'flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium',
-                    form.angleConfigs.length > 0 ? 'bg-emerald/10 text-emerald' : 'bg-surface text-ink-faint',
+                    form.angleConfigs.length > 0 ? 'bg-emerald/10 text-emerald-ink' : 'bg-surface text-ink-faint',
                   )}
                 >
                   {form.angleConfigs.length > 0 && <Check className="h-3 w-3" />}
@@ -397,7 +397,7 @@ export function ExerciseFormFields({
                           onClick={() => loadAngleIntoDraft(c)}
                           className="flex min-w-0 items-center gap-1.5 text-left text-[13px] text-ink"
                         >
-                          <Check className="h-3.5 w-3.5 flex-shrink-0 text-emerald" />
+                          <Check className="h-3.5 w-3.5 flex-shrink-0 text-emerald-ink" />
                           <span className="truncate">
                             {podLabel(c.nodeA)} ↔ {podLabel(c.nodeB)}
                           </span>
@@ -410,7 +410,7 @@ export function ExerciseFormFields({
                         <button
                           type="button"
                           onClick={() => removeAngleConfig(c.id)}
-                          className="flex-shrink-0 rounded p-1 text-ink-faint transition-colors duration-200 hover:bg-surface-hover hover:text-crimson"
+                          className="flex-shrink-0 rounded p-1 text-ink-faint transition-colors duration-200 hover:bg-surface-hover hover:text-crimson-ink"
                           aria-label={`Remove ${podLabel(c.nodeA)} to ${podLabel(c.nodeB)} angle`}
                         >
                           <X className="h-3.5 w-3.5" />
@@ -421,7 +421,7 @@ export function ExerciseFormFields({
                 </div>
               )}
               <div className="mt-4 rounded-lg bg-surface-secondary p-3.5 text-[13px] leading-relaxed text-ink-faint">
-                A live skeleton segment turns <span className="font-medium text-crimson">red</span> when deviation exceeds each
+                A live skeleton segment turns <span className="font-medium text-crimson-ink">red</span> when deviation exceeds each
                 confirmed angle's own fault threshold.
               </div>
               <DriftLimitField
@@ -441,7 +441,7 @@ export function ExerciseFormFields({
                 <span
                   className={clsx(
                     'flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium',
-                    form.muscleEmgTargets.length > 0 ? 'bg-emerald/10 text-emerald' : 'bg-surface text-ink-faint',
+                    form.muscleEmgTargets.length > 0 ? 'bg-emerald/10 text-emerald-ink' : 'bg-surface text-ink-faint',
                   )}
                 >
                   {form.muscleEmgTargets.length > 0 && <Check className="h-3 w-3" />}
@@ -534,7 +534,7 @@ export function ExerciseFormFields({
                   {form.muscleEmgTargets.map((t) => (
                     <div key={t.muscleId} className="flex items-center justify-between gap-3 rounded-lg bg-surface-secondary px-3.5 py-2.5">
                       <span className="flex min-w-0 items-center gap-1.5 text-left text-[13px] text-ink">
-                        <Check className="h-3.5 w-3.5 flex-shrink-0 text-emerald" />
+                        <Check className="h-3.5 w-3.5 flex-shrink-0 text-emerald-ink" />
                         <span className="truncate">{muscleLabel(t.muscleId)}</span>
                         <span className="flex-shrink-0 font-medium text-accent">· {t.targetMvc}% MVC</span>
                       </span>
@@ -542,7 +542,7 @@ export function ExerciseFormFields({
                         <button
                           type="button"
                           onClick={() => removeMuscleEmgTarget(t.muscleId)}
-                          className="flex-shrink-0 rounded p-1 text-ink-faint transition-colors duration-200 hover:bg-surface-hover hover:text-crimson"
+                          className="flex-shrink-0 rounded p-1 text-ink-faint transition-colors duration-200 hover:bg-surface-hover hover:text-crimson-ink"
                           aria-label={`Remove ${muscleLabel(t.muscleId)} EMG target`}
                         >
                           <X className="h-3.5 w-3.5" />
@@ -562,7 +562,7 @@ export function ExerciseFormFields({
       </div>
 
       {saveError && (
-        <p role="alert" className="mt-8 rounded-lg bg-crimson/10 px-4 py-3 text-[13px] font-medium text-crimson">
+        <p role="alert" className="mt-8 rounded-lg bg-crimson/10 px-4 py-3 text-[13px] font-medium text-crimson-ink">
           {saveError}
         </p>
       )}

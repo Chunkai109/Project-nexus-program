@@ -44,7 +44,7 @@ function VerdictDot({ cx, cy, payload }: { cx?: number; cy?: number; payload?: R
         strokeWidth={payload.verdict ? 0 : 1.5}
       />
       {payload.verdict && (
-        <text x={cx} y={cy} dy="0.35em" textAnchor="middle" fontSize={9} fontWeight={700} fill="#fff">
+        <text x={cx} y={cy} dy="0.35em" textAnchor="middle" fontSize={9} fontWeight={700} fill="var(--color-accent-ink)">
           {perfect ? '✓' : '✕'}
         </text>
       )}
@@ -153,15 +153,15 @@ export function TrendChart({
           label={`Target range ${targetMin}–${targetMax}°`}
         />
         <LegendItem
-          swatch={<span className="flex h-3.5 w-3.5 items-center justify-center rounded-full bg-emerald text-[8px] font-bold text-white">✓</span>}
+          swatch={<span className="flex h-3.5 w-3.5 items-center justify-center rounded-full bg-emerald text-[8px] font-bold text-accent-ink">✓</span>}
           label="AI: Perfect"
         />
         <LegendItem
-          swatch={<span className="flex h-3.5 w-3.5 items-center justify-center rounded-full bg-crimson text-[8px] font-bold text-white">✕</span>}
+          swatch={<span className="flex h-3.5 w-3.5 items-center justify-center rounded-full bg-crimson text-[8px] font-bold text-accent-ink">✕</span>}
           label="AI: form fault"
         />
         <LegendItem swatch={<span className="h-3.5 w-3.5 rounded-full border-[1.5px] border-ink-faint" />} label="No AI verdict" />
-        <LegendItem swatch={<span className="w-3.5 text-center text-[13px] font-extrabold text-amber">!</span>} label="Upper-arm drift" />
+        <LegendItem swatch={<span className="w-3.5 text-center text-[13px] font-extrabold text-amber-ink">!</span>} label="Upper-arm drift" />
       </div>
     </div>
   )

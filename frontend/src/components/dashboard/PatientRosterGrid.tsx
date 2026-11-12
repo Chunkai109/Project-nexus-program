@@ -6,23 +6,23 @@ import { Badge } from '@/components/ui/Badge'
 import { useAppData } from '@/lib/data/AppDataContext'
 import { formatRelativeTime, hashColor } from '@/lib/formatRelativeTime'
 import { PLACEHOLDER_RULES, RULES_ARE_PLACEHOLDERS } from '@/lib/dashboardRules'
-import { historyFor, summarizePatient, type PatientStatus } from '@/lib/sessionStats'
+import { historyFor, sessionStats, summarizePatient, type PatientStatus } from '@/lib/sessionStats'
 import { HoverExplain } from '@/components/ui/HoverExplain'
-import { DemoGoodFormChange } from './PlanTags'
+import { GoodFormChange } from './PlanTags'
 
 /** Status shown as icon + text (never colour alone). `dot` marks the ● statuses. */
 const STATUS: Record<PatientStatus, { label: string; icon: typeof CheckCircle2; className: string; order: number; dot?: boolean; explanation?: string }> = {
-  'needs-attention': { label: 'Needs attention', icon: AlertTriangle, className: 'text-crimson', order: 0 },
+  'needs-attention': { label: 'Needs attention', icon: AlertTriangle, className: 'text-crimson-ink', order: 0 },
   'check-camera': {
     label: 'Check camera',
     icon: Circle,
     dot: true,
-    className: 'text-amber',
+    className: 'text-amber-ink',
     order: 1,
     explanation: "The camera or AI missed most reps, so form wasn't judged. Check the camera position before the next session.",
   },
   inactive: { label: 'Inactive', icon: Circle, dot: true, className: 'text-ink-muted', order: 2 },
-  'on-track': { label: 'On track', icon: CheckCircle2, className: 'text-emerald', order: 3 },
+  'on-track': { label: 'On track', icon: CheckCircle2, className: 'text-emerald-ink', order: 3 },
   'no-sessions': { label: 'No sessions yet', icon: Clock, className: 'text-ink-muted', order: 4 },
 }
 
@@ -41,7 +41,7 @@ function GoodFormCell({ pct, unscored, change }: { pct: number | null | undefine
       <span className="block text-[12px] tabular-nums text-ink-muted">{unscored} not scored</span>
       {change !== null && (
         <span className="mt-0.5 block text-[12px]">
-          <DemoGoodFormChange change={change} />
+          <GoodFormChange change={change} />
         </span>
       )}
     </span>
@@ -57,7 +57,15 @@ export function PatientRosterGrid({ onSelectPatient }: { onSelectPatient?: (pati
       patients
         .map((p) => {
           const { sessions: history, isDemo } = historyFor(p.id, sessions)
-          return { patient: p, isDemo, summary: summarizePatient(history) }
+          const summary = summarizePatient(history)
+          // Real change in good-form %: the latest session vs the previous session of the same exercise.
+          const latest = summary.latest
+          const earlier = latest
+            ? history.filter((h) => h.exerciseId === latest.session.exerciseId && h.completedAt < latest.session.completedAt)
+            : []
+          const prevPct = earlier.length > 0 ? sessionStats(earlier[earlier.length - 1]).goodFormPct : null
+          const goodFormChange = latest?.goodFormPct != null && prevPct !== null ? latest.goodFormPct - prevPct : null
+          return { patient: p, isDemo, summary, goodFormChange }
         })
         .sort(
           (a, b) =>
@@ -92,7 +100,7 @@ export function PatientRosterGrid({ onSelectPatient }: { onSelectPatient?: (pati
           <span>Drift faults</span>
           <span />
         </div>
-        {rows.map(({ patient: p, isDemo, summary }) => {
+        {rows.map(({ patient: p, isDemo, summary, goodFormChange }) => {
           const status = STATUS[summary.status]
           const Icon = status.icon
           return (
@@ -140,7 +148,7 @@ export function PatientRosterGrid({ onSelectPatient }: { onSelectPatient?: (pati
                 <GoodFormCell
                   pct={summary.latest?.goodFormPct}
                   unscored={summary.latest?.unscored ?? 0}
-                  change={summary.demoGoodFormChange}
+                  change={goodFormChange}
                 />
               </span>
               <span className="col-span-2 text-ink-muted md:col-span-1">
@@ -153,7 +161,7 @@ export function PatientRosterGrid({ onSelectPatient }: { onSelectPatient?: (pati
       </Card>
       {RULES_ARE_PLACEHOLDERS && (
         <p className="mt-3 text-[12px] leading-relaxed text-ink-faint">
-          <span className="font-medium text-amber">Placeholder rules</span> until a physiotherapist confirms them: <b>Needs attention</b>{' '}
+          <span className="font-medium text-amber-ink">Placeholder rules</span> until a physiotherapist confirms them: <b>Needs attention</b>{' '}
           if the last session had {driftFaultsAtLeast}+ drift faults or good form under {goodFormBelowPct}%. <b>Check camera</b> if the AI
           scored half the reps or fewer. <b>Inactive</b> after {PLACEHOLDER_RULES.inactiveAfterDays} days without a session. Good form = reps
           the AI scored {PLACEHOLDER_RULES.goodFormVerdicts.join(' or ')}, out of the reps it scored.

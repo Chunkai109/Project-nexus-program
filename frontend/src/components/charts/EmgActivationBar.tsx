@@ -12,9 +12,9 @@ const toneBar = {
   crimson: 'bg-crimson',
 }
 const toneText = {
-  emerald: 'text-emerald',
-  amber: 'text-amber',
-  crimson: 'text-crimson',
+  emerald: 'text-emerald-ink',
+  amber: 'text-amber-ink',
+  crimson: 'text-crimson-ink',
 }
 
 export function EmgActivationBar({

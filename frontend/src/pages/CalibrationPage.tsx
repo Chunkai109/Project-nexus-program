@@ -1,15 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, Activity, Check, RotateCcw, Zap } from 'lucide-react'
+import { ArrowLeft } from 'lucide-react'
 import { PageShell } from '@/components/layout/PageShell'
-import { Logo } from '@/components/layout/Logo'
-import { ThemeToggle } from '@/components/ui/ThemeToggle'
-import { Breadcrumb } from '@/components/ui/Breadcrumb'
-import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
-import { ProgressBar } from '@/components/ui/ProgressBar'
+import { CalibrationView } from '@/components/patient/CalibrationView'
 import { useAppData } from '@/lib/data/AppDataContext'
 import { useSensorHub } from '@/lib/hub/HubProvider'
+import { CURL_FLEX_POD_ID } from '@/lib/hub/bicepCurlCounter'
 import { PODS } from '@/lib/mockData'
 import type { PodId } from '@/types'
 
@@ -139,138 +136,35 @@ export function CalibrationPage() {
   }
 
   const remainingSec = Math.ceil(remainingMs / 1000)
-  const isActivePhase = phase === 'baseline' || phase === 'mvc'
+  const hubConnected = hub.connectionState === 'connected'
+  // Read-only: the real forearm angle, to show the patient the rig is reading their arm.
+  const liveAngle = hubConnected ? (hub.pods[CURL_FLEX_POD_ID]?.pitchDeg ?? null) : null
+  const target = exercise.angleConfigs[0]
+  const liveValues = EMG_PODS.map((pod) => liveByPod[pod.id] ?? 0)
+  const liveEffortPct = liveValues.length === 0 ? 0 : (liveValues.reduce((sum, v) => sum + v, 0) / liveValues.length) * 100
+  const results =
+    phase === 'mvc-done'
+      ? EMG_PODS.map((pod) => ({ label: pod.label, baseline: baselineByPod[pod.id] ?? 0, mvc: mvcByPod[pod.id] ?? 0 }))
+      : []
 
   return (
     <PageShell>
-      <header className="translucent-header sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-border px-4 py-3 sm:px-6 lg:px-10 lg:py-4">
-        <Logo size="sm" />
-        <Breadcrumb
-          steps={[{ label: 'Step 1: Sensor Placement' }, { label: 'Step 2: Calibration' }, { label: 'Step 3: Live Session' }]}
-          activeIndex={1}
-        />
-        <ThemeToggle />
-      </header>
-
-      <main className="mx-auto flex max-w-2xl flex-col gap-6 px-4 py-6 sm:px-6 sm:py-8 lg:px-10 lg:py-10">
-        <Card className="p-7">
-          <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
-            <h1 className="text-[17px] font-semibold text-ink">EMG Baseline &amp; MVC Calibration</h1>
-          </div>
-          <p className="text-[13px] text-ink-faint">{exercise.title}</p>
-          <p className="mt-4 text-[13px] leading-relaxed text-ink-muted">
-            Muscle placement and individual physiology change what a raw EMG reading means, so every session starts by
-            recording your own baseline and maximum contraction. Runtime activation is then measured as{' '}
-            <span className="font-medium text-ink">(V_rms − V_baseline) / (V_mvc − V_baseline) × 100%</span> for each pod.
-          </p>
-        </Card>
-
-        {phase === 'idle' && (
-          <Card className="flex flex-col items-center gap-4 p-10 text-center">
-            <Activity className="h-8 w-8 text-accent" />
-            <div>
-              <p className="text-[15px] font-medium text-ink">Ready to calibrate</p>
-              <p className="mt-1 max-w-sm text-[13px] text-ink-faint">
-                First you'll relax your arm completely for 3 seconds, then curl against resistance as hard as you can for
-                3 seconds.
-              </p>
-            </div>
-            <Button size="lg" onClick={startBaseline}>
-              <Zap className="h-4 w-4" />
-              Begin Baseline Phase
-            </Button>
-          </Card>
-        )}
-
-        {isActivePhase && (
-          <Card className="flex flex-col items-center gap-6 p-10 text-center">
-            <p className="text-[15px] font-semibold text-ink">
-              {phase === 'baseline' ? 'Relax your arm completely' : 'Curl against resistance — maximum effort!'}
-            </p>
-            <div className="flex h-24 w-24 items-center justify-center rounded-full bg-accent/10">
-              <span className="text-4xl font-semibold tabular-nums text-accent">{remainingSec}</span>
-            </div>
-            <div className="flex w-full flex-col gap-4">
-              {EMG_PODS.map((pod) => (
-                <div key={pod.id} className="text-left">
-                  <div className="mb-1.5 flex items-center justify-between text-[13px]">
-                    <span className="font-medium text-ink">{pod.location}</span>
-                    <span className="text-ink-faint">{((liveByPod[pod.id] ?? 0) * 100).toFixed(0)}%</span>
-                  </div>
-                  <ProgressBar value={(liveByPod[pod.id] ?? 0) * 100} tone={phase === 'mvc' ? 'crimson' : 'accent'} />
-                </div>
-              ))}
-            </div>
-          </Card>
-        )}
-
-        {phase === 'baseline-done' && (
-          <Card className="flex flex-col items-center gap-5 p-10 text-center">
-            <Check className="h-8 w-8 text-emerald" />
-            <div>
-              <p className="text-[15px] font-medium text-ink">Baseline captured</p>
-              <div className="mt-3 flex flex-col gap-1.5">
-                {EMG_PODS.map((pod) => (
-                  <p key={pod.id} className="text-[13px] text-ink-muted">
-                    {pod.location}: <span className="font-medium text-ink">{(baselineByPod[pod.id] ?? 0).toFixed(3)}</span>
-                  </p>
-                ))}
-              </div>
-              <p className="mt-3 max-w-sm text-[13px] text-ink-faint">
-                Now push against resistance as hard as you can for 3 seconds to record your maximum contraction.
-              </p>
-            </div>
-            <Button size="lg" onClick={startMvc}>
-              <Zap className="h-4 w-4" />
-              Begin MVC Phase
-            </Button>
-          </Card>
-        )}
-
-        {phase === 'mvc-done' && (
-          <Card className="flex flex-col gap-5 p-8">
-            <div className="flex items-center gap-2 text-emerald">
-              <Check className="h-5 w-5" />
-              <p className="text-[15px] font-semibold text-ink">Calibration complete</p>
-            </div>
-            <div className="flex flex-col gap-3">
-              {EMG_PODS.map((pod) => {
-                const baseline = baselineByPod[pod.id] ?? 0
-                const mvc = mvcByPod[pod.id] ?? 0
-                return (
-                  <div key={pod.id} className="rounded-xl bg-surface-secondary p-4">
-                    <p className="mb-2 text-[13px] font-medium text-ink">{pod.location}</p>
-                    <div className="grid grid-cols-3 gap-3 text-center">
-                      <div>
-                        <p className="text-[11px] uppercase tracking-wide text-ink-faint">Baseline</p>
-                        <p className="text-[15px] font-semibold text-ink">{baseline.toFixed(3)}</p>
-                      </div>
-                      <div>
-                        <p className="text-[11px] uppercase tracking-wide text-ink-faint">MVC</p>
-                        <p className="text-[15px] font-semibold text-ink">{mvc.toFixed(3)}</p>
-                      </div>
-                      <div>
-                        <p className="text-[11px] uppercase tracking-wide text-ink-faint">Range</p>
-                        <p className="text-[15px] font-semibold text-accent">{(mvc - baseline).toFixed(3)}</p>
-                      </div>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-            <div className="flex gap-3">
-              <Button variant="ghost" onClick={recalibrate}>
-                <RotateCcw className="h-4 w-4" />
-                Recalibrate
-              </Button>
-              <Button className="flex-1" onClick={confirmAndContinue}>
-                <Check className="h-4 w-4" />
-                Confirm &amp; Continue
-              </Button>
-            </div>
-          </Card>
-        )}
-      </main>
+      <CalibrationView
+        exerciseTitle={exercise.title}
+        hubConnected={hubConnected}
+        liveAngle={liveAngle}
+        targetMin={target?.targetMin ?? 100}
+        targetMax={target?.targetMax ?? 135}
+        phase={phase}
+        remainingSec={remainingSec}
+        liveEffortPct={liveEffortPct}
+        results={results}
+        onStartBaseline={startBaseline}
+        onStartMvc={startMvc}
+        onRecalibrate={recalibrate}
+        onBack={() => navigate(`/patient/setup/${exercise.id}`)}
+        onContinue={confirmAndContinue}
+      />
     </PageShell>
   )
 }

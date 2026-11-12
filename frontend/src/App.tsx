@@ -11,6 +11,7 @@ import { CalibrationPage } from '@/pages/CalibrationPage'
 import { LiveSession } from '@/pages/LiveSession'
 import { SessionSummary } from '@/pages/SessionSummary'
 import { TherapistDashboard } from '@/pages/TherapistDashboard'
+import { PatientDemo } from '@/demo/PatientDemo'
 import type { UserRole } from '@/types'
 import type { ReactNode } from 'react'
 
@@ -90,13 +91,23 @@ function AppRoutes() {
 function App() {
   return (
     <ThemeProvider>
-      <AuthProvider>
-        <AppDataProvider>
-          <HubProvider>
-            <AppRoutes />
-          </HubProvider>
-        </AppDataProvider>
-      </AuthProvider>
+      <Routes>
+        {/* The demo preview sits OUTSIDE the auth, data and hub providers on purpose:
+            it has no way to read or write patient records or reach the hub. */}
+        <Route path="/demo/patient/:screen?" element={<PatientDemo />} />
+        <Route
+          path="*"
+          element={
+            <AuthProvider>
+              <AppDataProvider>
+                <HubProvider>
+                  <AppRoutes />
+                </HubProvider>
+              </AppDataProvider>
+            </AuthProvider>
+          }
+        />
+      </Routes>
     </ThemeProvider>
   )
 }

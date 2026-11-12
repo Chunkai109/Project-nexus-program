@@ -172,7 +172,7 @@ export function LoginPage() {
             )}
 
             {error && (
-              <p role="alert" className="rounded-xl bg-crimson/10 px-4 py-3 text-[13px] text-crimson">
+              <p role="alert" className="rounded-xl bg-crimson/10 px-4 py-3 text-[13px] text-crimson-ink">
                 {error}
               </p>
             )}

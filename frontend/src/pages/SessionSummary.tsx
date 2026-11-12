@@ -1,45 +1,17 @@
 import { useMemo } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { CheckCircle2, Timer, Repeat, Target, TriangleAlert, ArrowLeft, Crosshair, Gauge, Sparkles } from 'lucide-react'
+import { ArrowLeft } from 'lucide-react'
 import { PageShell } from '@/components/layout/PageShell'
-import { Logo } from '@/components/layout/Logo'
-import { ThemeToggle } from '@/components/ui/ThemeToggle'
-import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
-import { TrendChart } from '@/components/charts/TrendChart'
-import { EmgActivationBar } from '@/components/charts/EmgActivationBar'
+import { SessionSummaryView } from '@/components/patient/SessionSummaryView'
 import { useAppData } from '@/lib/data/AppDataContext'
-import { formatRelativeTime } from '@/lib/formatRelativeTime'
-import { muscleEmgTarget } from '@/lib/muscles'
-import type { SessionRecord } from '@/types'
-
-function average(values: number[]): number {
-  return values.length === 0 ? 0 : Math.round(values.reduce((sum, v) => sum + v, 0) / values.length)
-}
-
-function romAdherencePctOf(s: SessionRecord): number {
-  if (s.reps.length === 0) return 0
-  const inCorridor = s.reps.filter((r) => r.angle >= s.targetMin && r.angle <= s.targetMax).length
-  return Math.round((inCorridor / s.reps.length) * 100)
-}
-
-/** Green when the metric is good, amber when borderline, crimson otherwise. `direction: 'high'` means higher is better. */
-function toneClass(pct: number, direction: 'high' | 'low'): string {
-  const good = direction === 'high' ? pct >= 85 : pct <= 10
-  const warn = direction === 'high' ? pct >= 60 : pct <= 25
-  if (good) return 'text-emerald'
-  if (warn) return 'text-amber'
-  return 'text-crimson'
-}
+import { sessionStats } from '@/lib/sessionStats'
 
 export function SessionSummary() {
   const { sessionId } = useParams()
   const navigate = useNavigate()
-  const { sessions, exercises } = useAppData()
+  const { sessions } = useAppData()
   const session = useMemo(() => sessions.find((s) => s.id === sessionId) ?? null, [sessions, sessionId])
-  const exercise = useMemo(() => exercises.find((e) => e.id === session?.exerciseId) ?? null, [exercises, session])
-  const targetEmgBicep = muscleEmgTarget(exercise?.muscleEmgTargets ?? [], 'right-biceps-brachii')
-
   const priorSession = useMemo(() => {
     if (!session) return null
     return (
@@ -68,126 +40,15 @@ export function SessionSummary() {
     )
   }
 
-  const totalReps = session.reps.length
-  const avgAngle = average(session.reps.map((r) => r.angle))
-  // emgLeft/emgRight are duplicates of the same single bicep EMG channel on
-  // this rig (see LiveSession.tsx) — averaging either gives the same number.
-  const avgEmgBicep = average(session.reps.map((r) => r.emgLeft))
-  const faultCount = session.reps.filter((r) => r.faultActive).length
-  const repsWithAiComment = session.reps.filter((r) => r.aiComment)
-  const mm = String(Math.floor(session.durationSec / 60)).padStart(2, '0')
-  const ss = String(session.durationSec % 60).padStart(2, '0')
-
-  const romAdherencePct = romAdherencePctOf(session)
-  const faultRatePct = totalReps === 0 ? 0 : Math.round((faultCount / totalReps) * 100)
-  const cadence = session.durationSec > 0 ? Math.round((totalReps / session.durationSec) * 60) : 0
-
-  const priorRomAdherencePct = priorSession ? romAdherencePctOf(priorSession) : null
-  const romAdherenceDelta = priorRomAdherencePct !== null ? romAdherencePct - priorRomAdherencePct : null
+  const stats = sessionStats(session)
+  const previous = priorSession ? sessionStats(priorSession) : null
+  // emgLeft is the single (simulated) bicep channel on this rig; shown only under Details, tagged Simulated.
+  const avgEffortPct =
+    session.reps.length === 0 ? null : Math.round(session.reps.reduce((sum, r) => sum + r.emgLeft, 0) / session.reps.length)
 
   return (
     <PageShell>
-      <header className="translucent-header sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-border px-4 py-3 sm:px-6 lg:px-10 lg:py-4">
-        <Logo size="sm" />
-        <div className="flex items-center gap-2 text-emerald">
-          <CheckCircle2 className="h-4 w-4" />
-          <span className="text-sm font-medium">Session Complete</span>
-        </div>
-        <ThemeToggle />
-      </header>
-
-      <main className="mx-auto flex max-w-3xl flex-col gap-6 px-4 py-6 sm:px-6 sm:py-8 lg:px-10 lg:py-10">
-        <Card className="p-7">
-          <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
-            <h1 className="text-[19px] font-semibold text-ink">{session.exerciseTitle}</h1>
-            <span className="text-[13px] text-ink-faint">{formatRelativeTime(session.completedAt)}</span>
-          </div>
-          <p className="text-[13px] text-ink-faint">
-            {totalReps} rep{totalReps === 1 ? '' : 's'} recorded · Target corridor {session.targetMin}°–{session.targetMax}°
-          </p>
-
-          {romAdherenceDelta !== null ? (
-            <p className="mt-1.5 text-[13px]">
-              <span className={romAdherenceDelta >= 0 ? 'font-medium text-emerald' : 'font-medium text-crimson'}>
-                {romAdherenceDelta >= 0 ? '▲' : '▼'} {Math.abs(romAdherenceDelta)}% Form Adherence
-              </span>{' '}
-              <span className="text-ink-faint">vs last session ({formatRelativeTime(priorSession!.completedAt)})</span>
-            </p>
-          ) : (
-            <p className="mt-1.5 text-[13px] text-ink-faint">First recorded session for this exercise</p>
-          )}
-
-          <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
-            <div className="rounded-xl bg-surface-secondary p-4 text-center">
-              <Repeat className="mx-auto mb-1.5 h-4 w-4 text-accent" />
-              <p className="text-[19px] font-semibold text-ink">{totalReps}</p>
-              <p className="text-[11px] text-ink-faint">Reps</p>
-            </div>
-            <div className="rounded-xl bg-surface-secondary p-4 text-center">
-              <Timer className="mx-auto mb-1.5 h-4 w-4 text-accent" />
-              <p className="text-[19px] font-semibold text-ink">
-                {mm}:{ss}
-              </p>
-              <p className="text-[11px] text-ink-faint">Duration</p>
-            </div>
-            <div className="rounded-xl bg-surface-secondary p-4 text-center">
-              <Target className="mx-auto mb-1.5 h-4 w-4 text-accent" />
-              <p className="text-[19px] font-semibold text-ink">{avgAngle}°</p>
-              <p className="text-[11px] text-ink-faint">Avg. Angle</p>
-            </div>
-            <div className="rounded-xl bg-surface-secondary p-4 text-center">
-              <Crosshair className={`mx-auto mb-1.5 h-4 w-4 ${toneClass(romAdherencePct, 'high')}`} />
-              <p className={`text-[19px] font-semibold ${toneClass(romAdherencePct, 'high')}`}>{romAdherencePct}%</p>
-              <p className="text-[11px] text-ink-faint">Form Adherence</p>
-            </div>
-            <div className="rounded-xl bg-surface-secondary p-4 text-center">
-              <TriangleAlert className={`mx-auto mb-1.5 h-4 w-4 ${toneClass(faultRatePct, 'low')}`} />
-              <p className={`text-[19px] font-semibold ${toneClass(faultRatePct, 'low')}`}>{faultRatePct}%</p>
-              <p className="text-[11px] text-ink-faint">Fault Rate ({faultCount}/{totalReps})</p>
-            </div>
-            <div className="rounded-xl bg-surface-secondary p-4 text-center">
-              <Gauge className="mx-auto mb-1.5 h-4 w-4 text-accent" />
-              <p className="text-[19px] font-semibold text-ink">{cadence}</p>
-              <p className="text-[11px] text-ink-faint">Reps / Min</p>
-            </div>
-          </div>
-        </Card>
-
-        <Card className="p-7">
-          <p className="mb-3 text-[13px] font-medium text-ink-muted">Joint Angle Trajectory</p>
-          <TrendChart reps={session.reps} targetMin={session.targetMin} targetMax={session.targetMax} />
-        </Card>
-
-        <Card className="p-7">
-          <p className="mb-4 text-[13px] font-medium text-ink-muted">Average Muscle Activation</p>
-          <div className="flex flex-col gap-5">
-            <EmgActivationBar label="Bicep" value={avgEmgBicep} target={targetEmgBicep} />
-          </div>
-        </Card>
-
-        {repsWithAiComment.length > 0 && (
-          <Card className="p-7">
-            <div className="mb-4 flex items-center gap-2">
-              <Sparkles className="h-4 w-4 text-accent" />
-              <p className="text-[13px] font-medium text-ink-muted">AI Form Check Notes</p>
-            </div>
-            <div className="flex flex-col gap-3">
-              {repsWithAiComment.map((r) => (
-                <div key={r.rep} className="flex items-start gap-3 rounded-xl bg-surface-secondary p-3.5">
-                  <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-surface text-[11px] font-semibold text-ink">
-                    {r.rep}
-                  </span>
-                  <p className="text-[13px] text-ink-muted">{r.aiComment}</p>
-                </div>
-              ))}
-            </div>
-          </Card>
-        )}
-
-        <Button size="lg" className="w-full" onClick={() => navigate('/patient/exercises')}>
-          Back to Exercises
-        </Button>
-      </main>
+      <SessionSummaryView stats={stats} previous={previous} avgEffortPct={avgEffortPct} onDone={() => navigate('/patient/exercises')} />
     </PageShell>
   )
 }

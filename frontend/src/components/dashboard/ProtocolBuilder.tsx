@@ -145,7 +145,7 @@ export function ProtocolBuilder({ onSelectExercise }: { onSelectExercise: (exerc
           })}
         </div>
       )}
-      {saved && <p className="mt-4 text-center text-[13px] font-medium text-emerald">Saved.</p>}
+      {saved && <p className="mt-4 text-center text-[13px] font-medium text-emerald-ink">Saved.</p>}
     </Card>
   )
 }

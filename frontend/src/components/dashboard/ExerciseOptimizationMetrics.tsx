@@ -128,11 +128,11 @@ function TileHeader({
 }) {
   const toneClass =
     metricTone === 'crimson'
-      ? 'text-crimson'
+      ? 'text-crimson-ink'
       : metricTone === 'amber'
-        ? 'text-amber'
+        ? 'text-amber-ink'
         : metricTone === 'emerald'
-          ? 'text-emerald'
+          ? 'text-emerald-ink'
           : 'text-ink'
   return (
     <div className="mb-4">

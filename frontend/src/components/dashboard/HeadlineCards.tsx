@@ -3,8 +3,8 @@ import { Card } from '@/components/ui/Card'
 import { HoverExplain } from '@/components/ui/HoverExplain'
 import { formatRelativeTime } from '@/lib/formatRelativeTime'
 import { PLACEHOLDER_RULES, RULES_ARE_PLACEHOLDERS } from '@/lib/dashboardRules'
-import { demoGoodFormChange, type SessionStats } from '@/lib/sessionStats'
-import { DemoGoodFormChange } from './PlanTags'
+import type { SessionStats } from '@/lib/sessionStats'
+import { GoodFormChange } from './PlanTags'
 
 type Better = 'higher' | 'lower'
 
@@ -18,7 +18,7 @@ function Change({ current, previous, unit, better }: { current: number | null; p
   const size = Math.abs(delta)
   const words = unit === 'pts' ? `${size} ${size === 1 ? 'pt' : 'pts'}` : delta > 0 ? `${size} more` : `${size} fewer`
   return (
-    <span className={improved ? 'font-medium text-emerald' : 'font-medium text-crimson'}>
+    <span className={improved ? 'font-medium text-emerald-ink' : 'font-medium text-crimson-ink'}>
       {delta > 0 ? '▲' : '▼'} {words} vs last session
     </span>
   )
@@ -47,12 +47,12 @@ export function HeadlineCards({ latest, previous, sessionCount }: { latest: Sess
           label="Good-form reps"
           value={latest.goodFormPct === null ? '—' : `${latest.goodFormPct}%`}
           change={
-            latest.goodFormPct === null ? (
-              <span className="text-ink-muted">No comparison</span>
-            ) : !previous ? (
+            !previous ? (
               <span className="text-ink-faint">First session</span>
+            ) : latest.goodFormPct === null || previous.goodFormPct === null ? (
+              <span className="text-ink-muted">No comparison</span>
             ) : (
-              <DemoGoodFormChange change={demoGoodFormChange(latest.session.patientId, latest.session.id)} />
+              <GoodFormChange change={latest.goodFormPct - previous.goodFormPct} />
             )
           }
           detail={
@@ -86,7 +86,7 @@ export function HeadlineCards({ latest, previous, sessionCount }: { latest: Sess
       </div>
       {RULES_ARE_PLACEHOLDERS && (
         <p className="mt-3 text-[12px] text-ink-faint">
-          <span className="font-medium text-amber">Placeholder rule:</span> good form = reps the AI scored {goodFormLabel}, out of the reps
+          <span className="font-medium text-amber-ink">Placeholder rule:</span> good form = reps the AI scored {goodFormLabel}, out of the reps
           it scored, until a physiotherapist confirms the rule.
         </p>
       )}

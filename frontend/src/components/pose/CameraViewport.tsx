@@ -156,7 +156,7 @@ export function CameraViewport({
       {cameraOk && poseStatus === 'unavailable' && (
         <div className="absolute top-3 left-1/2 flex max-w-[90%] -translate-x-1/2 flex-col items-center gap-1 rounded-xl bg-black/60 px-3 py-2 text-center backdrop-blur-sm">
           <div className="flex items-center gap-2">
-            <VideoOff className="h-3.5 w-3.5 flex-shrink-0 text-amber" />
+            <VideoOff className="h-3.5 w-3.5 flex-shrink-0 text-amber-ink" />
             <p className="text-xs text-ink-faint">Pose model unavailable — camera feed only</p>
           </div>
           {poseError && (
@@ -200,7 +200,7 @@ export function CameraViewport({
       )}
 
       <div className="absolute left-4 top-4 flex items-center gap-1.5 rounded-full bg-black/50 px-2.5 py-1 text-[11px] font-medium text-white backdrop-blur-sm">
-        <Video className={`h-3 w-3 ${showRealSkeleton ? 'text-crimson' : 'text-ink-faint'}`} />
+        <Video className={`h-3 w-3 ${showRealSkeleton ? 'text-crimson-ink' : 'text-ink-faint'}`} />
         {showRealSkeleton
           ? 'REC · MediaPipe Pose (live)'
           : poseDetectionEnabled

@@ -5,9 +5,9 @@ type Tone = 'accent' | 'emerald' | 'amber' | 'crimson' | 'neutral' | 'violet'
 
 const toneClass: Record<Tone, string> = {
   accent: 'bg-accent/10 text-accent',
-  emerald: 'bg-emerald/10 text-emerald',
-  amber: 'bg-amber/10 text-amber',
-  crimson: 'bg-crimson/10 text-crimson',
+  emerald: 'bg-emerald/10 text-emerald-ink',
+  amber: 'bg-amber/10 text-amber-ink',
+  crimson: 'bg-crimson/10 text-crimson-ink',
   neutral: 'bg-surface-secondary text-ink-muted',
   violet: 'bg-violet/10 text-violet',
 }

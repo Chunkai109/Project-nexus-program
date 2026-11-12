@@ -13,6 +13,7 @@
     "postinstall": "node scripts/copy-mediapipe-wasm.mjs"
   },
   "dependencies": {
+    "@fontsource-variable/atkinson-hyperlegible-next": "^5.3.0",
     "@mediapipe/tasks-vision": "^1.0.1",
     "@react-three/drei": "^10.7.9",
     "@react-three/fiber": "^9.8.1",

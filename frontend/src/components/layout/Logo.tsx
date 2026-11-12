@@ -9,7 +9,7 @@ export function Logo({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' }) {
   return (
     <div className="flex items-center gap-2.5">
       <div className={clsx('flex items-center justify-center rounded-xl bg-accent', iconBox)}>
-        <Activity size={iconSize} strokeWidth={2.5} className="text-white" />
+        <Activity size={iconSize} strokeWidth={2.5} className="text-accent-ink" />
       </div>
       <span className={clsx('font-semibold tracking-tight text-ink', text)}>SmartPhysio</span>
     </div>

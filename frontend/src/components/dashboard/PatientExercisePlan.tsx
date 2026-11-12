@@ -351,7 +351,7 @@ function PlanSummary({
 
       {presetUpdated && (
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-amber/10 px-4 py-3">
-          <p className="flex items-center gap-2 text-[13px] font-medium text-amber">
+          <p className="flex items-center gap-2 text-[13px] font-medium text-amber-ink">
             <AlertTriangle className="h-4 w-4 flex-shrink-0" aria-hidden />
             Preset updated since this plan was made.
           </p>
@@ -422,7 +422,7 @@ function PlanSummary({
         <Button
           size="sm"
           variant="danger"
-          className="!bg-transparent !text-crimson hover:!bg-crimson/10"
+          className="!bg-transparent !text-crimson-ink hover:!bg-crimson/10"
           onClick={onRemove}
           aria-label={`Remove ${plan.title} from ${patient.name}`}
         >

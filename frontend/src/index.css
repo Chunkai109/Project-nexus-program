@@ -3,53 +3,65 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
-  --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', system-ui, Roboto, sans-serif;
+  --font-sans: 'Atkinson Hyperlegible Next Variable', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, Roboto, sans-serif;
   --font-mono: 'SF Mono', ui-monospace, 'JetBrains Mono', monospace;
 
-  --color-canvas: #fafafa;
+  /* "Warm clinic": warm off-white, navy ink, a clearly blue accent.
+     Every pair is checked by scripts/check-contrast.mjs. */
+  --color-canvas: #faf7f2;
   --color-surface: #ffffff;
-  --color-surface-secondary: #f5f5f7;
-  --color-surface-hover: #ececee;
-  --color-border: rgba(0, 0, 0, 0.08);
-  --color-border-strong: rgba(0, 0, 0, 0.14);
+  --color-surface-secondary: #f3eee6;
+  --color-surface-hover: #e9e2d7;
+  --color-border: rgba(20, 33, 61, 0.1);
+  --color-border-strong: rgba(20, 33, 61, 0.2);
 
-  --color-ink: #1d1d1f;
-  --color-ink-muted: #6e6e73;
-  --color-ink-faint: #86868b;
+  --color-ink: #14213d;
+  --color-ink-muted: #465069;
+  --color-ink-faint: #596175;
 
-  --color-accent: #0071e3;
-  --color-accent-hover: #0077ed;
+  --color-accent: #1f5fa6;
+  --color-accent-hover: #1a5290;
+  /* Text on an accent or status fill (buttons). */
   --color-accent-ink: #ffffff;
 
+  /* Status colours for fills, bars, chart marks and icons. */
   --color-emerald: #248a3d;
   --color-amber: #c26900;
   --color-crimson: #d70015;
   --color-violet: #5e5ce6;
+  /* The same meanings, darkened for text so words pass 4.5:1 on the warm background. */
+  --color-emerald-ink: #1b6e30;
+  --color-amber-ink: #8f4d00;
+  --color-crimson-ink: #b3000f;
 
-  --shadow-ambient: 0 4px 20px -2px rgba(0, 0, 0, 0.05);
-  --shadow-ambient-lg: 0 12px 40px -6px rgba(0, 0, 0, 0.08);
+  --shadow-ambient: 0 4px 20px -4px rgba(60, 42, 20, 0.08);
+  --shadow-ambient-lg: 0 14px 44px -8px rgba(60, 42, 20, 0.14);
 }
 
 .dark {
-  --color-canvas: #000000;
-  --color-surface: #1c1c1e;
-  --color-surface-secondary: #2c2c2e;
-  --color-surface-hover: #3a3a3c;
-  --color-border: rgba(255, 255, 255, 0.09);
-  --color-border-strong: rgba(255, 255, 255, 0.16);
+  --color-canvas: #0e1626;
+  --color-surface: #17223a;
+  --color-surface-secondary: #1f2c48;
+  --color-surface-hover: #293859;
+  --color-border: rgba(255, 255, 255, 0.1);
+  --color-border-strong: rgba(255, 255, 255, 0.2);
 
-  --color-ink: #f5f5f7;
-  --color-ink-muted: #a1a1a6;
-  --color-ink-faint: #86868b;
+  --color-ink: #f2efe9;
+  --color-ink-muted: #b6bdcc;
+  --color-ink-faint: #9aa3b5;
 
-  --color-accent: #0a84ff;
-  --color-accent-hover: #3aa0ff;
-  --color-accent-ink: #ffffff;
+  --color-accent: #6aa9f0;
+  --color-accent-hover: #86baf4;
+  /* White on this blue is only 2.5:1, so button text turns navy in dark mode. */
+  --color-accent-ink: #0e1626;
 
   --color-emerald: #32d74b;
   --color-amber: #ff9f0a;
   --color-crimson: #ff453a;
   --color-violet: #7d7aff;
+  --color-emerald-ink: #32d74b;
+  --color-amber-ink: #ff9f0a;
+  --color-crimson-ink: #ff6961;
 
   --shadow-ambient: 0 4px 20px -2px rgba(0, 0, 0, 0.4);
   --shadow-ambient-lg: 0 16px 48px -8px rgba(0, 0, 0, 0.55);
@@ -82,6 +94,22 @@
 
   #root {
     min-height: 100svh;
+  }
+
+  /* One visible keyboard focus ring everywhere. */
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
   }
 }
 

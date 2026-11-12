@@ -1,20 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, TriangleAlert, Timer, Repeat, ScanEye, Loader2, ChevronDown, ChevronUp } from 'lucide-react'
+import { ArrowLeft } from 'lucide-react'
 import { PageShell } from '@/components/layout/PageShell'
-import { Logo } from '@/components/layout/Logo'
-import { ThemeToggle } from '@/components/ui/ThemeToggle'
-import { Breadcrumb } from '@/components/ui/Breadcrumb'
-import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
-import { RadialGauge } from '@/components/charts/RadialGauge'
-import { EmgActivationBar } from '@/components/charts/EmgActivationBar'
 import { CameraViewport } from '@/components/pose/CameraViewport'
 import { PoseOverlay } from '@/components/pose/PoseOverlay'
+import { LiveSessionView } from '@/components/patient/LiveSessionView'
+import { verdictFor } from '@/components/patient/liveVerdict'
 import { useSensorStream } from '@/lib/useSensorStream'
 import { useAppData } from '@/lib/data/AppDataContext'
 import { useAuth } from '@/lib/AuthContext'
-import { muscleEmgTarget } from '@/lib/muscles'
 import { useSensorHub } from '@/lib/hub/HubProvider'
 import { CURL_DRIFT_POD_ID, CURL_FLEX_POD_ID, DEFAULT_DRIFT_TOLERANCE, EXTENSION_LIMIT, POD_HAPTIC_FORM } from '@/lib/hub/bicepCurlCounter'
 import type { PodId } from '@/lib/hub/protocol'
@@ -202,7 +197,8 @@ export function LiveSession() {
   const visionFramesRef = useRef<number[][][]>([])
   const visionBufferStartRef = useRef<number | null>(null)
   const [formCheck, setFormCheck] = useState<FormCheckState>({ status: 'idle' })
-  const [formCheckExpanded, setFormCheckExpanded] = useState(true)
+  // Display only: which rep is newest and when it finished (see the verdict logic near the render).
+  const [repMark, setRepMark] = useState({ rep: 0, at: 0 })
 
   function handleWorldLandmarks(landmarks: number[][] | null) {
     if (!landmarks || !visionCapturingRef.current) return
@@ -392,195 +388,58 @@ export function LiveSession() {
     setTimeout(() => navigate(session ? `/patient/session-summary/${session.id}` : '/patient/exercises'), 200)
   }
 
-  const mm = String(Math.floor(simulated.elapsedSec / 60)).padStart(2, '0')
-  const ss = String(simulated.elapsedSec % 60).padStart(2, '0')
+  // ---- Display only (no effect on rep counting, the AI check or what is saved) ----
+  // When the newest rep finished, so "Checking…" can time out on the final rep.
+  if (repMark.rep !== repCount) setRepMark({ rep: repCount, at: simulated.elapsedSec })
+  const verdict = verdictFor(repSamples[repSamples.length - 1], formCheck.status, simulated.elapsedSec - repMark.at)
+  // Degrees past this plan's limit. Only known from the real hub: the simulated stream's fault value means something else.
+  const overLimitDeg = usingHubCurl ? Math.max(0, Math.round(curl.driftError - driftToleranceDeg)) : null
 
   return (
-    <PageShell>
-      <header className="translucent-header sticky top-0 z-20 flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3 sm:px-6 lg:px-10 lg:py-4">
-        <Logo size="sm" />
-        <Breadcrumb
-          steps={[{ label: 'Step 1: Sensor Placement' }, { label: 'Step 2: Calibration' }, { label: 'Step 3: Live Session' }]}
-          activeIndex={2}
-        />
-        <div className="flex items-center gap-3 text-sm text-ink-muted sm:gap-5">
-          <span className="flex items-center gap-1.5">
-            <Timer className="h-4 w-4 text-accent" />
-            {mm}:{ss}
-          </span>
-          <span className="flex items-center gap-1.5">
-            <Repeat className="h-4 w-4 text-accent" />
-            {repCount} reps
-          </span>
-          <ThemeToggle />
-        </div>
-      </header>
-
-      <main className="grid grid-cols-1 gap-6 px-4 py-6 sm:px-6 sm:py-8 lg:grid-cols-[1.5fr_1fr] lg:px-10 lg:py-10">
-        {/* Primary viewport */}
-        <div className="flex flex-col gap-4">
+    <PageShell fullWidth>
+      <LiveSessionView
+        exerciseTitle={exercise.title}
+        sets={exercise.sets}
+        repsPerSet={exercise.reps}
+        repCount={repCount}
+        elapsedSec={simulated.elapsedSec}
+        angle={kneeFlexionDeg}
+        targetMin={targetMin}
+        targetMax={targetMax}
+        source={usingHubCurl ? 'hub' : 'simulated'}
+        driftFault={{ active: faultActive, overLimitDeg }}
+        verdict={verdict}
+        buzzOnPerfect={hub.connectionState === 'connected'}
+        ending={ending}
+        onEnd={handleEnd}
+        camera={
           <CameraViewport
             faultActive={faultActive}
             onWorldLandmarks={handleWorldLandmarks}
             poseDetectionEnabled={ENABLE_MEDIAPIPE_VISION && !ending}
-            fallbackSkeleton={
-              <PoseOverlay squatDepth={squatDepth} faultActive={faultActive} faultDeg={faultDeg} />
-            }
-          >
-            {faultActive && faultLabel && (
-              <div className="animate-pulse-ring-crimson absolute bottom-4 left-4 flex items-center gap-2 rounded-lg border border-crimson/40 bg-crimson/15 px-3 py-2 text-xs font-semibold text-crimson backdrop-blur-sm">
-                <TriangleAlert className="h-4 w-4" />
-                {faultLabel}
-              </div>
-            )}
-
-            <div className="absolute right-4 top-4 rounded-full bg-black/50 px-2.5 py-1 text-[11px] font-medium text-white backdrop-blur-sm">
-              {exercise.title}
-            </div>
-          </CameraViewport>
-
-          <Card className="flex items-start gap-2.5 p-5">
-            <ScanEye className="mt-0.5 h-4 w-4 flex-shrink-0 text-accent" />
-            <p className="text-[13px] text-ink-faint">
+            fallbackSkeleton={<PoseOverlay squatDepth={squatDepth} faultActive={faultActive} faultDeg={faultDeg} />}
+          />
+        }
+        details={
+          <>
+            <p>
               {usingHubCurl
-                ? "Flexion, drift and rep counting below are computed live from the ESP32's MPU6050 pods, run through the same curl algorithm as the firmware. The camera feed alongside it feeds AI Form Check."
-                : 'No live hub connection right now, so the joint angle and fault state below are simulated from the wearable stream.'}
+                ? 'Angle, drift and reps come live from the forearm and upper-arm motion sensors. The camera feeds the AI form check.'
+                : 'No live hub connection, so the angle and drift fault are simulated.'}
             </p>
-          </Card>
-        </div>
-
-        {/* Secondary column */}
-        <div className="flex flex-col gap-6">
-          <Card className="flex flex-col items-center p-6">
-            {/* min/max span the full rep sweep (extended to contracted), not just
-                the target corridor, since kneeFlexionDeg travels across the whole
-                range every rep — clamping tightly around target (as the other two
-                RadialGauge call sites do for their narrower, target-relative
-                stats) made every rep's bottom half collapse to a flat "empty" arc. */}
-            <RadialGauge
-              value={kneeFlexionDeg}
-              min={0}
-              max={Math.max(200, targetMax + 20)}
-              targetMin={targetMin}
-              targetMax={targetMax}
-              label="Joint Angle"
-              fault={faultActive}
-            />
-            <span
-              className={`mt-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium ${usingHubCurl ? 'bg-accent/10 text-accent' : 'bg-surface-secondary text-ink-faint'}`}
-            >
-              {usingHubCurl ? 'Source: Live Hub (MPU)' : 'Source: Wearable Simulation'}
-            </span>
-            <p className="mt-3 text-center text-[13px] font-medium text-ink-muted">
-              {kneeFlexionDeg < targetMin ? 'Keep going!' : 'Nice — target reached!'}
+            <p>
+              AI form check:{' '}
+              {formCheck.status === 'unavailable'
+                ? 'the AI server could not be reached (start it with: uvicorn ensemble.api.server:app --port 8000).'
+                : usingHubCurl
+                  ? 'camera + hub sensors.'
+                  : 'camera only.'}
             </p>
-          </Card>
-
-          <Card className="flex flex-col gap-2.5 p-6">
-            <button
-              type="button"
-              onClick={() => setFormCheckExpanded((v) => !v)}
-              className="flex items-center justify-between text-left"
-              aria-expanded={formCheckExpanded}
-            >
-              <h3 className="text-[15px] font-semibold text-ink">AI Form Check</h3>
-              <div className="flex items-center gap-2">
-                <span
-                  className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${
-                    formCheck.status === 'result' ? 'bg-accent/10 text-accent' : 'bg-surface-secondary text-ink-faint'
-                  }`}
-                >
-                  {formCheck.status === 'unavailable' ? 'Model Offline' : usingHubCurl ? 'Vision + Hub' : 'Vision Only'}
-                </span>
-                {formCheckExpanded ? (
-                  <ChevronUp className="h-4 w-4 flex-shrink-0 text-ink-faint" />
-                ) : (
-                  <ChevronDown className="h-4 w-4 flex-shrink-0 text-ink-faint" />
-                )}
-              </div>
-            </button>
-
-            {formCheckExpanded && (
-              <>
-                {formCheck.status === 'idle' && (
-                  <p className="text-[13px] text-ink-faint">
-                    Start curling from full extension in view of the camera to get an AI-scored form check.
-                  </p>
-                )}
-                {formCheck.status === 'capturing' && (
-                  <p className="flex items-center gap-2 text-[13px] text-ink-faint">
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    {formCheck.phase === 'rising'
-                      ? 'Recording this rep — keep going to the target…'
-                      : 'In the target zone — hold briefly to finish scoring this rep…'}
-                  </p>
-                )}
-                {formCheck.status === 'checking' && (
-                  <p className="flex items-center gap-2 text-[13px] text-ink-faint">
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    Scoring your last rep…
-                  </p>
-                )}
-                {formCheck.status === 'insufficient_frames' && (
-                  <p className="text-[13px] text-ink-faint">
-                    That rep was too fast for the camera to score (only {formCheck.frameCount} frame
-                    {formCheck.frameCount === 1 ? '' : 's'} captured) — try pacing the lift a little slower.
-                  </p>
-                )}
-                {formCheck.status === 'unavailable' && (
-                  <p className="text-[13px] text-ink-faint">
-                    Couldn't reach the vision model API — start it with{' '}
-                    <code className="rounded bg-surface-secondary px-1 py-0.5 text-[12px]">
-                      uvicorn ensemble.api.server:app --port 8000
-                    </code>{' '}
-                    (see ensemble/README.md).
-                  </p>
-                )}
-                {formCheck.status === 'result' &&
-                  (() => {
-                    const { result } = formCheck
-                    const isGoodForm = result.prediction === 'Perfect'
-                    const isGate =
-                      result.prediction === 'no_exercise_detected' ||
-                      result.prediction === 'unrecognized_movement' ||
-                      result.prediction === 'unrecognized_input'
-                    return (
-                      <>
-                        <div className="flex items-center justify-between">
-                          <span
-                            className={`text-[17px] font-semibold ${isGoodForm ? 'text-emerald' : isGate ? 'text-ink-faint' : 'text-crimson'}`}
-                          >
-                            {result.prediction ?? 'No result'}
-                          </span>
-                          {result.good_form_score != null && (
-                            <span className="text-[13px] text-ink-faint">
-                              {Math.round(result.good_form_score * 100)}% good form
-                            </span>
-                          )}
-                        </div>
-                        {result.message && <p className="text-[12px] text-ink-faint">{result.message}</p>}
-                        {'source' in result && (
-                          <p className="text-[11px] text-ink-faint">source: {result.source}</p>
-                        )}
-                      </>
-                    )
-                  })()}
-              </>
-            )}
-          </Card>
-
-          <Card className="flex flex-col gap-5 p-6">
-            <div className="flex items-center justify-between">
-              <h3 className="text-[15px] font-semibold text-ink">EMG Activation</h3>
-            </div>
-            <EmgActivationBar label="Bicep" value={emgBicep} target={muscleEmgTarget(exercise.muscleEmgTargets, 'right-biceps-brachii')} />
-          </Card>
-
-          <Button variant="danger" size="lg" className="w-full" onClick={handleEnd} disabled={ending}>
-            {ending ? 'Syncing session data…' : 'End Session & Sync Data'}
-          </Button>
-        </div>
-      </main>
+            {formCheck.status === 'result' && 'source' in formCheck.result && <p>Last result source: {formCheck.result.source}</p>}
+            {faultLabel && <p>{faultLabel}</p>}
+          </>
+        }
+      />
     </PageShell>
   )
 }

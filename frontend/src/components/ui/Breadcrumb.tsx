@@ -15,7 +15,7 @@ export function Breadcrumb({ steps, activeIndex }: { steps: Step[]; activeIndex:
             <div
               className={clsx(
                 'flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium transition-colors',
-                state === 'done' && 'bg-emerald/10 text-emerald',
+                state === 'done' && 'bg-emerald/10 text-emerald-ink',
                 state === 'active' && 'bg-accent/10 text-accent',
                 state === 'upcoming' && 'text-ink-faint',
               )}
@@ -23,8 +23,8 @@ export function Breadcrumb({ steps, activeIndex }: { steps: Step[]; activeIndex:
               <span
                 className={clsx(
                   'flex h-4 w-4 items-center justify-center rounded-full text-[10px]',
-                  state === 'done' && 'bg-emerald text-white',
-                  state === 'active' && 'bg-accent text-white',
+                  state === 'done' && 'bg-emerald text-accent-ink',
+                  state === 'active' && 'bg-accent text-accent-ink',
                   state === 'upcoming' && 'bg-surface-secondary text-ink-faint',
                 )}
               >

@@ -63,7 +63,7 @@ export function ExerciseFineTune({ exerciseId }: { exerciseId: string }) {
           <h2 className="text-[15px] font-semibold text-ink">Edit Exercise</h2>
           <p className="text-[13px] text-ink-faint">Define biomechanical thresholds prescribed for this exercise</p>
         </div>
-        {saved && <span className="text-[13px] font-medium text-emerald">Saved.</span>}
+        {saved && <span className="text-[13px] font-medium text-emerald-ink">Saved.</span>}
       </div>
       <ExerciseFormFields
         form={form}
