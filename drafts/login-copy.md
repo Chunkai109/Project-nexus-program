@@ -31,7 +31,7 @@ Physiotherapist accounts are set up by your clinic. Ask your clinic admin to cre
 
 Forgot your password? Ask your clinic admin.
 
-Theme button: Switch to dark theme. Switch to light theme.
+Theme button: Switch to dark mode. Switch to light mode.
 
 ## Errors
 
@@ -54,6 +54,8 @@ Account created, but your profile could not be loaded. Try signing in.
 Enter your name.
 
 Enter your email.
+
+Enter a full email address, like you@example.com.
 
 Enter your password.
 
