@@ -69,7 +69,7 @@ export function HoverExplain({
       {position &&
         createPortal(
           <div
-            className="pointer-events-none fixed z-[100] rounded-lg border border-border-strong bg-surface px-3.5 py-2.5 text-[12px] leading-snug text-ink-muted shadow-[var(--shadow-ambient-lg)]"
+            className="pointer-events-none fixed z-[100] rounded-lg border border-border-strong bg-surface px-3.5 py-2.5 text-[13px] leading-snug text-ink-muted shadow-[var(--shadow-ambient-lg)]"
             style={{ top: position.top, left: position.left, width: WIDTH }}
           >
             {explanation}

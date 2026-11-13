@@ -1,22 +1,22 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
-import { Dumbbell, LogOut, Menu, Settings, Users, X } from 'lucide-react'
+import { Dumbbell, LogOut, Menu, Users, X } from 'lucide-react'
 import { clsx } from 'clsx'
 import { Logo } from './Logo'
 import { ThemeToggle } from '@/components/ui/ThemeToggle'
 import { useAuth } from '@/lib/AuthContext'
 
 const NAV_ITEMS = [
-  { key: 'roster', label: 'Patient Roster', icon: Users, hint: 'Who needs you first' },
-  { key: 'creator', label: 'Exercise Creator', icon: Dumbbell, hint: 'Preset exercises' },
-  { key: 'settings', label: 'Settings', icon: Settings, hint: 'Practice preferences' },
+  { key: 'roster', label: 'Patients', icon: Users, hint: 'Who needs you first' },
+  { key: 'creator', label: 'Exercise Creator', icon: Dumbbell, hint: 'Presets' },
+  // Settings is hidden until it has content.
 ] as const
 
-/** Pages inside a section highlight that section, e.g. a patient's page highlights Patient Roster. */
+/** Pages inside a section highlight that section, e.g. a patient's page highlights Patients. */
 function sectionOf(tab: string): string {
   if (tab === 'analytics') return 'roster'
-  if (tab.startsWith('exercise-')) return 'creator'
+  if (tab.startsWith('exercise-') || tab.startsWith('creator')) return 'creator'
   return tab
 }
 
@@ -104,7 +104,7 @@ export function PhysioSidebar({ active, onSelect }: { active: string; onSelect: 
               <div className="flex items-start justify-between px-5 pt-5">
                 <div>
                   <Logo size="sm" />
-                  <p className="mt-1 pl-0.5 text-xs text-ink-faint">Physiotherapist Portal</p>
+                  <p className="mt-1 pl-0.5 text-[13px] text-ink-muted">Physiotherapist portal</p>
                 </div>
                 <button
                   ref={closeButtonRef}
@@ -128,7 +128,7 @@ export function PhysioSidebar({ active, onSelect }: { active: string; onSelect: 
                       aria-current={selected ? 'page' : undefined}
                       title={hint}
                       className={clsx(
-                        'relative flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-[14px] transition-colors duration-150',
+                        'relative flex min-h-[44px] w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-[15px] transition-colors duration-150',
                         selected ? 'bg-surface-secondary font-semibold text-ink' : 'text-ink-muted hover:bg-surface-secondary hover:text-ink',
                       )}
                     >
@@ -145,7 +145,7 @@ export function PhysioSidebar({ active, onSelect }: { active: string; onSelect: 
                   <Avatar name={name} className="h-9 w-9 text-sm" />
                   <div className="min-w-0 flex-1 text-sm leading-tight">
                     <p className="truncate font-semibold text-ink">{name}</p>
-                    <p className="truncate text-xs text-ink-faint">{user?.email ?? 'physio@clinic.com'}</p>
+                    <p className="truncate text-[13px] text-ink-muted">{user?.email ?? 'physio@clinic.com'}</p>
                   </div>
                   <button
                     type="button"

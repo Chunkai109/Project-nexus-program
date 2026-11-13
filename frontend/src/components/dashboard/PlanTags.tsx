@@ -6,7 +6,7 @@ export function NotUsedYetTag() {
   return (
     <HoverExplain className="inline-flex" explanation="Saved with this plan. The AI form check will use it in a future version.">
       <span
-        className="inline-flex items-center whitespace-nowrap rounded-full bg-surface-secondary px-2 py-0.5 text-[11px] font-medium text-ink-muted"
+        className="inline-flex items-center whitespace-nowrap rounded-full bg-surface-secondary px-2 py-0.5 text-[13px] font-medium text-ink-muted"
         aria-label="Not used in sessions yet. Saved with this plan. The AI form check will use it in a future version."
       >
         Not used in sessions yet

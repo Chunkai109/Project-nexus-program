@@ -37,7 +37,7 @@ export function ExerciseFineTune({ exerciseId }: { exerciseId: string }) {
   if (!exercise) {
     return (
       <Card className="p-7 text-center">
-        <p className="text-[14px] text-ink-muted">This exercise no longer exists — it may have just been deleted.</p>
+        <p className="text-[15px] text-ink-muted">This preset no longer exists. It may have just been deleted.</p>
       </Card>
     )
   }
@@ -58,14 +58,10 @@ export function ExerciseFineTune({ exerciseId }: { exerciseId: string }) {
   }
 
   return (
-    <Card className="p-7">
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h2 className="text-[15px] font-semibold text-ink">Edit Exercise</h2>
-          <p className="text-[13px] text-ink-faint">Define biomechanical thresholds prescribed for this exercise</p>
-        </div>
-        {saved && <span className="text-[13px] font-medium text-emerald-ink">Saved.</span>}
-      </div>
+    <Card className="p-6">
+      <p className="mb-2 min-h-[1.5em] text-right text-[14px] font-medium text-emerald-ink" role="status">
+        {saved ? 'Saved.' : ''}
+      </p>
       <ExerciseFormFields
         form={form}
         setForm={setForm}

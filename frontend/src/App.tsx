@@ -12,6 +12,7 @@ import { LiveSession } from '@/pages/LiveSession'
 import { SessionSummary } from '@/pages/SessionSummary'
 import { TherapistDashboard } from '@/pages/TherapistDashboard'
 import { PatientDemo } from '@/demo/PatientDemo'
+import { PhysioDemo } from '@/demo/PhysioDemo'
 import { BodyCheck } from '@/demo/BodyCheck'
 import { AdminPage } from '@/pages/AdminPage'
 import { homeFor } from '@/lib/homeFor'
@@ -110,6 +111,7 @@ function App() {
         {/* The demo preview sits OUTSIDE the auth, data and hub providers on purpose:
             it has no way to read or write patient records or reach the hub. */}
         <Route path="/demo/patient/:screen?" element={<PatientDemo />} />
+        <Route path="/demo/physio/:screen?" element={<PhysioDemo />} />
         {/* Developer check page for the 3D body model. Reads and writes nothing. */}
         <Route path="/demo/body" element={<BodyCheck />} />
         <Route

@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { Check, X } from 'lucide-react'
 import {
   CartesianGrid,
   ComposedChart,
@@ -43,13 +44,11 @@ function VerdictDot({ cx, cy, payload }: { cx?: number; cy?: number; payload?: R
         stroke={color}
         strokeWidth={payload.verdict ? 0 : 1.5}
       />
-      {payload.verdict && (
-        <text x={cx} y={cy} dy="0.35em" textAnchor="middle" fontSize={9} fontWeight={700} fill="var(--color-accent-ink)">
-          {perfect ? '✓' : '✕'}
-        </text>
-      )}
+      {/* Drawn as shapes, not text: a tick for Perfect, a cross for a form fault. */}
+      {perfect && <path d={`M${cx - 3.2},${cy} L${cx - 0.8},${cy + 2.6} L${cx + 3.4},${cy - 2.8}`} fill="none" stroke="var(--color-accent-ink)" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />}
+      {faulted && <path d={`M${cx - 2.6},${cy - 2.6} L${cx + 2.6},${cy + 2.6} M${cx + 2.6},${cy - 2.6} L${cx - 2.6},${cy + 2.6}`} stroke="var(--color-accent-ink)" strokeWidth={1.8} strokeLinecap="round" />}
       {payload.drift && (
-        <text x={cx} y={cy - 12} textAnchor="middle" fontSize={11} fontWeight={800} fill="var(--color-amber)">
+        <text x={cx} y={cy - 12} textAnchor="middle" fontSize={13} fontWeight={800} fill="var(--color-amber-ink)">
           !
         </text>
       )}
@@ -93,21 +92,22 @@ export function TrendChart({
           <ReferenceArea
             y1={targetMin}
             y2={targetMax}
-            fill="var(--color-emerald)"
-            fillOpacity={0.1}
-            stroke="var(--color-emerald)"
-            strokeOpacity={0.35}
+            fill="var(--color-ink)"
+            fillOpacity={0.06}
+            stroke="var(--color-ink-muted)"
+            strokeOpacity={0.4}
+            strokeDasharray="4 3"
           />
           <XAxis
             dataKey="rep"
-            tick={{ fill: 'var(--color-ink-faint)', fontSize: 11 }}
+            tick={{ fill: 'var(--color-ink-muted)', fontSize: 12 }}
             axisLine={{ stroke: 'var(--color-border-strong)' }}
             tickLine={false}
             interval={Math.max(0, Math.ceil(data.length / 12) - 1)}
-            label={{ value: 'Rep', position: 'insideBottom', offset: -2, fill: 'var(--color-ink-faint)', fontSize: 11 }}
+            label={{ value: 'Rep', position: 'insideBottom', offset: -2, fill: 'var(--color-ink-muted)', fontSize: 12 }}
           />
           <YAxis
-            tick={{ fill: 'var(--color-ink-faint)', fontSize: 11 }}
+            tick={{ fill: 'var(--color-ink-muted)', fontSize: 12 }}
             axisLine={{ stroke: 'var(--color-border-strong)' }}
             tickLine={false}
             width={48}
@@ -120,7 +120,7 @@ export function TrendChart({
               background: 'var(--color-surface)',
               border: '1px solid var(--color-border)',
               borderRadius: 12,
-              fontSize: 12,
+              fontSize: 13,
               color: 'var(--color-ink)',
               boxShadow: 'var(--shadow-ambient)',
             }}
@@ -128,7 +128,7 @@ export function TrendChart({
             labelFormatter={(rep) => `Rep ${rep}`}
             formatter={(value, _name, item) => {
               const p = item.payload as RepPoint
-              const verdict = p.verdict ?? 'No AI verdict'
+              const verdict = p.verdict ?? 'Not scored'
               return [`${value}° · ${verdict}${p.drift ? ' · drift fault' : ''}`, 'Peak angle']
             }}
           />
@@ -147,21 +147,18 @@ export function TrendChart({
           />
         </ComposedChart>
       </ResponsiveContainer>
-      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[12px] text-ink-faint">
+      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[13px] text-ink-muted">
+        <LegendItem swatch={<span className="h-3 w-5 rounded-sm border border-dashed border-ink-muted bg-ink/5" />} label={`Target ${targetMin}–${targetMax}°`} />
         <LegendItem
-          swatch={<span className="h-3 w-5 rounded-sm border border-emerald/40 bg-emerald/15" />}
-          label={`Target range ${targetMin}–${targetMax}°`}
+          swatch={<span className="flex h-3.5 w-3.5 items-center justify-center rounded-full bg-emerald text-accent-ink"><Check className="h-2.5 w-2.5" strokeWidth={3.5} aria-hidden /></span>}
+          label="Perfect"
         />
         <LegendItem
-          swatch={<span className="flex h-3.5 w-3.5 items-center justify-center rounded-full bg-emerald text-[8px] font-bold text-accent-ink">✓</span>}
-          label="AI: Perfect"
+          swatch={<span className="flex h-3.5 w-3.5 items-center justify-center rounded-full bg-crimson text-accent-ink"><X className="h-2.5 w-2.5" strokeWidth={3.5} aria-hidden /></span>}
+          label="Form fault"
         />
-        <LegendItem
-          swatch={<span className="flex h-3.5 w-3.5 items-center justify-center rounded-full bg-crimson text-[8px] font-bold text-accent-ink">✕</span>}
-          label="AI: form fault"
-        />
-        <LegendItem swatch={<span className="h-3.5 w-3.5 rounded-full border-[1.5px] border-ink-faint" />} label="No AI verdict" />
-        <LegendItem swatch={<span className="w-3.5 text-center text-[13px] font-extrabold text-amber-ink">!</span>} label="Upper-arm drift" />
+        <LegendItem swatch={<span className="h-3.5 w-3.5 rounded-full border-[1.5px] border-ink-faint" />} label="Not scored" />
+        <LegendItem swatch={<span className="w-3.5 text-center text-[13px] font-extrabold text-amber-ink">!</span>} label="Upper arm drifted" />
       </div>
     </div>
   )

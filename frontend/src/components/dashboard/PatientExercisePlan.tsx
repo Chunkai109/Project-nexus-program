@@ -170,8 +170,8 @@ export function PatientExercisePlan({
 
       <div className="min-w-0 lg:col-span-8 xl:col-span-9">
         {editing ? (
-          <Card className="p-7">
-            <h2 className="mb-6 text-[15px] font-semibold text-ink">
+          <Card className="p-6">
+            <h2 className="mb-6 text-[16px] font-semibold text-ink">
               {view.kind === 'new' ? `New plan from '${newFromPreset?.title ?? 'preset'}'` : `Edit ${editingPlan?.title ?? 'plan'}`}
             </h2>
             <ExerciseFormFields
@@ -337,10 +337,10 @@ function PlanSummary({
   const lastStats = last ? sessionStats(last) : null
 
   return (
-    <Card className="p-7">
+    <Card className="p-6">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
-          <h2 className="break-words text-[15px] font-semibold text-ink">{plan.title}</h2>
+          <h2 className="break-words text-[16px] font-semibold text-ink">{plan.title}</h2>
           <p className="mt-0.5 text-[13px] text-ink-muted">{subtitle}</p>
         </div>
         <Button size="sm" variant="secondary" onClick={onEdit} aria-label={`Edit ${plan.title}`}>
@@ -363,7 +363,7 @@ function PlanSummary({
 
       <table className="mt-6 w-full border-collapse text-[13px] tabular-nums">
         <thead>
-          <tr className="border-b border-border text-left text-[12px] font-medium text-ink-muted">
+          <tr className="border-b border-border text-left text-[13px] font-medium text-ink-muted">
             <th scope="col" className="py-2 pr-3 font-medium">
               Setting
             </th>
@@ -392,13 +392,13 @@ function PlanSummary({
                 )}
                 {r.plan}
               </td>
-              <td className="whitespace-nowrap py-2.5 text-right text-[12px] text-ink-muted sm:text-[13px] sm:text-ink">{r.preset}</td>
+              <td className="whitespace-nowrap py-2.5 text-right text-[13px] text-ink-muted sm:text-[13px] sm:text-ink">{r.preset}</td>
             </tr>
           ))}
         </tbody>
       </table>
       {preset && (
-        <p className="mt-2 text-[12px] text-ink-muted">
+        <p className="mt-2 text-[13px] text-ink-muted">
           <span className="text-accent">●</span> Changed from preset
         </p>
       )}

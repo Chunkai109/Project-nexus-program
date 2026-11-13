@@ -1,15 +1,10 @@
-import { useState } from 'react'
-import { ChevronRight, Plus } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
-import { Button } from '@/components/ui/Button'
-import { Badge } from '@/components/ui/Badge'
-import { HoverExplain } from '@/components/ui/HoverExplain'
 import { ExerciseFormFields } from './ExerciseFormFields'
 import { useAppData } from '@/lib/data/AppDataContext'
 import { useExerciseForm } from '@/lib/useExerciseForm'
 import { podLabel } from '@/lib/podUtils'
-import { presetUsage } from '@/lib/planCompare'
 import type { AngleConfig } from '@/types'
+import { PageHeader } from './ui/PageHeader'
 
 export function describeAngleConfigs(configs: AngleConfig[]): string {
   if (configs.length === 0) return 'No angles configured'
@@ -18,136 +13,26 @@ export function describeAngleConfigs(configs: AngleConfig[]): string {
 }
 
 /**
- * Creates and lists presets (exercises not assigned to anyone). Patients
- * never see a preset directly: the physio copies it into a patient's own
- * plan from that patient's Exercise plan tab. Tapping a row opens that
- * exercise's Optimization Analytics page (editing and deleting now live
- * there instead of inline icons here, to avoid duplicating the same actions
- * in two places).
+ * The "New preset" form. Presets are exercises not assigned to anyone; the
+ * physio copies one into a patient's own plan from that patient's Exercise
+ * plan tab. The list of presets is PresetListView.
  */
-export function ProtocolBuilder({ onSelectExercise }: { onSelectExercise: (exerciseId: string) => void }) {
-  const { exercises, addExercise } = useAppData()
-  const presets = exercises.filter((e) => e.assignedPatientId === null)
-  const [mode, setMode] = useState<'list' | 'form'>('list')
-  const [saved, setSaved] = useState(false)
-  const {
-    form,
-    setForm,
-    resetForm,
-    toggleTag,
-    chooseBodyRegion,
-    selectDraftJoint,
-    draftValid,
-    canSave,
-    confirmAngle,
-    removeAngleConfig,
-    loadAngleIntoDraft,
-    selectDraftMuscleGroup,
-    selectDraftMuscle,
-    setDraftMuscleEmgPct,
-    confirmMuscleEmgTarget,
-    removeMuscleEmgTarget,
-    buildPayload,
-  } = useExerciseForm()
-
-  function startCreate() {
-    resetForm()
-    setMode('form')
-  }
+export function ProtocolBuilder({ onDone }: { onDone: (savedId?: string) => void }) {
+  const { addExercise } = useAppData()
+  const formCtl = useExerciseForm()
 
   function handleSave() {
-    if (!canSave) return
-    addExercise(buildPayload())
-    setSaved(true)
-    setTimeout(() => setSaved(false), 1500)
-    setMode('list')
-  }
-
-  if (mode === 'form') {
-    return (
-      <Card className="p-7">
-        <div className="mb-6">
-          <h2 className="text-[15px] font-semibold text-ink">New Preset</h2>
-          <p className="text-[13px] text-ink-faint">Define biomechanical thresholds prescribed for this exercise</p>
-        </div>
-        <ExerciseFormFields
-          form={form}
-          setForm={setForm}
-          mode="preset"
-          toggleTag={toggleTag}
-          chooseBodyRegion={chooseBodyRegion}
-          selectDraftJoint={selectDraftJoint}
-          draftValid={draftValid}
-          confirmAngle={confirmAngle}
-          removeAngleConfig={removeAngleConfig}
-          loadAngleIntoDraft={loadAngleIntoDraft}
-          selectDraftMuscleGroup={selectDraftMuscleGroup}
-          selectDraftMuscle={selectDraftMuscle}
-          setDraftMuscleEmgPct={setDraftMuscleEmgPct}
-          confirmMuscleEmgTarget={confirmMuscleEmgTarget}
-          removeMuscleEmgTarget={removeMuscleEmgTarget}
-          canSave={canSave}
-          onSave={handleSave}
-          onCancel={() => setMode('list')}
-          saveLabel="Save Preset"
-        />
-      </Card>
-    )
+    if (!formCtl.canSave) return
+    const saved = addExercise(formCtl.buildPayload())
+    onDone(saved.id)
   }
 
   return (
-    <Card className="p-7">
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="text-[15px] font-semibold text-ink">Exercise Protocols</h2>
-          <p className="text-[13px] text-ink-faint">
-            Build preset exercises. Tailor them for each patient from the patient's Exercise plan tab.
-          </p>
-        </div>
-        <HoverExplain explanation="Opens the 3-step wizard (Basics, Angle Configuration, EMG Activation) to create a new preset.">
-          <Button size="sm" onClick={startCreate}>
-            <Plus className="h-3.5 w-3.5" />
-            New Exercise
-          </Button>
-        </HoverExplain>
-      </div>
-
-      {presets.length === 0 ? (
-        <div className="flex flex-col items-center gap-2 rounded-xl bg-surface-secondary py-14 text-center">
-          <p className="text-[14px] font-medium text-ink">No presets yet</p>
-          <p className="max-w-xs text-[13px] text-ink-faint">
-            Create a preset, then add it to a patient from their Exercise plan tab.
-          </p>
-        </div>
-      ) : (
-        <div className="flex flex-col gap-3">
-          {presets.map((ex) => {
-            const used = presetUsage(ex.id, exercises)
-            return (
-              <HoverExplain key={ex.id} explanation={`Open ${ex.title}'s Optimization Analytics — edit or delete it from there.`}>
-                <button
-                  type="button"
-                  onClick={() => onSelectExercise(ex.id)}
-                  className="flex w-full flex-wrap items-start justify-between gap-3 rounded-xl bg-surface-secondary p-4 text-left transition-colors duration-200 hover:bg-surface-hover"
-                >
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-[14px] font-semibold text-ink">{ex.title}</p>
-                    <div className="mt-1 flex flex-wrap items-center gap-2">
-                      <Badge tone="accent">{ex.sets}×{ex.reps}</Badge>
-                      <span className="text-[12px] text-ink-muted">
-                        {used === 0 ? 'Not used yet' : `Used by ${used} patient${used === 1 ? '' : 's'}`}
-                      </span>
-                    </div>
-                    <p className="mt-1 truncate text-[13px] text-ink-faint">{describeAngleConfigs(ex.angleConfigs)}</p>
-                  </div>
-                  <ChevronRight className="h-4 w-4 flex-shrink-0 text-ink-faint" />
-                </button>
-              </HoverExplain>
-            )
-          })}
-        </div>
-      )}
-      {saved && <p className="mt-4 text-center text-[13px] font-medium text-emerald-ink">Saved.</p>}
-    </Card>
+    <>
+      <PageHeader title="New preset" subtitle="Set the range, limits and notes this preset starts every patient plan with." />
+      <Card className="p-6">
+        <ExerciseFormFields {...formCtl} mode="preset" onSave={handleSave} onCancel={() => onDone()} saveLabel="Save preset" />
+      </Card>
+    </>
   )
 }

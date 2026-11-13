@@ -13,8 +13,8 @@ export function VerdictBreakdownChart({ session, height = 240 }: { session: Sess
   return (
     <div>
       {scored === 0 ? (
-        <p className="flex items-center justify-center rounded-xl bg-surface-secondary text-[13px] text-ink-faint" style={{ height }}>
-          The AI hasn't scored any reps in this session yet.
+        <p className="flex items-center justify-center rounded-xl bg-surface-secondary text-[14px] text-ink-muted" style={{ height }}>
+          The AI scored no reps in this session.
         </p>
       ) : (
         <ResponsiveContainer width="100%" height={height}>
@@ -23,7 +23,7 @@ export function VerdictBreakdownChart({ session, height = 240 }: { session: Sess
             <XAxis
               type="number"
               allowDecimals={false}
-              tick={{ fill: 'var(--color-ink-faint)', fontSize: 11 }}
+              tick={{ fill: 'var(--color-ink-muted)', fontSize: 12 }}
               axisLine={{ stroke: 'var(--color-border-strong)' }}
               tickLine={false}
             />
@@ -31,7 +31,7 @@ export function VerdictBreakdownChart({ session, height = 240 }: { session: Sess
               type="category"
               dataKey="verdict"
               width={84}
-              tick={{ fill: 'var(--color-ink-muted)', fontSize: 12 }}
+              tick={{ fill: 'var(--color-ink)', fontSize: 13 }}
               axisLine={false}
               tickLine={false}
             />
@@ -41,23 +41,23 @@ export function VerdictBreakdownChart({ session, height = 240 }: { session: Sess
                 background: 'var(--color-surface)',
                 border: '1px solid var(--color-border)',
                 borderRadius: 12,
-                fontSize: 12,
+                fontSize: 13,
                 color: 'var(--color-ink)',
               }}
               formatter={(value) => [`${value} reps`, 'AI verdict']}
             />
             <Bar dataKey="count" radius={[0, 6, 6, 0]} isAnimationActive={false}>
               {data.map((d) => (
-                <Cell key={d.verdict} fill={d.verdict === 'Perfect' ? 'var(--color-emerald)' : 'var(--color-crimson)'} fillOpacity={d.verdict === 'Perfect' ? 0.9 : 0.75} />
+                <Cell key={d.verdict} fill={d.verdict === 'Perfect' ? 'var(--color-emerald)' : 'var(--color-ink-faint)'} />
               ))}
-              <LabelList dataKey="count" position="right" fill="var(--color-ink-muted)" fontSize={12} />
+              <LabelList dataKey="count" position="right" fill="var(--color-ink)" fontSize={13} />
             </Bar>
           </BarChart>
         </ResponsiveContainer>
       )}
-      <p className="mt-3 text-[12px] text-ink-faint">
-        {scored} of {session.reps.length} reps scored by the AI
-        {unscored > 0 ? ` · ${unscored} with no AI verdict (camera missed the rep or the AI was offline)` : ''}
+      <p className="mt-3 text-[13px] text-ink-muted">
+        {scored} of {session.reps.length} reps scored by the AI.
+        {unscored > 0 ? ` ${unscored} not scored (the camera missed the rep or the AI was offline).` : ''}
       </p>
     </div>
   )

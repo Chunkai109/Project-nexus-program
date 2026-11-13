@@ -2,8 +2,8 @@ import { CartesianGrid, LabelList, Line, LineChart, ResponsiveContainer, Tooltip
 import type { SessionStats } from '@/lib/sessionStats'
 
 const SERIES = [
-  { key: 'goodFormPct', label: 'Good form', color: 'var(--color-emerald)' },
-  { key: 'inRangePct', label: 'In range', color: 'var(--color-accent)' },
+  { key: 'goodFormPct', label: 'Good form', color: 'var(--color-accent)', dash: undefined },
+  { key: 'inRangePct', label: 'In range', color: 'var(--color-ink-muted)', dash: '5 4' },
 ] as const
 
 function shortDate(ms: number): string {
@@ -23,11 +23,11 @@ export function ProgressChart({ stats, height = 240 }: { stats: SessionStats[]; 
 
   return (
     <ResponsiveContainer width="100%" height={height}>
-      <LineChart data={data} margin={{ top: 12, right: 100, bottom: 4, left: -4 }}>
+      <LineChart data={data} margin={{ top: 12, right: 128, bottom: 4, left: -4 }}>
         <CartesianGrid stroke="var(--color-border)" vertical={false} />
         <XAxis
           dataKey="label"
-          tick={{ fill: 'var(--color-ink-faint)', fontSize: 11 }}
+          tick={{ fill: 'var(--color-ink-muted)', fontSize: 12 }}
           axisLine={{ stroke: 'var(--color-border-strong)' }}
           tickLine={false}
         />
@@ -35,7 +35,7 @@ export function ProgressChart({ stats, height = 240 }: { stats: SessionStats[]; 
           domain={[0, 100]}
           ticks={[0, 25, 50, 75, 100]}
           tickFormatter={(v: number) => `${v}%`}
-          tick={{ fill: 'var(--color-ink-faint)', fontSize: 11 }}
+          tick={{ fill: 'var(--color-ink-muted)', fontSize: 12 }}
           axisLine={{ stroke: 'var(--color-border-strong)' }}
           tickLine={false}
           width={48}
@@ -45,8 +45,10 @@ export function ProgressChart({ stats, height = 240 }: { stats: SessionStats[]; 
             background: 'var(--color-surface)',
             border: '1px solid var(--color-border)',
             borderRadius: 12,
-            fontSize: 12,
+            fontSize: 13,
             color: 'var(--color-ink)',
+            maxWidth: 260,
+            whiteSpace: 'normal',
           }}
           labelFormatter={(label, items) => {
             const exercise = (items?.[0]?.payload as { exercise?: string } | undefined)?.exercise
@@ -66,7 +68,8 @@ export function ProgressChart({ stats, height = 240 }: { stats: SessionStats[]; 
             dataKey={s.key}
             name={s.label}
             stroke={s.color}
-            strokeWidth={2.5}
+            strokeWidth={s.key === 'goodFormPct' ? 2.5 : 1.75}
+            strokeDasharray={s.dash}
             dot={{ r: 3.5, fill: s.color, strokeWidth: 0 }}
             connectNulls
             isAnimationActive={false}
@@ -82,7 +85,7 @@ export function ProgressChart({ stats, height = 240 }: { stats: SessionStats[]; 
                 const close = otherValue != null && Math.abs(value - otherValue) < 8
                 const shift = !close ? 0 : value > otherValue || (value === otherValue && s.key === 'inRangePct') ? -8 : 8
                 return (
-                  <text x={Number(x) + 10} y={Number(y) + shift} dy="0.35em" fontSize={12} fontWeight={600} fill={s.color}>
+                  <text x={Number(x) + 10} y={Number(y) + shift} dy="0.35em" fontSize={13} fontWeight={600} fill={s.color}>
                     {s.label} {value}%
                   </text>
                 )

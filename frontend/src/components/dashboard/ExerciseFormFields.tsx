@@ -2,7 +2,7 @@ import { useState, type Dispatch, type SetStateAction } from 'react'
 import { AlertTriangle, ArrowLeft, ArrowRight, Bold, Check, ChevronDown, Italic, List, Loader2, Save, X } from 'lucide-react'
 import { clsx } from 'clsx'
 import { Button } from '@/components/ui/Button'
-import { Breadcrumb } from '@/components/ui/Breadcrumb'
+import { StepChips } from './ui/StepChips'
 import { HoverExplain } from '@/components/ui/HoverExplain'
 import { Slider } from '@/components/ui/Slider'
 import { RangeSlider } from '@/components/ui/RangeSlider'
@@ -39,7 +39,7 @@ function clip(text: string): string {
 /** Grey "Preset: 10" line under a patient-plan field that differs from its preset. */
 function PresetHint({ show, value }: { show: boolean; value: string | number }) {
   if (!show) return null
-  return <p className="mt-1.5 text-[12px] text-ink-muted">Preset: {value}</p>
+  return <p className="mt-1.5 text-[13px] text-ink-muted">Preset: {value}</p>
 }
 
 /** Upper-arm drift limit: whole degrees, 1–90, with a warning (not a block) below 20°. */
@@ -65,18 +65,18 @@ function DriftLimitField({ value, onChange, presetValue }: { value: string; onCh
         />
         <span className="text-[14px] text-ink-muted">°</span>
       </div>
-      <p id="drift-limit-help" className="mt-2 text-[12px] text-ink-muted">
+      <p id="drift-limit-help" className="mt-2 text-[13px] text-ink-muted">
         Upper-arm movement from 0° to this value is allowed. The fault fires above it.
       </p>
       <PresetHint show={presetValue !== undefined && parsed !== presetValue} value={`${presetValue}°`} />
       <div id="drift-limit-msg" aria-live="polite">
         {invalid && (
-          <p className="mt-2 text-[12px] font-medium text-crimson-ink">
+          <p className="mt-2 text-[13px] font-medium text-crimson-ink">
             Enter a whole number of degrees between {DRIFT_LIMIT_MIN} and {DRIFT_LIMIT_MAX}.
           </p>
         )}
         {low && (
-          <p className="mt-2 flex items-center gap-1.5 text-[12px] font-medium text-amber-ink">
+          <p className="mt-2 flex items-center gap-1.5 text-[13px] font-medium text-amber-ink">
             <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
             Below {DRIFT_LIMIT_WARN_BELOW}° fired on normal movement in rig testing.
           </p>
@@ -161,7 +161,7 @@ export function ExerciseFormFields({
 
   return (
     <div>
-      <Breadcrumb steps={WIZARD_STEPS} activeIndex={stepIndex} />
+      <StepChips steps={WIZARD_STEPS} activeIndex={stepIndex} />
 
       <div className="mt-8">
         {step === 'basics' && (
@@ -223,7 +223,7 @@ export function ExerciseFormFields({
                     </button>
                   ))}
                 </div>
-                <p className="mt-1.5 text-[12px] text-ink-muted">
+                <p className="mt-1.5 text-[13px] text-ink-muted">
                   {form.bodyRegionChosen ? 'You picked this. It no longer follows the muscle groups.' : 'Suggested from the muscle groups. You can change it.'}
                 </p>
               </fieldset>
@@ -297,7 +297,7 @@ export function ExerciseFormFields({
                       <HoverExplain key={i} explanation="Text formatting for the instructions below — not yet functional in this draft.">
                         <button
                           type="button"
-                          className="rounded p-1.5 text-ink-faint transition-colors duration-200 hover:bg-surface-hover hover:text-ink"
+                          className="rounded p-1.5 text-ink-muted transition-colors duration-200 hover:bg-surface-hover hover:text-ink"
                         >
                           <Icon className="h-3.5 w-3.5" />
                         </button>
@@ -309,7 +309,7 @@ export function ExerciseFormFields({
                       value={form.setupInstructions}
                       onChange={(e) => setForm((f) => ({ ...f, setupInstructions: e.target.value }))}
                       rows={9}
-                      className="w-full resize-none bg-transparent px-4 py-3 text-[14px] text-ink outline-none placeholder:text-ink-faint"
+                      className="w-full resize-none bg-transparent px-4 py-3 text-[14px] text-ink outline-none placeholder:text-ink-muted"
                       placeholder="Write pod placement guidelines for the patient…"
                     />
                   </HoverExplain>
@@ -325,13 +325,13 @@ export function ExerciseFormFields({
 
         {step === 'angles' && (
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-            <div className="rounded-xl bg-surface-secondary p-6">
+            <div className="rounded-2xl border border-border bg-surface p-6">
               <div className="mb-1 flex items-center justify-between">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-ink-faint">Angle Configuration</p>
+                <h3 className="text-[16px] font-semibold text-ink">Angle Configuration</h3>
                 <span
                   className={clsx(
-                    'flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium',
-                    form.angleConfigs.length > 0 ? 'bg-emerald/10 text-emerald-ink' : 'bg-surface text-ink-faint',
+                    'flex items-center gap-1 rounded-full px-2 py-0.5 text-[13px] font-medium',
+                    form.angleConfigs.length > 0 ? 'bg-emerald/10 text-emerald-ink' : 'bg-surface-secondary text-ink-muted',
                   )}
                 >
                   {form.angleConfigs.length > 0 && <Check className="h-3 w-3" />}
@@ -346,13 +346,13 @@ export function ExerciseFormFields({
                 height={300}
               />
               <div className="mt-4 text-center text-[13px]">
-                {!draftLabel && <span className="text-ink-faint">No joint selected yet</span>}
+                {!draftLabel && <span className="text-ink-muted">No joint selected yet</span>}
                 {draftLabel && <span className="font-medium text-accent">{draftLabel} selected</span>}
               </div>
             </div>
 
-            <div className="flex flex-col items-center gap-1 rounded-xl bg-surface-secondary p-6">
-              <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-ink-faint">Angle Customisation Preview</p>
+            <div className="flex flex-col items-center gap-1 rounded-2xl border border-border bg-surface p-6">
+              <h3 className="mb-1 text-[16px] font-semibold text-ink">Angle Customisation Preview</h3>
               <RadialGauge
                 value={(form.draftMin + form.draftMax) / 2}
                 min={0}
@@ -415,11 +415,11 @@ export function ExerciseFormFields({
             </div>
 
             <div className="lg:col-span-2">
-              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-ink-faint">
+              <p className="mb-2 text-[13px] font-semibold text-ink-muted">
                 Confirmed Angles ({form.angleConfigs.length})
               </p>
               {form.angleConfigs.length === 0 ? (
-                <p className="rounded-lg bg-surface-secondary p-3.5 text-center text-[13px] text-ink-faint">
+                <p className="rounded-lg bg-surface-secondary p-3.5 text-center text-[13px] text-ink-muted">
                   No angles confirmed yet — set one above and it'll be saved as a property of this exercise.
                 </p>
               ) : (
@@ -445,7 +445,7 @@ export function ExerciseFormFields({
                         <button
                           type="button"
                           onClick={() => removeAngleConfig(c.id)}
-                          className="flex-shrink-0 rounded p-1 text-ink-faint transition-colors duration-200 hover:bg-surface-hover hover:text-crimson-ink"
+                          className="flex-shrink-0 rounded p-1 text-ink-muted transition-colors duration-200 hover:bg-surface-hover hover:text-crimson-ink"
                           aria-label={`Remove ${podLabel(c.nodeA)} to ${podLabel(c.nodeB)} angle`}
                         >
                           <X className="h-3.5 w-3.5" />
@@ -455,7 +455,7 @@ export function ExerciseFormFields({
                   ))}
                 </div>
               )}
-              <div className="mt-4 rounded-lg bg-surface-secondary p-3.5 text-[13px] leading-relaxed text-ink-faint">
+              <div className="mt-4 rounded-lg bg-surface-secondary p-3.5 text-[13px] leading-relaxed text-ink-muted">
                 A live skeleton segment turns <span className="font-medium text-crimson-ink">red</span> when deviation exceeds each
                 confirmed angle's own fault threshold.
               </div>
@@ -470,13 +470,13 @@ export function ExerciseFormFields({
 
         {step === 'emg' && (
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-            <div className="rounded-xl bg-surface-secondary p-6">
+            <div className="rounded-2xl border border-border bg-surface p-6">
               <div className="mb-1 flex items-center justify-between">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-ink-faint">Muscle Selection</p>
+                <h3 className="text-[16px] font-semibold text-ink">Muscle Selection</h3>
                 <span
                   className={clsx(
-                    'flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium',
-                    form.muscleEmgTargets.length > 0 ? 'bg-emerald/10 text-emerald-ink' : 'bg-surface text-ink-faint',
+                    'flex items-center gap-1 rounded-full px-2 py-0.5 text-[13px] font-medium',
+                    form.muscleEmgTargets.length > 0 ? 'bg-emerald/10 text-emerald-ink' : 'bg-surface-secondary text-ink-muted',
                   )}
                 >
                   {form.muscleEmgTargets.length > 0 && <Check className="h-3 w-3" />}
@@ -495,14 +495,14 @@ export function ExerciseFormFields({
                 height={300}
               />
               <div className="my-4 text-center text-[13px]">
-                {!draftGroup && <span className="text-ink-faint">No muscle group selected yet</span>}
+                {!draftGroup && <span className="text-ink-muted">No muscle group selected yet</span>}
                 {draftGroup && <span className="font-medium text-accent">{draftGroup.label} selected</span>}
               </div>
             </div>
 
-            <div className="flex flex-col items-center gap-2 rounded-xl bg-surface-secondary p-6">
+            <div className="flex flex-col items-center gap-2 rounded-2xl border border-border bg-surface p-6">
               <div className="mb-1 flex items-center gap-2 self-start">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-ink-faint">Target EMG Activation</p>
+                <h3 className="text-[16px] font-semibold text-ink">Target EMG Activation</h3>
                 {isPlan && <NotUsedYetTag />}
               </div>
               {draftGroup ? (
@@ -525,7 +525,7 @@ export function ExerciseFormFields({
                             </option>
                           ))}
                         </select>
-                        <ChevronDown className="pointer-events-none absolute right-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-faint" />
+                        <ChevronDown className="pointer-events-none absolute right-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-muted" />
                       </div>
                     </label>
                   </HoverExplain>
@@ -554,24 +554,24 @@ export function ExerciseFormFields({
                       </HoverExplain>
                     </>
                   ) : (
-                    <p className="w-full rounded-lg bg-surface p-3.5 text-center text-[13px] text-ink-faint">
+                    <p className="w-full rounded-lg bg-surface-secondary p-3.5 text-center text-[13px] text-ink-muted">
                       Select a muscle above to set its target.
                     </p>
                   )}
                 </>
               ) : (
-                <p className="w-full rounded-lg bg-surface p-3.5 text-center text-[13px] text-ink-faint">
+                <p className="w-full rounded-lg bg-surface-secondary p-3.5 text-center text-[13px] text-ink-muted">
                   Select a muscle group to continue.
                 </p>
               )}
             </div>
 
             <div className="lg:col-span-2">
-              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-ink-faint">
+              <p className="mb-2 text-[13px] font-semibold text-ink-muted">
                 Confirmed Muscle Targets ({form.muscleEmgTargets.length})
               </p>
               {form.muscleEmgTargets.length === 0 ? (
-                <p className="rounded-lg bg-surface-secondary p-3.5 text-center text-[13px] text-ink-faint">
+                <p className="rounded-lg bg-surface-secondary p-3.5 text-center text-[13px] text-ink-muted">
                   No muscle targets set yet — set one above and it'll be saved as a property of this exercise.
                 </p>
               ) : (
@@ -587,7 +587,7 @@ export function ExerciseFormFields({
                         <button
                           type="button"
                           onClick={() => removeMuscleEmgTarget(t.muscleId)}
-                          className="flex-shrink-0 rounded p-1 text-ink-faint transition-colors duration-200 hover:bg-surface-hover hover:text-crimson-ink"
+                          className="flex-shrink-0 rounded p-1 text-ink-muted transition-colors duration-200 hover:bg-surface-hover hover:text-crimson-ink"
                           aria-label={`Remove ${muscleLabel(t.muscleId)} EMG target`}
                         >
                           <X className="h-3.5 w-3.5" />
@@ -597,7 +597,7 @@ export function ExerciseFormFields({
                   ))}
                 </div>
               )}
-              <div className="mt-4 rounded-lg bg-surface-secondary p-3.5 text-[13px] leading-relaxed text-ink-faint">
+              <div className="mt-4 rounded-lg bg-surface-secondary p-3.5 text-[13px] leading-relaxed text-ink-muted">
                 Each muscle's EMG bar flags below <span className="font-medium text-ink">55% of its own target</span> activation
                 as weak.
               </div>

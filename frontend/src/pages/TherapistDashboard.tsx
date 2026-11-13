@@ -1,25 +1,26 @@
 import { useCallback, useRef, useState } from 'react'
+import { Pencil, Trash2 } from 'lucide-react'
+import { BackLink } from '@/components/dashboard/ui/BackLink'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { PageShell } from '@/components/layout/PageShell'
 import { PhysioSidebar } from '@/components/layout/PhysioSidebar'
+import { AdminViewBanner } from '@/components/layout/AdminViewBanner'
 import { ProtocolBuilder } from '@/components/dashboard/ProtocolBuilder'
 import { ExerciseOptimizationMetrics } from '@/components/dashboard/ExerciseOptimizationMetrics'
 import { ExerciseFineTune } from '@/components/dashboard/ExerciseFineTune'
 import { TelemetrySection } from '@/components/dashboard/TelemetrySection'
 import { PatientRosterGrid } from '@/components/dashboard/PatientRosterGrid'
+import { PresetListView } from '@/components/dashboard/PresetListView'
+import { PageHeader } from '@/components/dashboard/ui/PageHeader'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
-import { HoverExplain } from '@/components/ui/HoverExplain'
 import { useAppData } from '@/lib/data/AppDataContext'
-import { ArrowLeft, Pencil, Settings, Trash2 } from 'lucide-react'
-import { ModelCredits } from '@/components/body/ModelCredits'
 import { useAuth } from '@/lib/AuthContext'
-import { AdminViewBanner } from '@/components/layout/AdminViewBanner'
 
 export function TherapistDashboard() {
-  const { exercises, deleteExercise } = useAppData()
+  const { exercises, patients, sessions, loading, deleteExercise } = useAppData()
   const { user } = useAuth()
-  const [tab, setTab] = useState('creator')
+  const [tab, setTab] = useState('roster')
   const [selectedPatientId, setSelectedPatientId] = useState<string | undefined>()
   const [selectedExerciseId, setSelectedExerciseId] = useState<string | undefined>()
   const [pendingDeleteExercise, setPendingDeleteExercise] = useState(false)
@@ -34,18 +35,18 @@ export function TherapistDashboard() {
     else setTab(next)
   }
 
-  function openPatientAnalytics(patientId: string) {
+  function openPatient(patientId: string) {
     setSelectedPatientId(patientId)
     setTab('analytics')
   }
 
-  function openExerciseAnalytics(exerciseId: string) {
+  function openPresetResults(exerciseId: string) {
     setSelectedExerciseId(exerciseId)
     setPendingDeleteExercise(false)
     setTab('exercise-analytics')
   }
 
-  function openExerciseFineTune(exerciseId: string) {
+  function openPresetEditor(exerciseId: string) {
     setSelectedExerciseId(exerciseId)
     setTab('exercise-finetune')
   }
@@ -67,78 +68,57 @@ export function TherapistDashboard() {
       <main className="min-w-0 flex-1 px-4 py-6 sm:px-6 sm:py-8 lg:px-10 lg:py-10">
         {tab === 'roster' && (
           <>
-            <div className="mb-10">
-              <h1 className="text-[28px] font-semibold tracking-tight text-ink">Patient Roster</h1>
-              <p className="mt-1.5 text-[15px] text-ink-muted">
-                Who needs you first, based on each patient's latest session. Select a patient to see their progress.
-              </p>
-            </div>
-            <PatientRosterGrid onSelectPatient={openPatientAnalytics} />
+            <PageHeader title="Patients" subtitle="Who needs you first, based on each patient's latest session." />
+            <PatientRosterGrid onSelectPatient={openPatient} />
           </>
         )}
 
         {tab === 'creator' && (
+          <PresetListView exercises={exercises} loading={loading} onNew={() => setTab('creator-new')} onView={openPresetResults} onEdit={openPresetEditor} />
+        )}
+
+        {tab === 'creator-new' && (
           <>
-            <div className="mb-10">
-              <h1 className="text-[28px] font-semibold tracking-tight text-ink">Exercise Creator</h1>
-              <p className="mt-1.5 text-[15px] text-ink-muted">
-                Build a rehabilitation protocol and review how patients are tracking against it.
-              </p>
+            <div className="mb-4">
+              <BackLink label="Back to Exercise Creator" onClick={() => setTab('creator')} />
             </div>
-            <ProtocolBuilder onSelectExercise={openExerciseAnalytics} />
+            <ProtocolBuilder onDone={(id) => (id ? openPresetResults(id) : setTab('creator'))} />
           </>
         )}
 
         {tab === 'exercise-analytics' && selectedExerciseId && (
           <>
-            <HoverExplain explanation="Return to the Exercise Protocols list." className="mb-6">
-              <Button variant="ghost" size="sm" onClick={() => setTab('creator')}>
-                <ArrowLeft className="h-3.5 w-3.5" />
-                Back to Exercise Creator
-              </Button>
-            </HoverExplain>
-            <div className="mb-10 flex flex-wrap items-start justify-between gap-4">
-              <div>
-                <h1 className="text-[28px] font-semibold tracking-tight text-ink">{selectedExercise?.title ?? 'Exercise'}</h1>
-                <p className="mt-1.5 text-[15px] text-ink-muted">Optimization analytics for this exercise.</p>
-              </div>
-              {pendingDeleteExercise ? (
-                <div className="flex items-center gap-2">
-                  <span className="text-[13px] text-ink-muted">Delete this exercise?</span>
-                  <HoverExplain explanation="Keep this exercise — cancels the delete.">
-                    <Button variant="ghost" size="sm" onClick={() => setPendingDeleteExercise(false)}>
-                      Cancel
+            <PageHeader
+              above={<BackLink label="Back to Exercise Creator" onClick={() => setTab('creator')} />}
+              title={selectedExercise?.title ?? 'Preset'}
+              subtitle="Preset results"
+              actions={
+                selectedExercise && (
+                  <>
+                    <Button onClick={() => openPresetEditor(selectedExerciseId)}>
+                      <Pencil className="h-4 w-4" aria-hidden />
+                      Edit preset
                     </Button>
-                  </HoverExplain>
-                  <HoverExplain explanation="Permanently delete this preset. Patient plans copied from it stay as they are.">
-                    <Button variant="danger" size="sm" onClick={confirmDeleteExercise}>
-                      <Trash2 className="h-3.5 w-3.5" />
-                      Delete
+                    <Button variant="outline" className="text-crimson-ink" onClick={() => setPendingDeleteExercise(true)}>
+                      <Trash2 className="h-4 w-4" aria-hidden />
+                      Delete preset
                     </Button>
-                  </HoverExplain>
-                </div>
-              ) : (
-                <div className="flex items-center gap-2">
-                  <HoverExplain explanation="Open this preset's fields to change its thresholds or targets. Patient plans copied from it don't change.">
-                    <Button size="sm" onClick={() => openExerciseFineTune(selectedExerciseId)}>
-                      <Pencil className="h-3.5 w-3.5" />
-                      Edit Exercise
-                    </Button>
-                  </HoverExplain>
-                  <HoverExplain explanation="Ask for confirmation before permanently deleting this exercise.">
-                    <Button variant="danger" size="sm" onClick={() => setPendingDeleteExercise(true)}>
-                      <Trash2 className="h-3.5 w-3.5" />
-                      Delete Exercise
-                    </Button>
-                  </HoverExplain>
-                </div>
-              )}
-            </div>
+                  </>
+                )
+              }
+            />
             {selectedExercise ? (
-              <ExerciseOptimizationMetrics key={selectedExerciseId} exercise={selectedExercise} />
+              <ExerciseOptimizationMetrics
+                key={selectedExerciseId}
+                exercise={selectedExercise}
+                exercises={exercises}
+                patients={patients}
+                sessions={sessions}
+                onOpenPatient={openPatient}
+              />
             ) : (
               <Card className="p-7 text-center">
-                <p className="text-[14px] text-ink-muted">This exercise no longer exists — it may have just been deleted.</p>
+                <p className="text-[15px] text-ink-muted">This preset no longer exists. It may have just been deleted.</p>
               </Card>
             )}
           </>
@@ -146,58 +126,34 @@ export function TherapistDashboard() {
 
         {tab === 'exercise-finetune' && selectedExerciseId && (
           <>
-            <HoverExplain explanation="Return to this exercise's Optimization Analytics without saving further changes." className="mb-6">
-              <Button variant="ghost" size="sm" onClick={() => setTab('exercise-analytics')}>
-                <ArrowLeft className="h-3.5 w-3.5" />
-                Back to Analytics
-              </Button>
-            </HoverExplain>
-            <div className="mb-10">
-              <h1 className="text-[28px] font-semibold tracking-tight text-ink">{selectedExercise?.title ?? 'Exercise'}</h1>
-              <p className="mt-1.5 text-[15px] text-ink-muted">Fine-tune thresholds prescribed for this exercise.</p>
-            </div>
+            <PageHeader
+              above={<BackLink label="Back to preset results" onClick={() => setTab('exercise-analytics')} />}
+              title={selectedExercise?.title ?? 'Preset'}
+              subtitle="Edit this preset. Patient plans already copied from it don't change."
+            />
             <ExerciseFineTune key={selectedExerciseId} exerciseId={selectedExerciseId} />
           </>
         )}
 
         {tab === 'analytics' && (
-          <>
-            <HoverExplain explanation="Return to the Patient Roster list." className="mb-6">
-              <Button variant="ghost" size="sm" onClick={() => goToTab('roster')}>
-                <ArrowLeft className="h-3.5 w-3.5" />
-                Back to Patient Roster
-              </Button>
-            </HoverExplain>
-            <div className="mb-10">
-              <h1 className="text-[28px] font-semibold tracking-tight text-ink">Patient</h1>
-              <p className="mt-1.5 text-[15px] text-ink-muted">Progress and the exercise plan for one patient.</p>
-            </div>
-            <TelemetrySection
-              key={selectedPatientId}
-              initialPatientId={selectedPatientId}
-              onDirtyChange={handlePlanDirty}
-              onOpenCreator={() => goToTab('creator')}
-            />
-          </>
-        )}
-
-        {tab === 'settings' && (
-          <>
-            <div className="mb-10">
-              <h1 className="text-[28px] font-semibold tracking-tight text-ink">Settings</h1>
-              <p className="mt-1.5 text-[15px] text-ink-muted">Practice preferences and account configuration.</p>
-            </div>
-            <Card className="flex flex-col items-center gap-3 p-12 text-center">
-              <Settings className="h-8 w-8 text-ink-faint" />
-              <p className="text-sm text-ink-muted">Practice settings are coming in a future iteration of this draft.</p>
-            </Card>
-            <Card className="mt-4 p-5">
-              <h2 className="text-[15px] font-semibold text-ink">Credits</h2>
-              <ModelCredits className="mt-1 !text-[13px] !text-ink-muted" />
-            </Card>
-          </>
+          <TelemetrySection
+            key={selectedPatientId}
+            initialPatientId={selectedPatientId}
+            onDirtyChange={handlePlanDirty}
+            onOpenCreator={() => goToTab('creator')}
+            onBack={() => goToTab('roster')}
+          />
         )}
       </main>
+      <ConfirmDialog
+        open={pendingDeleteExercise}
+        message="Delete this preset? Patient plans copied from it stay as they are."
+        cancelLabel="Keep preset"
+        confirmLabel="Delete preset"
+        danger
+        onCancel={() => setPendingDeleteExercise(false)}
+        onConfirm={confirmDeleteExercise}
+      />
       <ConfirmDialog
         open={pendingTab !== null}
         message="Discard unsaved changes?"

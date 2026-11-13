@@ -48,7 +48,7 @@ export function ExerciseListPanel({
             .filter((s) => s.items.length > 0)
             .map((s, i) => (
               <div key={s.label ?? i} className={clsx(i > 0 && 'mt-4')}>
-                {s.label && <p className="mb-1.5 px-3 text-[11px] font-semibold uppercase tracking-wide text-ink-muted">{s.label}</p>}
+                {s.label && <p className="mb-1.5 px-3 text-[13px] font-semibold text-ink-muted">{s.label}</p>}
                 <ul className="flex flex-col gap-1" aria-label={s.label ?? ariaLabel}>
                   {s.items.map((item) => {
                     const isSel = item.id === selectedId
@@ -64,7 +64,7 @@ export function ExerciseListPanel({
                           )}
                         >
                           <span className="block truncate text-[14px] font-semibold text-ink">{item.title}</span>
-                          <span className="block text-[12px] tabular-nums text-ink-muted">{item.detail}</span>
+                          <span className="block text-[13px] tabular-nums text-ink-muted">{item.detail}</span>
                         </button>
                       </li>
                     )
