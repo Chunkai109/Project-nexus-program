@@ -585,8 +585,9 @@ export function BodyModel3D({
             frameloop="demand"
             events={zoomSafeEvents}
             dpr={mode === 'live' ? 1 : [1, 2]}
-            // Live: edge smoothing is off. On a laptop with no graphics chip it cost 22% of the page's frame rate; off, it costs 2%.
-            gl={{ alpha: true, antialias: mode !== 'live', powerPreference: mode === 'live' ? 'low-power' : 'default' }}
+            // Edge smoothing is on everywhere. On a laptop with no graphics chip it cost the Live page about 22% of its frame rate
+            // (2% with it off): if Live stutters there, change this to `antialias: mode !== 'live'`.
+            gl={{ alpha: true, antialias: true, powerPreference: mode === 'live' ? 'low-power' : 'default' }}
             camera={{ fov: 30, near: 0.05, far: 40, position: view.position }}
           >
             {/* Soft light from the top-left, a gentle fill, no cast shadows. */}
