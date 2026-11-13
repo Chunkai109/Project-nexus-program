@@ -20,6 +20,8 @@ interface AuthContextValue {
   /** Creates a patient account. Physio accounts are made by an admin (see supabase/schema.sql). */
   signUp: (input: { name: string; email: string; password: string; practiceId: string }) => Promise<AuthResult>
   signOut: () => Promise<void>
+  /** Reads the signed-in account again from the server (used after an admin opens another clinic). */
+  refreshUser: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
@@ -137,9 +139,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
+  const refreshUser = useCallback(async () => {
+    if (!supabase || !user) return
+    const profile = await loadProfile(user.id)
+    if (profile) setUser(profile)
+  }, [user])
+
   const value = useMemo<AuthContextValue>(
-    () => ({ user, initializing, realAccounts: Boolean(supabase), signIn, signUp, signOut }),
-    [user, initializing, signIn, signUp, signOut],
+    () => ({ user, initializing, realAccounts: Boolean(supabase), signIn, signUp, signOut, refreshUser }),
+    [user, initializing, signIn, signUp, signOut, refreshUser],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

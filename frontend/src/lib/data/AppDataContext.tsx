@@ -295,6 +295,9 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const [sessions, setSessions] = useState<SessionRecord[]>(() => (supabase ? [] : readJson(SESSIONS_KEY, [])))
   const { user } = useAuth()
   const userId = supabase ? (user?.id ?? null) : null
+  // An admin works in one clinic at a time. The database lets an admin read every account,
+  // so the patient list is narrowed here to the clinic the admin has open.
+  const adminClinic = user?.role === 'admin' ? user.practiceId : null
   // Which account's data has finished loading; loading is derived from it.
   const [loadedFor, setLoadedFor] = useState<string | null>(null)
   const loading = userId !== null && loadedFor !== userId
@@ -312,11 +315,10 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     let cancelled = false
     Promise.all([
       supabase.from('exercises').select('*').order('created_at', { ascending: true }),
-      supabase
-        .from('profiles')
-        .select('id, name, email, first_seen_at, last_seen_at')
-        .eq('role', 'patient')
-        .order('first_seen_at', { ascending: true }),
+      (adminClinic
+        ? supabase.from('profiles').select('id, name, email, first_seen_at, last_seen_at').eq('role', 'patient').eq('practice_id', adminClinic)
+        : supabase.from('profiles').select('id, name, email, first_seen_at, last_seen_at').eq('role', 'patient')
+      ).order('first_seen_at', { ascending: true }),
       supabase.from('sessions').select('*').order('completed_at', { ascending: true }),
     ]).then(([exercisesRes, patientsRes, sessionsRes]) => {
       if (cancelled) return
@@ -342,7 +344,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       setSessions([])
       setLoadedFor(null)
     }
-  }, [userId])
+  }, [userId, adminClinic])
 
   useEffect(() => {
     const client = supabase

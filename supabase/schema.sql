@@ -20,8 +20,9 @@
 --     practice, and manage exercises for that practice only.
 --   • Admins (one or two trusted team accounts) see every account's name,
 --     email, role and clinic, and can turn a patient account into a physio
---     account from the app's Admin page. They see no exercise or session
---     data. Make the first admin here:  select make_admin('you@example.com');
+--     account from the app's Admin page. They can also open one clinic at a
+--     time and work in it like one of its physios (prototype, test accounts
+--     only). Make the first admin here:  select make_admin('you@example.com');
 --     On a database that already has data, run admin-role-migration.sql
 --     instead of this file.
 --   • Someone who isn't signed in sees nothing.
@@ -42,6 +43,8 @@ drop function if exists public.my_practice() cascade;
 drop function if exists public.make_physio(text, text, text) cascade;
 drop function if exists public.make_admin(text) cascade;
 drop function if exists public.admin_set_account(uuid, text, text) cascade;
+drop function if exists public.admin_open_clinic(text) cascade;
+drop function if exists public.is_admin() cascade;
 
 create extension if not exists "pgcrypto";
 
@@ -159,6 +162,40 @@ end;
 $$;
 revoke execute on function public.make_admin(text) from public, anon, authenticated;
 
+-- ---------------------------------------------------------------
+-- Admin "open clinic": full physio access to one clinic at a time
+-- ---------------------------------------------------------------
+-- FOR THE PROTOTYPE, WITH TEST ACCOUNTS ONLY. With this, an admin can read
+-- and change every clinic's patients, sessions and exercises. Do not use it
+-- on a database that holds real patients without each clinic's agreement.
+--
+-- How it works: every clinical-data rule asks my_role() and my_practice().
+-- For an admin, my_role() now answers 'physio', and my_practice() is the
+-- clinic the admin has open (stored on the admin's own profile). So an admin
+-- gets exactly what a physio of that clinic gets, and the existing rules do
+-- not need rewriting. Rules that are about admins use is_admin() instead.
+
+create or replace function public.is_admin()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$ select exists (select 1 from public.profiles where id = auth.uid() and role = 'admin') $$;
+
+create or replace function public.my_role()
+returns text
+language sql
+stable
+security definer
+set search_path = public
+as $$ select case when role = 'admin' then 'physio' else role end from public.profiles where id = auth.uid() $$;
+
+drop policy if exists "admin reads all profiles" on profiles;
+create policy "admin reads all profiles" on profiles
+  for select to authenticated
+  using (public.is_admin());
+
 -- Called from the Admin page. Only an admin can run it; it can only set
 -- patient or physio (never admin), and never changes an admin's account.
 create or replace function public.admin_set_account(target uuid, new_role text, new_practice text)
@@ -168,7 +205,7 @@ security definer
 set search_path = public
 as $$
 begin
-  if public.my_role() is distinct from 'admin' then
+  if not public.is_admin() then
     raise exception 'Only an admin can change accounts.';
   end if;
   if new_role not in ('patient', 'physio') then
@@ -187,6 +224,26 @@ end;
 $$;
 revoke execute on function public.admin_set_account(uuid, text, text) from public, anon;
 grant execute on function public.admin_set_account(uuid, text, text) to authenticated;
+
+-- Called from the Admin page: choose which clinic the admin has open.
+create or replace function public.admin_open_clinic(practice text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not public.is_admin() then
+    raise exception 'Only an admin can open a clinic.';
+  end if;
+  if not exists (select 1 from public.practices where id = practice) then
+    raise exception 'Unknown clinic %.', practice;
+  end if;
+  update public.profiles set practice_id = practice where id = auth.uid();
+end;
+$$;
+revoke execute on function public.admin_open_clinic(text) from public, anon;
+grant execute on function public.admin_open_clinic(text) to authenticated;
 
 -- ---------------------------------------------------------------
 -- exercises — protocols a physio has created for their practice.
@@ -293,10 +350,6 @@ create policy "read own profile, physio reads practice patients" on profiles
     id = auth.uid()
     or (public.my_role() = 'physio' and role = 'patient' and practice_id = public.my_practice())
   );
-
-create policy "admin reads all profiles" on profiles
-  for select to authenticated
-  using (public.my_role() = 'admin');
 
 -- You may change only your own name and last-seen time — never your role
 -- or practice.

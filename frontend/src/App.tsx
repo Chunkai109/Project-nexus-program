@@ -19,11 +19,12 @@ import { useAppZoom } from '@/components/layout/useAppZoom'
 import type { UserRole } from '@/types'
 import type { ReactNode } from 'react'
 
-function RequireRole({ role, children }: { role: UserRole; children: ReactNode }) {
+/** `adminToo` lets an admin in as well: the admin works in the clinic they have open, like one of its physiotherapists. */
+function RequireRole({ role, adminToo = false, children }: { role: UserRole; adminToo?: boolean; children: ReactNode }) {
   const { user, initializing } = useAuth()
   if (initializing) return null
   if (!user) return <Navigate to="/login" replace />
-  if (user.role !== role) return <Navigate to={homeFor(user.role)} replace />
+  if (user.role !== role && !(adminToo && user.role === 'admin')) return <Navigate to={homeFor(user.role)} replace />
   return <>{children}</>
 }
 
@@ -82,7 +83,7 @@ function AppRoutes() {
       <Route
         path="/physio"
         element={
-          <RequireRole role="physio">
+          <RequireRole role="physio" adminToo>
             <TherapistDashboard />
           </RequireRole>
         }

@@ -13,9 +13,12 @@ import { HoverExplain } from '@/components/ui/HoverExplain'
 import { useAppData } from '@/lib/data/AppDataContext'
 import { ArrowLeft, Pencil, Settings, Trash2 } from 'lucide-react'
 import { ModelCredits } from '@/components/body/ModelCredits'
+import { useAuth } from '@/lib/AuthContext'
+import { AdminViewBanner } from '@/components/layout/AdminViewBanner'
 
 export function TherapistDashboard() {
   const { exercises, deleteExercise } = useAppData()
+  const { user } = useAuth()
   const [tab, setTab] = useState('creator')
   const [selectedPatientId, setSelectedPatientId] = useState<string | undefined>()
   const [selectedExerciseId, setSelectedExerciseId] = useState<string | undefined>()
@@ -58,6 +61,7 @@ export function TherapistDashboard() {
 
   return (
     <PageShell fullWidth className="flex flex-col">
+      {user?.role === 'admin' && <AdminViewBanner practiceId={user.practiceId} />}
       <PhysioSidebar active={tab} onSelect={goToTab} />
 
       <main className="min-w-0 flex-1 px-4 py-6 sm:px-6 sm:py-8 lg:px-10 lg:py-10">

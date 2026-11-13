@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { AlertCircle, CheckCircle2, Loader2, LogOut, RefreshCw, Search, ShieldCheck, Stethoscope, UserRound } from 'lucide-react'
+import { AlertCircle, ArrowRight, CheckCircle2, Loader2, LogOut, RefreshCw, Search, ShieldCheck, Stethoscope, UserRound } from 'lucide-react'
 import { clsx } from 'clsx'
 import { PageShell } from '@/components/layout/PageShell'
 import { Logo } from '@/components/layout/Logo'
@@ -9,7 +9,8 @@ import { Card } from '@/components/ui/Card'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { ThemeToggle } from '@/components/ui/ThemeToggle'
 import { useAuth } from '@/lib/AuthContext'
-import { listAccounts, setAccount, type AdminAccount } from '@/lib/admin'
+import { listAccounts, openClinic, setAccount, type AdminAccount } from '@/lib/admin'
+import { DeveloperTools } from '@/components/admin/DeveloperTools'
 import { PRACTICES } from '@/lib/mockData'
 
 const ROLE = {
@@ -26,11 +27,12 @@ const clinicName = (id: string) => PRACTICES.find((p) => p.id === id)?.name ?? i
 /**
  * The Admin page: every account with its role and clinic, and the one job an
  * admin has, which is to turn a patient account into a physiotherapist
- * account (or back) and put it in the right clinic. It shows no exercise or
- * session data, and the database does not give an admin any.
+ * account (or back) and put it in the right clinic. This tab shows no exercise or
+ * session data. The Clinics tab opens a clinic's physio dashboard, and the
+ * Developer tools tab has the team's pre-demo checks.
  */
 export function AdminPage() {
-  const { user, signOut } = useAuth()
+  const { user, signOut, refreshUser } = useAuth()
   const navigate = useNavigate()
   const [accounts, setAccounts] = useState<AdminAccount[] | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -41,6 +43,23 @@ export function AdminPage() {
   const [pending, setPending] = useState<Pending | null>(null)
   const [savingId, setSavingId] = useState<string | null>(null)
   const [message, setMessage] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null)
+  const [tab, setTab] = useState<'accounts' | 'clinics' | 'tools'>('accounts')
+  const [openingId, setOpeningId] = useState<string | null>(null)
+  const [openError, setOpenError] = useState<string | null>(null)
+
+  /** Opens a clinic: from then on the admin works in it like one of its physiotherapists. */
+  async function open(practiceId: string) {
+    setOpeningId(practiceId)
+    setOpenError(null)
+    const result = await openClinic(practiceId)
+    if (!result.ok) {
+      setOpeningId(null)
+      setOpenError(result.error)
+      return
+    }
+    await refreshUser()
+    navigate('/physio')
+  }
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -125,10 +144,77 @@ export function AdminPage() {
       </header>
 
       <main className="mx-auto w-full max-w-[1100px] px-6 py-8">
+        <div role="tablist" aria-label="Admin sections" className="mb-6 flex gap-1 border-b border-border-strong">
+          {([['accounts', 'Accounts'], ['clinics', 'Clinics'], ['tools', 'Developer tools']] as const).map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              role="tab"
+              aria-selected={tab === id}
+              onClick={() => setTab(id)}
+              className={clsx(
+                '-mb-px min-h-[48px] border-b-2 px-4 text-[17px] font-semibold',
+                tab === id ? 'border-accent text-accent' : 'border-transparent text-ink-muted hover:text-ink',
+              )}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {tab === 'tools' && (
+          <>
+            <h1 className="text-[28px] font-bold tracking-tight text-ink">Developer tools</h1>
+            <p className="mb-6 mt-1 max-w-[60ch] text-[16px] text-ink-muted">Checks for the team before a demo. Nothing here reads or changes patient records.</p>
+            <DeveloperTools />
+          </>
+        )}
+
+        {tab === 'clinics' && (
+          <>
+            <h1 className="text-[28px] font-bold tracking-tight text-ink">Clinics</h1>
+            <p className="mt-1 max-w-[62ch] text-[16px] text-ink-muted">
+              Open a clinic to work in it like one of its physiotherapists: see its patients and sessions, and create, edit or delete its
+              exercises and plans. For the prototype with test accounts only.
+            </p>
+            {openError && (
+              <p role="alert" className="mt-4 flex items-start gap-2.5 rounded-xl bg-crimson/10 px-4 py-3 text-[16px] font-medium text-crimson-ink">
+                <AlertCircle className="mt-0.5 h-5 w-5 flex-shrink-0" aria-hidden />
+                {openError}
+              </p>
+            )}
+            <ul className="mt-5 flex flex-col gap-3">
+              {PRACTICES.map((p) => {
+                const inClinic = (accounts ?? []).filter((a) => a.practiceId === p.id && a.role !== 'admin')
+                return (
+                  <li key={p.id}>
+                    <Card className="flex flex-wrap items-center justify-between gap-4 p-5">
+                      <div>
+                        <p className="text-[18px] font-bold text-ink">{p.name}</p>
+                        <p className="text-[15px] text-ink-muted">
+                          {accounts === null
+                            ? 'Loading accounts…'
+                            : `${inClinic.filter((a) => a.role === 'physio').length} physiotherapists, ${inClinic.filter((a) => a.role === 'patient').length} patients`}
+                        </p>
+                      </div>
+                      <Button className="min-h-[48px] text-[16px]" disabled={openingId !== null} onClick={() => void open(p.id)}>
+                        {openingId === p.id ? <Loader2 className="h-5 w-5 animate-spin" aria-hidden /> : <ArrowRight className="h-5 w-5" aria-hidden />}
+                        {openingId === p.id ? 'Opening…' : 'Open clinic'}
+                      </Button>
+                    </Card>
+                  </li>
+                )
+              })}
+            </ul>
+          </>
+        )}
+
+        {tab === 'accounts' && (
+          <>
         <h1 className="text-[28px] font-bold tracking-tight text-ink">Accounts</h1>
         <p className="mt-1 max-w-[60ch] text-[16px] text-ink-muted">
-          Everyone creates a patient account first. To set up a physiotherapist, find their account here and change it. You see names, emails,
-          roles and clinics only: no exercise or session data.
+          Everyone creates a patient account first. To set up a physiotherapist, find their account here
+          and change it. To see a clinic's patients and plans, use the Clinics tab.
         </p>
 
         <div className="mt-6 flex flex-wrap items-center gap-3">
@@ -286,6 +372,8 @@ export function AdminPage() {
         <p className="mt-4 max-w-[70ch] text-[14px] text-ink-muted">
           Admin accounts are made in the Supabase SQL Editor, not here. See supabase/admin-role-migration.sql.
         </p>
+          </>
+        )}
       </main>
 
       <ConfirmDialog

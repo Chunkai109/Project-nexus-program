@@ -49,3 +49,11 @@ export async function setAccount(id: string, role: 'patient' | 'physio', practic
   if (error) return { ok: false, error: "We couldn't save that change. Nothing was changed. Try again." }
   return { ok: true, value: null }
 }
+
+/** Chooses the clinic the admin has open. After this the admin works in it like one of its physiotherapists. */
+export async function openClinic(practiceId: string): Promise<Result<null>> {
+  if (!supabase) return { ok: false, error: NO_SERVER }
+  const { error } = await supabase.rpc('admin_open_clinic', { practice: practiceId })
+  if (error) return { ok: false, error: "We couldn't open that clinic. Check the connection and try again." }
+  return { ok: true, value: null }
+}

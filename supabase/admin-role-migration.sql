@@ -10,8 +10,12 @@
 --   • An admin can see every account's name, email, role and clinic, across
 --     all clinics, and can turn a patient account into a physiotherapist
 --     account (or back), and move an account to another clinic.
---   • An admin can NOT see exercises, sessions or any exercise data, and
---     cannot make another admin. Admins are made only here, in the SQL Editor.
+--   • An admin can also "open" one clinic at a time and then work in it
+--     exactly like one of its physiotherapists: see its patients and
+--     sessions, and create, edit and delete its exercises and plans.
+--     This is for the prototype with TEST ACCOUNTS ONLY (see the note below).
+--   • An admin cannot make another admin. Admins are made only here, in the
+--     SQL Editor.
 --
 -- After running this, make your first admin (the account must already
 -- exist: create it in the app with "Create account", or under
@@ -46,6 +50,40 @@ end;
 $$;
 revoke execute on function public.make_admin(text) from public, anon, authenticated;
 
+-- ---------------------------------------------------------------
+-- Admin "open clinic": full physio access to one clinic at a time
+-- ---------------------------------------------------------------
+-- FOR THE PROTOTYPE, WITH TEST ACCOUNTS ONLY. With this, an admin can read
+-- and change every clinic's patients, sessions and exercises. Do not use it
+-- on a database that holds real patients without each clinic's agreement.
+--
+-- How it works: every clinical-data rule asks my_role() and my_practice().
+-- For an admin, my_role() now answers 'physio', and my_practice() is the
+-- clinic the admin has open (stored on the admin's own profile). So an admin
+-- gets exactly what a physio of that clinic gets, and the existing rules do
+-- not need rewriting. Rules that are about admins use is_admin() instead.
+
+create or replace function public.is_admin()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$ select exists (select 1 from public.profiles where id = auth.uid() and role = 'admin') $$;
+
+create or replace function public.my_role()
+returns text
+language sql
+stable
+security definer
+set search_path = public
+as $$ select case when role = 'admin' then 'physio' else role end from public.profiles where id = auth.uid() $$;
+
+drop policy if exists "admin reads all profiles" on profiles;
+create policy "admin reads all profiles" on profiles
+  for select to authenticated
+  using (public.is_admin());
+
 -- Called from the Admin page. Only an admin can run it; it can only set
 -- patient or physio (never admin), and never changes an admin's account.
 create or replace function public.admin_set_account(target uuid, new_role text, new_practice text)
@@ -55,7 +93,7 @@ security definer
 set search_path = public
 as $$
 begin
-  if public.my_role() is distinct from 'admin' then
+  if not public.is_admin() then
     raise exception 'Only an admin can change accounts.';
   end if;
   if new_role not in ('patient', 'physio') then
@@ -74,3 +112,23 @@ end;
 $$;
 revoke execute on function public.admin_set_account(uuid, text, text) from public, anon;
 grant execute on function public.admin_set_account(uuid, text, text) to authenticated;
+
+-- Called from the Admin page: choose which clinic the admin has open.
+create or replace function public.admin_open_clinic(practice text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not public.is_admin() then
+    raise exception 'Only an admin can open a clinic.';
+  end if;
+  if not exists (select 1 from public.practices where id = practice) then
+    raise exception 'Unknown clinic %.', practice;
+  end if;
+  update public.profiles set practice_id = practice where id = auth.uid();
+end;
+$$;
+revoke execute on function public.admin_open_clinic(text) from public, anon;
+grant execute on function public.admin_open_clinic(text) to authenticated;
