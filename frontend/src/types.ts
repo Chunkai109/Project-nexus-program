@@ -1,4 +1,4 @@
-export type UserRole = 'patient' | 'physio'
+export type UserRole = 'patient' | 'physio' | 'admin'
 
 export interface Practice {
   id: string

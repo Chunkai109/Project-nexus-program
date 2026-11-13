@@ -18,6 +18,12 @@
 --     physios only.
 --   • Physios see the patients, sessions and exercises of their own
 --     practice, and manage exercises for that practice only.
+--   • Admins (one or two trusted team accounts) see every account's name,
+--     email, role and clinic, and can turn a patient account into a physio
+--     account from the app's Admin page. They see no exercise or session
+--     data. Make the first admin here:  select make_admin('you@example.com');
+--     On a database that already has data, run admin-role-migration.sql
+--     instead of this file.
 --   • Someone who isn't signed in sees nothing.
 -- =================================================================
 
@@ -34,6 +40,8 @@ drop function if exists public.handle_new_user() cascade;
 drop function if exists public.my_role() cascade;
 drop function if exists public.my_practice() cascade;
 drop function if exists public.make_physio(text, text, text) cascade;
+drop function if exists public.make_admin(text) cascade;
+drop function if exists public.admin_set_account(uuid, text, text) cascade;
 
 create extension if not exists "pgcrypto";
 
@@ -55,7 +63,7 @@ insert into practices (id, name) values
 -- ---------------------------------------------------------------
 create table profiles (
   id uuid primary key references auth.users (id) on delete cascade,
-  role text not null default 'patient' check (role in ('patient', 'physio')),
+  role text not null default 'patient' check (role in ('patient', 'physio', 'admin')),
   name text not null,
   email text not null,
   practice_id text not null references practices (id),
@@ -131,6 +139,54 @@ stable
 security definer
 set search_path = public
 as $$ select practice_id from public.profiles where id = auth.uid() $$;
+
+-- ---------------------------------------------------------------
+-- admin role (see admin-role-migration.sql for the notes)
+-- ---------------------------------------------------------------
+-- SQL Editor only: turn an existing account into an admin.
+create or replace function public.make_admin(user_email text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  update public.profiles set role = 'admin' where lower(email) = lower(user_email);
+  if not found then
+    raise exception 'No account with email %. Create it first, then run this again.', user_email;
+  end if;
+end;
+$$;
+revoke execute on function public.make_admin(text) from public, anon, authenticated;
+
+-- Called from the Admin page. Only an admin can run it; it can only set
+-- patient or physio (never admin), and never changes an admin's account.
+create or replace function public.admin_set_account(target uuid, new_role text, new_practice text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if public.my_role() is distinct from 'admin' then
+    raise exception 'Only an admin can change accounts.';
+  end if;
+  if new_role not in ('patient', 'physio') then
+    raise exception 'The role must be patient or physio.';
+  end if;
+  if not exists (select 1 from public.practices where id = new_practice) then
+    raise exception 'Unknown clinic %.', new_practice;
+  end if;
+  update public.profiles
+     set role = new_role, practice_id = new_practice
+   where id = target and role <> 'admin';
+  if not found then
+    raise exception 'That account was not found, or it is an admin account.';
+  end if;
+end;
+$$;
+revoke execute on function public.admin_set_account(uuid, text, text) from public, anon;
+grant execute on function public.admin_set_account(uuid, text, text) to authenticated;
 
 -- ---------------------------------------------------------------
 -- exercises — protocols a physio has created for their practice.
@@ -237,6 +293,10 @@ create policy "read own profile, physio reads practice patients" on profiles
     id = auth.uid()
     or (public.my_role() = 'physio' and role = 'patient' and practice_id = public.my_practice())
   );
+
+create policy "admin reads all profiles" on profiles
+  for select to authenticated
+  using (public.my_role() = 'admin');
 
 -- You may change only your own name and last-seen time — never your role
 -- or practice.

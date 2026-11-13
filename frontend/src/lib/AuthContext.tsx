@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabase/client'
 
 export function deriveNameFromEmail(email: string, role: UserRole): string {
   const name = email.split('@')[0].replace(/[._]/g, ' ')
-  return name.length > 0 ? name.replace(/\b\w/g, (c) => c.toUpperCase()) : role === 'patient' ? 'Patient' : 'Physiotherapist'
+  return name.length > 0 ? name.replace(/\b\w/g, (c) => c.toUpperCase()) : role === 'patient' ? 'Patient' : role === 'admin' ? 'Admin' : 'Physiotherapist'
 }
 
 type AuthResult = { user: AuthUser; error?: undefined } | { user?: undefined; error: string }

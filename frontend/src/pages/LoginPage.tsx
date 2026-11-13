@@ -8,7 +8,8 @@ import { ModelCredits } from '@/components/body/ModelCredits'
 import { useAuth } from '@/lib/AuthContext'
 import { useAppData } from '@/lib/data/AppDataContext'
 import { PRACTICES } from '@/lib/mockData'
-import type { AuthUser, UserRole } from '@/types'
+import { homeFor } from '@/lib/homeFor'
+import type { UserRole } from '@/types'
 // SmartPhysio rig photo: team to supply a final shot, ideally with the laptop screen visible.
 // Today this is the team's own photo of the prototype being worn (no stock image, so no licence credit).
 // It is imported so Vite bundles it into the app: nothing loads from the web.
@@ -19,10 +20,6 @@ type FieldName = 'name' | 'email' | 'password'
 
 /** The navy of the light theme's text. Used over the photo in both themes, so it is written out here. */
 const NAVY = '20 33 61'
-
-function homeFor(user: AuthUser): string {
-  return user.role === 'patient' ? '/patient/exercises' : '/physio'
-}
 
 /**
  * The sign-in code (lib/AuthContext) returns its own short messages. This puts
@@ -130,7 +127,7 @@ export function LoginPage() {
   const tabs = useRef<Partial<Record<Mode, HTMLButtonElement | null>>>({})
 
   if (initializing) return null
-  if (user) return <Navigate to={homeFor(user)} replace />
+  if (user) return <Navigate to={homeFor(user.role)} replace />
 
   const registering = mode === 'register'
   // Physio accounts are created by an admin, never from this screen.
@@ -193,7 +190,7 @@ export function LoginPage() {
     if (!realAccounts && result.user.role === 'patient') {
       registerPatientVisit(result.user.name, result.user.email)
     }
-    navigate(homeFor(result.user))
+    navigate(homeFor(result.user.role))
   }
 
   const tabClass = (active: boolean) =>

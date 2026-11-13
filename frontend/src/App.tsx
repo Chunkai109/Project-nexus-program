@@ -13,6 +13,8 @@ import { SessionSummary } from '@/pages/SessionSummary'
 import { TherapistDashboard } from '@/pages/TherapistDashboard'
 import { PatientDemo } from '@/demo/PatientDemo'
 import { BodyCheck } from '@/demo/BodyCheck'
+import { AdminPage } from '@/pages/AdminPage'
+import { homeFor } from '@/lib/homeFor'
 import { useAppZoom } from '@/components/layout/useAppZoom'
 import type { UserRole } from '@/types'
 import type { ReactNode } from 'react'
@@ -21,7 +23,7 @@ function RequireRole({ role, children }: { role: UserRole; children: ReactNode }
   const { user, initializing } = useAuth()
   if (initializing) return null
   if (!user) return <Navigate to="/login" replace />
-  if (user.role !== role) return <Navigate to={user.role === 'patient' ? '/patient/exercises' : '/physio'} replace />
+  if (user.role !== role) return <Navigate to={homeFor(user.role)} replace />
   return <>{children}</>
 }
 
@@ -82,6 +84,14 @@ function AppRoutes() {
         element={
           <RequireRole role="physio">
             <TherapistDashboard />
+          </RequireRole>
+        }
+      />
+      <Route
+        path="/admin"
+        element={
+          <RequireRole role="admin">
+            <AdminPage />
           </RequireRole>
         }
       />
