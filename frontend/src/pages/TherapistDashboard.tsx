@@ -12,6 +12,7 @@ import { Card } from '@/components/ui/Card'
 import { HoverExplain } from '@/components/ui/HoverExplain'
 import { useAppData } from '@/lib/data/AppDataContext'
 import { ArrowLeft, Pencil, Settings, Trash2 } from 'lucide-react'
+import { ModelCredits } from '@/components/body/ModelCredits'
 
 export function TherapistDashboard() {
   const { exercises, deleteExercise } = useAppData()
@@ -185,6 +186,10 @@ export function TherapistDashboard() {
             <Card className="flex flex-col items-center gap-3 p-12 text-center">
               <Settings className="h-8 w-8 text-ink-faint" />
               <p className="text-sm text-ink-muted">Practice settings are coming in a future iteration of this draft.</p>
+            </Card>
+            <Card className="mt-4 p-5">
+              <h2 className="text-[15px] font-semibold text-ink">Credits</h2>
+              <ModelCredits className="mt-1 !text-[13px] !text-ink-muted" />
             </Card>
           </>
         )}

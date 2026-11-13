@@ -159,6 +159,8 @@ create table exercises (
   based_on_preset_id uuid references exercises (id) on delete set null,
   -- Upper-arm drift (degrees) allowed before the live drift fault fires.
   drift_tolerance_deg integer not null default 22,
+  -- The part of the body the exercise uses; the 3D model's camera frames it.
+  body_region text not null default 'full' check (body_region in ('upper', 'lower', 'core', 'full')),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   -- The preset's updated_at when the plan was copied.
@@ -173,6 +175,16 @@ create table exercises (
 --   alter table exercises add column updated_at timestamptz not null default now();
 --   alter table exercises add column preset_snapshot_at timestamptz;
 --   update exercises set updated_at = created_at;
+--   -- v1.2.0, body regions. New exercises save their own; existing ones get the
+--   -- region suggested by their muscle groups (the same rule as the app):
+--   alter table exercises add column if not exists body_region text not null default 'full'
+--     check (body_region in ('upper', 'lower', 'core', 'full'));
+--   update exercises set body_region = case
+--     when cardinality(muscle_groups) = 0 then 'full'
+--     when muscle_groups <@ array['Chest', 'Back', 'Shoulder', 'Arm', 'Forearm'] then 'upper'
+--     when muscle_groups <@ array['Upper Leg', 'Lower Leg'] then 'lower'
+--     when muscle_groups <@ array['Core'] then 'core'
+--     else 'full' end;
 --   -- Removing a plan must keep its past sessions:
 --   alter table sessions drop constraint sessions_exercise_id_fkey;
 --   -- Patients see only their own plans, not presets:
@@ -322,6 +334,14 @@ cross join (
         jsonb_build_object('id', gen_random_uuid(), 'nodeA', 7, 'nodeB', 9, 'targetMin', 30, 'targetMax', 150, 'faultThresholdDeg', 15),
         jsonb_build_object('id', gen_random_uuid(), 'nodeA', 8, 'nodeB', 10, 'targetMin', 30, 'targetMax', 150, 'faultThresholdDeg', 15)))
 ) as e (title, muscle_groups, sets, reps, therapist_note, est_minutes, angle_configs);
+
+-- The starter exercises get the body region suggested by their muscle groups.
+update exercises set body_region = case
+  when cardinality(muscle_groups) = 0 then 'full'
+  when muscle_groups <@ array['Chest', 'Back', 'Shoulder', 'Arm', 'Forearm'] then 'upper'
+  when muscle_groups <@ array['Upper Leg', 'Lower Leg'] then 'lower'
+  when muscle_groups <@ array['Core'] then 'core'
+  else 'full' end;
 
 -- ---------------------------------------------------------------
 -- Realtime — live updates between devices. Each person only receives

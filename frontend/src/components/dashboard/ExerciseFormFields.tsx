@@ -8,12 +8,14 @@ import { Slider } from '@/components/ui/Slider'
 import { RangeSlider } from '@/components/ui/RangeSlider'
 import { RadialGauge } from '@/components/charts/RadialGauge'
 import { JointPicker } from '@/components/body/JointPicker'
+import { MEASURED_JOINT_ID, muscleOptionLabel } from '@/components/body/measured'
 import { MuscleGroupPicker } from '@/components/body/MuscleGroupPicker'
-import { JOINT_PRESETS, jointPresetForPair } from '@/lib/joints'
+import { JOINT_PRESETS } from '@/lib/joints'
 import { MUSCLE_GROUPS, muscleLabel } from '@/lib/muscles'
 import { podLabel } from '@/lib/podUtils'
 import { DRIFT_LIMIT_MAX, DRIFT_LIMIT_MIN, DRIFT_LIMIT_WARN_BELOW, parseDriftLimit, type ExerciseFormState } from '@/lib/useExerciseForm'
 import { NotUsedYetTag } from './PlanTags'
+import { BODY_REGIONS, type BodyRegion } from '@/lib/bodyRegion'
 import type { AngleConfig, Exercise } from '@/types'
 
 const MUSCLE_TAGS = MUSCLE_GROUPS.map((g) => g.label)
@@ -99,6 +101,7 @@ export function ExerciseFormFields({
   saving = false,
   saveError,
   toggleTag,
+  chooseBodyRegion,
   selectDraftJoint,
   draftValid,
   confirmAngle,
@@ -122,6 +125,7 @@ export function ExerciseFormFields({
   saving?: boolean
   saveError?: string | null
   toggleTag: (tag: string) => void
+  chooseBodyRegion: (region: BodyRegion) => void
   selectDraftJoint: (jointId: string) => void
   draftValid: boolean
   confirmAngle: () => void
@@ -142,9 +146,15 @@ export function ExerciseFormFields({
   const draftJoint = JOINT_PRESETS.find((p) => p.id === form.draftJointId)
   const loadedConfig = draftJoint ? undefined : form.angleConfigs.find((c) => c.id === form.draftConfigId)
   const draftLabel = draftJoint ? draftJoint.label : loadedConfig ? `${podLabel(loadedConfig.nodeA)} ↔ ${podLabel(loadedConfig.nodeB)}` : null
-  const confirmedJointIds = new Set(
-    form.angleConfigs.map((c) => jointPresetForPair(c.nodeA, c.nodeB)?.id).filter((id): id is string => id != null),
-  )
+  // The rig's real elbow angle is measured between Pod 2 (forearm) and Pod 3 (upper arm).
+  const isRigElbow = (c: AngleConfig) => (c.nodeA === 2 && c.nodeB === 3) || (c.nodeA === 3 && c.nodeB === 2)
+  const rigElbowConfig = form.angleConfigs.find(isRigElbow)
+  const pickedJointId = form.draftJointId ?? (loadedConfig && isRigElbow(loadedConfig) ? MEASURED_JOINT_ID : null)
+  /** Picking the right elbow opens the exercise's existing Pod 2 ↔ Pod 3 angle if it has one, so it is edited, not duplicated. */
+  const pickJoint = (jointId: string) => {
+    if (jointId === MEASURED_JOINT_ID && rigElbowConfig) loadAngleIntoDraft(rigElbowConfig)
+    else selectDraftJoint(jointId)
+  }
   const draftGroup = MUSCLE_GROUPS.find((g) => g.id === form.draftMuscleGroupId)
   const isPlan = mode === 'patientPlan'
   const preset = isPlan ? (compareTo ?? null) : null
@@ -193,6 +203,30 @@ export function ExerciseFormFields({
                   ))}
                 </div>
               </div>
+
+              <fieldset>
+                <legend className="mb-2 block text-[13px] font-medium text-ink-muted">Body region</legend>
+                <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Body region">
+                  {BODY_REGIONS.map((r) => (
+                    <button
+                      key={r.id}
+                      type="button"
+                      role="radio"
+                      aria-checked={form.bodyRegion === r.id}
+                      onClick={() => chooseBodyRegion(r.id)}
+                      className={clsx(
+                        'rounded-full px-3.5 py-1.5 text-[13px] font-medium transition-colors duration-200',
+                        form.bodyRegion === r.id ? 'bg-accent text-accent-ink' : 'bg-surface-secondary text-ink-muted hover:bg-surface-hover',
+                      )}
+                    >
+                      {r.label}
+                    </button>
+                  ))}
+                </div>
+                <p className="mt-1.5 text-[12px] text-ink-muted">
+                  {form.bodyRegionChosen ? 'You picked this. It no longer follows the muscle groups.' : 'Suggested from the muscle groups. You can change it.'}
+                </p>
+              </fieldset>
 
               <div className="grid grid-cols-3 gap-4">
                 <HoverExplain explanation="Number of sets the patient should complete per session.">
@@ -305,10 +339,11 @@ export function ExerciseFormFields({
                 </span>
               </div>
               <JointPicker
-                selectedJointId={form.draftJointId}
-                onSelect={selectDraftJoint}
-                confirmedJointIds={confirmedJointIds}
-                height={280}
+                selectedJointId={pickedJointId}
+                onSelect={pickJoint}
+                bodyRegion={form.bodyRegion}
+                targetRange={{ min: form.draftMin, max: form.draftMax }}
+                height={300}
               />
               <div className="mt-4 text-center text-[13px]">
                 {!draftLabel && <span className="text-ink-faint">No joint selected yet</span>}
@@ -448,7 +483,17 @@ export function ExerciseFormFields({
                   {form.muscleEmgTargets.length > 0 ? `${form.muscleEmgTargets.length} Set` : 'None set'}
                 </span>
               </div>
-              <MuscleGroupPicker selectedGroupId={form.draftMuscleGroupId} onSelect={selectDraftMuscleGroup} height={280} />
+              <MuscleGroupPicker
+                selectedGroupId={form.draftMuscleGroupId}
+                selectedMuscleId={form.draftMuscleId}
+                onSelect={selectDraftMuscleGroup}
+                onSelectMuscle={(groupId, muscleId) => {
+                  selectDraftMuscleGroup(groupId)
+                  selectDraftMuscle(muscleId)
+                }}
+                bodyRegion={form.bodyRegion}
+                height={300}
+              />
               <div className="my-4 text-center text-[13px]">
                 {!draftGroup && <span className="text-ink-faint">No muscle group selected yet</span>}
                 {draftGroup && <span className="font-medium text-accent">{draftGroup.label} selected</span>}
@@ -476,7 +521,7 @@ export function ExerciseFormFields({
                           </option>
                           {draftGroup.muscles.map((m) => (
                             <option key={m.id} value={m.id}>
-                              {m.label}
+                              {muscleOptionLabel(m.id, m.label)}
                             </option>
                           ))}
                         </select>

@@ -21,3 +21,12 @@ ensemble/data/synchronized_sessions/*
 ml/data/processed_*/
 ml/models/best_model_*/
 ml/results_*/
+
+# 3D body model sources (see tools/body-model/README.md): the Mixamo character
+# file must not be shared, and Z-Anatomy is far too large. Only the converted
+# files in frontend/public/models/ are committed.
+*.fbx
+tools/body-model/build/
+tools/body-model/source/
+Z-Anatomy.zip
+Startup.blend

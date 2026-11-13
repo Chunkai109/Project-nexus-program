@@ -147,6 +147,8 @@ function DemoLive({ onEnd }: { onEnd: () => void }) {
       targetMax={TARGET.targetMax}
       source="hub"
       driftFault={{ active: drifting, overLimitDeg: drifting ? 6 : null }}
+      upperArmDriftDeg={drifting ? 28 : 3}
+      showArmModel={new URLSearchParams(window.location.search).get('arm') !== 'off'}
       verdict={verdict}
       buzzOnPerfect
       camera={<DemoCamera angle={angle} fault={drifting} />}

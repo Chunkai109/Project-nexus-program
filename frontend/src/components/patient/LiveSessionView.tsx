@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useMemo, type ReactNode } from 'react'
 import { AlertTriangle, CheckCircle2, CircleSlash, FlaskConical, Loader2, Timer, Vibrate, Wifi, XCircle } from 'lucide-react'
 import { clsx } from 'clsx'
 import { Card } from '@/components/ui/Card'
@@ -8,6 +8,7 @@ import { Details } from './PatientBits'
 import { formatClock } from './format'
 import { setProgress, type VerdictDisplay } from './liveVerdict'
 import { PatientContainer } from './PatientContainer'
+import { BodyModel3D } from '@/components/body/BodyModel3D'
 
 /** The full elbow range on this rig: 0° straight, 135° fully curled. */
 const ANGLE_MAX = 135
@@ -100,6 +101,8 @@ export function LiveSessionView({
   targetMax,
   source,
   driftFault,
+  upperArmDriftDeg,
+  showArmModel = true,
   verdict,
   buzzOnPerfect,
   camera,
@@ -119,6 +122,10 @@ export function LiveSessionView({
   source: 'hub' | 'simulated'
   /** `overLimitDeg` is null when the number isn't known (simulated stream). */
   driftFault: { active: boolean; overLimitDeg: number | null }
+  /** How far the upper arm has swung from its starting position, from the hub. Null when there is no hub (the model's upper arm then stays still). */
+  upperArmDriftDeg: number | null
+  /** Set false to leave the 3D arm out (used to measure its cost, or on a laptop that cannot keep up). */
+  showArmModel?: boolean
   verdict: VerdictDisplay
   /** True when a Perfect rep triggers the vibration motor (hub connected). */
   buzzOnPerfect: boolean
@@ -128,6 +135,7 @@ export function LiveSessionView({
   onEnd: () => void
 }) {
   const p = setProgress(repCount, sets, repsPerSet)
+  const armRange = useMemo(() => ({ min: targetMin, max: targetMax }), [targetMin, targetMax])
 
   return (
     <>
@@ -172,7 +180,21 @@ export function LiveSessionView({
           </div>
 
           <div className="flex min-w-0 flex-col gap-3">
-            <Card className="flex flex-col items-center px-5 py-4 text-center">
+            <Card className="flex items-center gap-3 px-4 py-3">
+              {/* A small moving picture of the arm. It only repeats what the angle bar and the status line already say in words. */}
+              {showArmModel && (
+                <div className="aspect-square w-[clamp(150px,14.5vw,280px)] flex-shrink-0 overflow-hidden rounded-xl bg-surface-secondary" data-testid="live-arm-model">
+                  <BodyModel3D
+                    mode="live"
+                    elbowAngleDeg={Math.min(ANGLE_MAX, Math.max(0, angle))}
+                    targetRange={armRange}
+                    upperArmDriftDeg={Math.min(60, Math.max(0, upperArmDriftDeg ?? 0))}
+                    driftFault={driftFault.active}
+                    height="100%"
+                  />
+                </div>
+              )}
+              <div className="flex min-w-0 flex-1 flex-col items-center text-center">
               {p.allDone ? (
                 <>
                   <p className="inline-flex items-center gap-2 text-[26px] font-bold text-emerald-ink">
@@ -200,6 +222,7 @@ export function LiveSessionView({
                   <p className="text-[20px] font-semibold text-ink-muted">reps done in this set</p>
                 </>
               )}
+              </div>
             </Card>
 
             <Verdict verdict={verdict} buzzed={buzzOnPerfect} />

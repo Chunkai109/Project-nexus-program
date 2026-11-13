@@ -35,6 +35,7 @@ export function ProtocolBuilder({ onSelectExercise }: { onSelectExercise: (exerc
     setForm,
     resetForm,
     toggleTag,
+    chooseBodyRegion,
     selectDraftJoint,
     draftValid,
     canSave,
@@ -74,6 +75,7 @@ export function ProtocolBuilder({ onSelectExercise }: { onSelectExercise: (exerc
           setForm={setForm}
           mode="preset"
           toggleTag={toggleTag}
+          chooseBodyRegion={chooseBodyRegion}
           selectDraftJoint={selectDraftJoint}
           draftValid={draftValid}
           confirmAngle={confirmAngle}

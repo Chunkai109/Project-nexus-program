@@ -1,47 +1,70 @@
-import { Body3DPicker, scaleMarkers, type BodyMarker } from './Body3DPicker'
+import { BodyModel3D, type BodyMarker3D } from './BodyModel3D'
+import { MEASURED_MUSCLE_ID } from './measured'
+import { MUSCLE_GROUPS } from '@/lib/muscles'
+import type { BodyRegion } from '@/lib/bodyRegion'
 
 /**
- * Marker positions were measured directly off the mesh's own vertices (the
- * true surface point furthest outward in each region) and nudged out by a
- * small, fixed margin so they hug the body instead of floating, while still
- * clearing the surface enough that the opaque mesh never blocks the
- * raycast; bilateral regions get two markers that both select the same
- * group.
- */
-const RAW_MARKERS: BodyMarker[] = [
-  { id: 'chest', value: 'chest', position: [0, 15.3, 1.33] },
-  { id: 'back', value: 'back', position: [0, 15.3, -2.0] },
-  { id: 'core', value: 'core', position: [0, 12.5, 1.29] },
-  { id: 'left-shoulder', value: 'shoulder', position: [-2.74, 17.0, -0.29] },
-  { id: 'right-shoulder', value: 'shoulder', position: [2.74, 17.0, -0.29] },
-  { id: 'left-arm', value: 'arm', position: [-4.11, 14.8, -0.94] },
-  { id: 'right-arm', value: 'arm', position: [4.11, 14.8, -0.94] },
-  { id: 'left-forearm', value: 'forearm', position: [-5.56, 11.8, -0.55] },
-  { id: 'right-forearm', value: 'forearm', position: [5.56, 11.8, -0.55] },
-  { id: 'left-upper-leg', value: 'upper-leg', position: [-2.47, 8.0, -0.27] },
-  { id: 'right-upper-leg', value: 'upper-leg', position: [2.47, 8.0, -0.27] },
-  { id: 'left-lower-leg', value: 'lower-leg', position: [-2.48, 3.3, -0.77] },
-  { id: 'right-lower-leg', value: 'lower-leg', position: [2.48, 3.3, -0.77] },
-]
-
-const MARKERS = scaleMarkers(RAW_MARKERS)
-
-/**
- * One tap on a marker reveals which muscle group it is (bilateral regions
- * like Shoulder or Arm have two markers that both select the same group);
- * the specific muscle within that group is then picked from a dropdown, not
- * from the figure itself. Chest and Back sit on opposite sides of the torso,
- * so rotating the figure is what reveals Back — the reason this is a 3D
- * rotatable figure rather than a flat stickman.
+ * The muscle step of the exercise editor, on the 3D mannequin. Muscles are
+ * shown as areas on the body. Only the right bicep can be picked on the model,
+ * because it is the only muscle with a sensor; the rest are grey and say so
+ * on hover. The group dropdown under it, and the muscle dropdown beside it,
+ * reach every muscle from the keyboard.
  */
 export function MuscleGroupPicker({
   selectedGroupId,
+  selectedMuscleId,
   onSelect,
-  height = 260,
+  onSelectMuscle,
+  bodyRegion,
+  height = 280,
 }: {
   selectedGroupId: string | null
+  selectedMuscleId: string | null
   onSelect: (groupId: string) => void
+  /** Called when a muscle is picked on the model itself. */
+  onSelectMuscle: (groupId: string, muscleId: string) => void
+  bodyRegion: BodyRegion
   height?: number
 }) {
-  return <Body3DPicker markers={MARKERS} selectedValue={selectedGroupId} onSelect={onSelect} height={height} />
+  const markers: BodyMarker3D[] = MUSCLE_GROUPS.flatMap((g) =>
+    g.muscles.map((m) => ({
+      id: m.id,
+      kind: 'muscle' as const,
+      label: m.id === MEASURED_MUSCLE_ID ? `${m.label} (Pod 1)` : m.label,
+      selectable: m.id === MEASURED_MUSCLE_ID,
+      emphasised: g.id === selectedGroupId,
+    })),
+  )
+  return (
+    <div className="flex flex-col gap-3">
+      <BodyModel3D
+        mode="editor"
+        bodyRegion={bodyRegion}
+        markers={markers}
+        selected={selectedMuscleId}
+        onSelect={(id) => {
+          const group = MUSCLE_GROUPS.find((g) => g.muscles.some((m) => m.id === id))
+          if (group) onSelectMuscle(group.id, id)
+        }}
+        height={height}
+      />
+      <label className="block">
+        <span className="mb-1 block text-[13px] font-medium text-ink-muted">Muscle group</span>
+        <select
+          value={selectedGroupId ?? ''}
+          onChange={(e) => onSelect(e.target.value)}
+          className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-[14px] text-ink"
+        >
+          <option value="" disabled>
+            Select a muscle group…
+          </option>
+          {MUSCLE_GROUPS.map((g) => (
+            <option key={g.id} value={g.id}>
+              {g.label}
+            </option>
+          ))}
+        </select>
+      </label>
+    </div>
+  )
 }

@@ -4,6 +4,7 @@ import type { AngleConfig, Exercise, PatientRecord, PodId, SessionRecord } from 
 import { supabase } from '@/lib/supabase/client'
 import { useAuth } from '@/lib/AuthContext'
 import { normalizeMuscleEmgTargets, type LegacyMuscleEmgTarget } from '@/lib/muscles'
+import { isBodyRegion, suggestBodyRegion } from '@/lib/bodyRegion'
 import {
   exerciseFromRow,
   exercisePatchToRow,
@@ -100,8 +101,8 @@ type LegacyExerciseFields = Partial<{
   targetEmgMvc: number
 }>
 
-type StoredExercise = Omit<Exercise, 'muscleEmgTargets' | 'basedOnPresetId' | 'driftToleranceDeg' | 'updatedAt' | 'presetSnapshotAt'> &
-  Partial<Pick<Exercise, 'basedOnPresetId' | 'driftToleranceDeg' | 'updatedAt' | 'presetSnapshotAt'>> &
+type StoredExercise = Omit<Exercise, 'muscleEmgTargets' | 'basedOnPresetId' | 'driftToleranceDeg' | 'updatedAt' | 'presetSnapshotAt' | 'bodyRegion'> &
+  Partial<Pick<Exercise, 'basedOnPresetId' | 'driftToleranceDeg' | 'updatedAt' | 'presetSnapshotAt' | 'bodyRegion'>> &
   LegacyExerciseFields & { muscleEmgTargets?: LegacyMuscleEmgTarget[] }
 
 function normalizeExercise(raw: StoredExercise): Exercise {
@@ -129,6 +130,8 @@ function normalizeExercise(raw: StoredExercise): Exercise {
     assignedPatientId: raw.assignedPatientId ?? null,
     basedOnPresetId: raw.basedOnPresetId ?? null,
     driftToleranceDeg: raw.driftToleranceDeg ?? DEFAULT_DRIFT_TOLERANCE_DEG,
+    // Saved before body regions existed: use the one suggested by its muscle groups.
+    bodyRegion: isBodyRegion(raw.bodyRegion) ? raw.bodyRegion : suggestBodyRegion(raw.muscleGroups ?? []),
     updatedAt: raw.updatedAt ?? raw.createdAt,
     presetSnapshotAt: raw.presetSnapshotAt ?? null,
   }
@@ -171,6 +174,7 @@ function buildDefaultBicepCurlExercise(): NewExercise {
     angleConfigs: [{ id: crypto.randomUUID(), nodeA: 2, nodeB: 3, targetMin: 100, targetMax: 135, faultThresholdDeg: 15 }],
     assignedPatientId: null,
     driftToleranceDeg: DEFAULT_DRIFT_TOLERANCE_DEG,
+    bodyRegion: 'upper',
   }
 }
 
@@ -199,6 +203,7 @@ function buildDefaultSquatsExercise(): NewExercise {
     ],
     assignedPatientId: null,
     driftToleranceDeg: DEFAULT_DRIFT_TOLERANCE_DEG,
+    bodyRegion: 'lower',
   }
 }
 
@@ -218,6 +223,7 @@ function buildDefaultPushUpExercise(): NewExercise {
     ],
     assignedPatientId: null,
     driftToleranceDeg: DEFAULT_DRIFT_TOLERANCE_DEG,
+    bodyRegion: 'upper',
   }
 }
 
@@ -237,6 +243,7 @@ function buildDefaultShoulderPressExercise(): NewExercise {
     ],
     assignedPatientId: null,
     driftToleranceDeg: DEFAULT_DRIFT_TOLERANCE_DEG,
+    bodyRegion: 'upper',
   }
 }
 

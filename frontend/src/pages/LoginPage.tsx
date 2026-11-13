@@ -1,3 +1,4 @@
+import { ModelCredits } from '@/components/body/ModelCredits'
 import { useState, type FormEvent, type ReactNode } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { ChevronDown, Lock, Mail, User } from 'lucide-react'
@@ -207,6 +208,7 @@ export function LoginPage() {
             </button>
           )}
         </div>
+        <ModelCredits className="mt-6 border-t border-border pt-4" />
       </Card>
     </div>
   )

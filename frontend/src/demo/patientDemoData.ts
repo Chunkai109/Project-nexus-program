@@ -49,6 +49,7 @@ function demoExercise(
     assignedPatientId: DEMO_PATIENT.id,
     basedOnPresetId: null,
     driftToleranceDeg,
+    bodyRegion: 'upper',
     createdAt,
     updatedAt: createdAt,
     presetSnapshotAt: null,

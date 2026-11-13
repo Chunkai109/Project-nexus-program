@@ -408,6 +408,7 @@ export function LiveSession() {
         targetMax={targetMax}
         source={usingHubCurl ? 'hub' : 'simulated'}
         driftFault={{ active: faultActive, overLimitDeg }}
+        upperArmDriftDeg={usingHubCurl ? curl.driftError : null}
         verdict={verdict}
         buzzOnPerfect={hub.connectionState === 'connected'}
         ending={ending}

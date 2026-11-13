@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { JOINT_PRESETS, jointPresetForPair } from '@/lib/joints'
 import { DEFAULT_DRIFT_TOLERANCE_DEG, type NewExercise } from '@/lib/data/AppDataContext'
+import { suggestBodyRegion, type BodyRegion } from '@/lib/bodyRegion'
 import type { AngleConfig, Exercise, MuscleEmgTarget, PodId } from '@/types'
 
 export interface ExerciseFormState {
@@ -16,6 +17,10 @@ export interface ExerciseFormState {
   assignedPatientId: string | null
   /** Kept as typed text so the field can show a validation message instead of silently coercing. */
   driftToleranceInput: string
+  /** The body region. While `bodyRegionChosen` is false it follows the suggestion from the muscle groups. */
+  bodyRegion: BodyRegion
+  /** True once the physio has picked a region by hand in this edit; it then stops following the suggestion. */
+  bodyRegionChosen: boolean
   /** The joint currently being defined, before it's confirmed into angleConfigs. */
   draftJointId: string | null
   /** The confirmed angle loaded back for editing, so one with no matching joint (e.g. the curl rig's pods 2↔3) can still be re-confirmed. */
@@ -42,6 +47,8 @@ function blankForm(): ExerciseFormState {
     angleConfigs: [],
     assignedPatientId: null,
     driftToleranceInput: String(DEFAULT_DRIFT_TOLERANCE_DEG),
+    bodyRegion: suggestBodyRegion([]),
+    bodyRegionChosen: false,
     draftJointId: null,
     draftConfigId: null,
     draftMin: 90,
@@ -66,6 +73,9 @@ export function formFromExercise(ex: Exercise): ExerciseFormState {
     angleConfigs: ex.angleConfigs,
     assignedPatientId: ex.assignedPatientId,
     driftToleranceInput: String(ex.driftToleranceDeg),
+    bodyRegion: ex.bodyRegion,
+    // A saved region that differs from the suggestion was a deliberate choice, so it is kept.
+    bodyRegionChosen: ex.bodyRegion !== suggestBodyRegion(ex.muscleGroups),
     draftJointId: null,
     draftConfigId: null,
     draftMin: 90,
@@ -109,10 +119,15 @@ export function useExerciseForm(initial?: Exercise) {
   }
 
   function toggleTag(tag: string) {
-    setForm((f) => ({
-      ...f,
-      muscleGroups: f.muscleGroups.includes(tag) ? f.muscleGroups.filter((t) => t !== tag) : [...f.muscleGroups, tag],
-    }))
+    setForm((f) => {
+      const muscleGroups = f.muscleGroups.includes(tag) ? f.muscleGroups.filter((t) => t !== tag) : [...f.muscleGroups, tag]
+      return { ...f, muscleGroups, bodyRegion: f.bodyRegionChosen ? f.bodyRegion : suggestBodyRegion(muscleGroups) }
+    })
+  }
+
+  /** The physio picks a region by hand: it stops following the muscle groups. */
+  function chooseBodyRegion(region: BodyRegion) {
+    setForm((f) => ({ ...f, bodyRegion: region, bodyRegionChosen: true }))
   }
 
   /** Selecting a joint stands in for the old two-tap flow — both underlying sensor nodes come along with it. */
@@ -231,6 +246,7 @@ export function useExerciseForm(initial?: Exercise) {
       angleConfigs: form.angleConfigs,
       assignedPatientId: form.assignedPatientId,
       driftToleranceDeg: driftLimit ?? DEFAULT_DRIFT_TOLERANCE_DEG,
+      bodyRegion: form.bodyRegion,
     }
   }
 
@@ -240,6 +256,7 @@ export function useExerciseForm(initial?: Exercise) {
     resetForm,
     driftLimit,
     toggleTag,
+    chooseBodyRegion,
     selectDraftJoint,
     draftValid,
     canSave,

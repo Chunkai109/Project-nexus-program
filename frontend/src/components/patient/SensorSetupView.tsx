@@ -245,7 +245,7 @@ export function SensorSetupView({
             <h2 className="mb-1 text-[19px] font-bold text-ink">Where each pod goes</h2>
             <p className="mb-3 text-[15px] text-ink-muted">Drag the figure to turn it. Tap a pod in the list to find it.</p>
             <div className={clsx(vibrating && 'animate-pulse')}>
-              <SensorPlacementPicker pods={rows.map((r) => ({ ...r.pod, signal: r.signal, battery: r.battery ?? 0 }))} activePodId={activePod} onSelect={setActivePod} height={240} />
+              <SensorPlacementPicker pods={rows.map((r) => ({ ...r.pod, signal: r.signal, battery: r.battery ?? 0 }))} activePodId={activePod} onSelect={setActivePod} height={300} />
             </div>
             {exercise.setupInstructions && (
               <div className="mt-4 rounded-xl bg-accent/10 p-4">

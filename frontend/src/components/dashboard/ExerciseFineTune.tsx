@@ -16,6 +16,7 @@ export function ExerciseFineTune({ exerciseId }: { exerciseId: string }) {
     form,
     setForm,
     toggleTag,
+    chooseBodyRegion,
     selectDraftJoint,
     draftValid,
     canSave,
@@ -72,6 +73,7 @@ export function ExerciseFineTune({ exerciseId }: { exerciseId: string }) {
         saving={saving}
         saveError={saveError}
         toggleTag={toggleTag}
+        chooseBodyRegion={chooseBodyRegion}
         selectDraftJoint={selectDraftJoint}
         draftValid={draftValid}
         confirmAngle={confirmAngle}

@@ -65,6 +65,8 @@ export interface Exercise {
   basedOnPresetId: string | null
   /** Upper-arm drift (degrees from baseline) allowed before the live drift fault fires. Default 22. */
   driftToleranceDeg: number
+  /** The part of the body the exercise uses. The 3D model's camera frames it. */
+  bodyRegion: 'upper' | 'lower' | 'core' | 'full'
   createdAt: number
   /** Set on every save. */
   updatedAt: number

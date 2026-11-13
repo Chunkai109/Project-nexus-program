@@ -1,55 +1,69 @@
-import { Body3DPicker, scaleMarkers, type BodyMarker } from './Body3DPicker'
-import { useTheme } from '@/lib/ThemeContext'
+import { BodyModel3D, type BodyMarker3D } from './BodyModel3D'
+import { ARM_ONLY_NOTE, MEASURED_JOINT_ID, NOT_MEASURED } from './measured'
+import { JOINT_PRESETS } from '@/lib/joints'
+import type { BodyRegion } from '@/lib/bodyRegion'
 
 /**
- * One marker per `JOINT_PRESETS` entry, positioned at that joint's actual
- * location on the mesh — measured the same way as the muscle picker's
- * markers (true outward surface point at the joint's height, nudged out a
- * small fixed margin so it hugs the limb without being occluded by it).
- */
-const RAW_MARKERS: BodyMarker[] = [
-  { id: 'left-shoulder', value: 'left-shoulder', position: [-2.74, 17.0, -0.29] },
-  { id: 'right-shoulder', value: 'right-shoulder', position: [2.74, 17.0, -0.29] },
-  { id: 'left-elbow', value: 'left-elbow', position: [-4.92, 13.2, -0.74] },
-  { id: 'right-elbow', value: 'right-elbow', position: [4.92, 13.2, -0.74] },
-  { id: 'left-hip', value: 'left-hip', position: [-2.12, 10.6, 0.17] },
-  { id: 'right-hip', value: 'right-hip', position: [2.12, 10.6, 0.17] },
-  { id: 'left-knee', value: 'left-knee', position: [-2.5, 5.9, -0.64] },
-  { id: 'right-knee', value: 'right-knee', position: [2.5, 5.9, -0.64] },
-]
-
-const MARKERS = scaleMarkers(RAW_MARKERS)
-
-/**
- * One tap picks a whole joint (both underlying sensor nodes at once), rather
- * than requiring two separate taps on raw sensor dots. The confirmed angle
- * this produces is exactly the same nodeA/nodeB pair shape as before. Uses
- * the same rotatable 3D scan as the EMG step's muscle picker so a physio
- * only has to learn one figure. Every joint starts red; one turns green as
- * soon as its angle is confirmed, so at a glance you can see what's left.
+ * The joint step of the exercise editor, on the 3D mannequin. Only the right
+ * elbow can be picked, because it is the only joint the pods measure; the
+ * other joints are drawn grey and say so. With the elbow picked, a see-through
+ * forearm swings through the target range and the range is drawn as an arc.
+ * The dropdown under it does the same job from the keyboard.
  */
 export function JointPicker({
   selectedJointId,
   onSelect,
-  confirmedJointIds,
-  height = 220,
+  bodyRegion,
+  targetRange,
+  height = 280,
 }: {
   selectedJointId: string | null
   onSelect: (jointId: string) => void
-  confirmedJointIds?: Set<string>
+  bodyRegion: BodyRegion
+  /** Shown as the arc and the moving forearm while the right elbow is selected. */
+  targetRange?: { min: number; max: number }
   height?: number
 }) {
-  const { theme } = useTheme()
-  const unconfirmedColor = theme === 'dark' ? '#ff453a' : '#d70015'
-
+  // Lower-body and core exercises have nothing this rig can measure.
+  const armInScope = bodyRegion === 'upper' || bodyRegion === 'full'
+  const markers: BodyMarker3D[] = JOINT_PRESETS.map((j) => ({
+    id: j.id,
+    kind: 'joint',
+    label: j.id === MEASURED_JOINT_ID ? `${j.label} (Pods 2 and 3)` : j.label,
+    selectable: armInScope && j.id === MEASURED_JOINT_ID,
+  }))
+  const elbowSelected = selectedJointId === MEASURED_JOINT_ID
   return (
-    <Body3DPicker
-      markers={MARKERS}
-      selectedValue={selectedJointId}
-      confirmedValues={confirmedJointIds}
-      onSelect={onSelect}
-      height={height}
-      unconfirmedColor={unconfirmedColor}
-    />
+    <div className="flex flex-col gap-3">
+      <BodyModel3D
+        mode="editor"
+        bodyRegion={bodyRegion}
+        markers={markers}
+        selected={selectedJointId}
+        onSelect={onSelect}
+        targetRange={elbowSelected ? targetRange : undefined}
+        elbowAngleDeg={0}
+        height={height}
+        note={armInScope ? undefined : ARM_ONLY_NOTE}
+      />
+      <label className="block">
+        <span className="mb-1 block text-[13px] font-medium text-ink-muted">Joint</span>
+        <select
+          value={selectedJointId ?? ''}
+          onChange={(e) => onSelect(e.target.value)}
+          disabled={!armInScope}
+          className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-[14px] text-ink disabled:opacity-60"
+        >
+          <option value="" disabled>
+            {armInScope ? 'Select a joint…' : ARM_ONLY_NOTE}
+          </option>
+          {JOINT_PRESETS.map((j) => (
+            <option key={j.id} value={j.id} disabled={j.id !== MEASURED_JOINT_ID}>
+              {j.id === MEASURED_JOINT_ID ? `${j.label} (Pods 2 and 3)` : `${j.label}: ${NOT_MEASURED}`}
+            </option>
+          ))}
+        </select>
+      </label>
+    </div>
   )
 }
