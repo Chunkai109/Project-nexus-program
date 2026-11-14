@@ -16,11 +16,18 @@
  * Free tier: Google's free-tier terms may let Google use what is sent to
  * improve its products, and it has rate limits. Check the current terms.
  */
-import { ApiError, FinishReason, GoogleGenAI, type Content } from 'npm:@google/genai@2.32.0'
+import { ApiError, FinishReason, GoogleGenAI, ThinkingLevel, type Content, type ThinkingConfig } from 'npm:@google/genai@2.32.0'
 import { createClient } from 'npm:@supabase/supabase-js@2.117.2'
 import { SYSTEM_PROMPT } from './prompt.ts'
 
 const MODEL = Deno.env.get('GEMINI_MODEL') || 'gemini-3.8-flash'
+// How long the model thinks before it starts writing. Lower = faster first
+// words. GEMINI_THINKING: MINIMAL, LOW (default), MEDIUM, HIGH, or "default"
+// to leave it to the model.
+const THINKING = (Deno.env.get('GEMINI_THINKING') || 'LOW').toUpperCase()
+const THINKING_CONFIG: ThinkingConfig | undefined = (Object.values(ThinkingLevel) as string[]).includes(THINKING)
+  ? { thinkingLevel: THINKING as ThinkingLevel }
+  : undefined
 const MAX_CONTEXT_CHARS = 80_000
 const MAX_MESSAGES = 30
 const MAX_MESSAGE_CHARS = 4_000
@@ -104,7 +111,7 @@ Deno.serve(async (req) => {
         const answer = await ai.models.generateContentStream({
           model: MODEL,
           contents,
-          config: { systemInstruction: SYSTEM_PROMPT, maxOutputTokens: 4096, abortSignal: req.signal },
+          config: { systemInstruction: SYSTEM_PROMPT, maxOutputTokens: 4096, abortSignal: req.signal, ...(THINKING_CONFIG ? { thinkingConfig: THINKING_CONFIG } : {}) },
         })
         let finish: string | undefined
         let blocked = false
