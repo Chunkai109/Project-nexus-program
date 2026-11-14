@@ -10,10 +10,10 @@
 // Streams flexion, drift and the filtered EMG envelope to the app over its
 // own WiFi network + WebSocket, and pulses the motor when the app asks.
 //
-// Sensor maths follows the team's "Filtered Sensor Reader (Dual MPU +
-// Sichiray EMG)" sketch exactly (gyro calibration, complementary filter,
-// flexion = 90 - roll1, drift = 90 - roll2, and the EMG high-pass ->
-// 50 Hz notch -> RMS -> smoothing chain). This file adds the WiFi /
+// IMU maths is the original hub code (flexion = 90 - roll1, drift =
+// roll2 - 90), confirmed working on the rig. EMG follows the team's
+// "Filtered Sensor Reader (Dual MPU + Sichiray EMG)" sketch (high-pass ->
+// 50 Hz notch -> RMS -> smoothing). This file adds the WiFi /
 // WebSocket link and the motor around it.
 // ===========================================================================
 
@@ -22,7 +22,7 @@
 
 // Hardware Peripheral Pins
 #define EMG_PIN            34  // Analog pin for Sichiray EMG signal (ADC1; ADC2 can't be used while WiFi is on)
-#define VIB_MOTOR_FORM_PIN 25  // Digital output — single motor strapped on the bicep, pulses on correct form
+#define VIB_MOTOR_FORM_PIN 27  // Digital output — single motor strapped on the bicep, pulses on correct form
 
 // MPU-6050 Addresses
 #define MPU1_ADDR 0x68  // Sensor 1: Forearm   -> AD0 to GND
@@ -44,7 +44,6 @@ struct MPUData {
 
 struct GyroOffsets {
   float gx = 0.0;
-  float gy = 0.0;
 };
 
 // ---------------------------------------------------------------------------
@@ -75,9 +74,9 @@ unsigned long formMotorOffAt = 0;  // millis() deadline for the motor's app-comm
 
 GyroOffsets calib1, calib2;
 
-// Filtered Orientation Angles
-float roll1 = 0.0, pitch1 = 0.0; // Forearm
-float roll2 = 0.0, pitch2 = 0.0; // Upper Arm
+// Filtered Orientation Angles — only roll is needed (flexion from Sensor 1, drift from Sensor 2).
+float roll1 = 0.0; // Forearm
+float roll2 = 0.0; // Upper Arm
 const float ALPHA = 0.96;
 
 // Timing. EMG is sampled at 1000 Hz in its own task (see emgTask below);
@@ -198,17 +197,15 @@ bool readSensor(uint8_t addr, MPUData &data) {
 void calibrateGyro(uint8_t addr, GyroOffsets &calib, const char* name) {
   Serial.print("Calibrating "); Serial.print(name);
   Serial.println("... Keep arm still!");
-  long sum_gx = 0, sum_gy = 0;
+  long sum_gx = 0;
   MPUData d;
   for (int i = 0; i < 400; i++) {
     if (readSensor(addr, d)) {
       sum_gx += d.gx;
-      sum_gy += d.gy;
     }
     delay(3);
   }
   calib.gx = (sum_gx / 400.0) / 131.0;
-  calib.gy = (sum_gy / 400.0) / 131.0;
 }
 
 // ---------------------------------------------------------------------------
@@ -279,14 +276,12 @@ void setup() {
   // Seed angles from gravity vectors
   MPUData d1, d2;
   if (readSensor(MPU1_ADDR, d1)) {
-    float ay = d1.ay / 16384.0, az = d1.az / 16384.0, ax = d1.ax / 16384.0;
-    roll1  = atan2(ay, az) * 180.0 / M_PI;
-    pitch1 = atan2(-ax, sqrt(ay * ay + az * az)) * 180.0 / M_PI;
+    float ay = d1.ay / 16384.0, az = d1.az / 16384.0;
+    roll1 = atan2(ay, az) * 180.0 / M_PI;
   }
   if (readSensor(MPU2_ADDR, d2)) {
-    float ay = d2.ay / 16384.0, az = d2.az / 16384.0, ax = d2.ax / 16384.0;
-    roll2  = atan2(ay, az) * 180.0 / M_PI;
-    pitch2 = atan2(-ax, sqrt(ay * ay + az * az)) * 180.0 / M_PI;
+    float ay = d2.ay / 16384.0, az = d2.az / 16384.0;
+    roll2 = atan2(ay, az) * 180.0 / M_PI;
   }
 
   WiFi.softAP(AP_SSID, AP_PASSWORD);
@@ -344,32 +339,25 @@ void loop() {
 
   MPUData d1, d2;
 
+  // 1. Read and filter Sensor 1 (Forearm)
   if (readSensor(MPU1_ADDR, d1)) {
-    float ax = d1.ax / 16384.0, ay = d1.ay / 16384.0, az = d1.az / 16384.0;
+    float ay = d1.ay / 16384.0, az = d1.az / 16384.0;
     float gx = (d1.gx / 131.0) - calib1.gx;
-    float gy = (d1.gy / 131.0) - calib1.gy;
-
-    float accelRoll  = atan2(ay, az) * 180.0 / M_PI;
-    float accelPitch = atan2(-ax, sqrt(ay * ay + az * az)) * 180.0 / M_PI;
-
-    roll1  = ALPHA * (roll1 + gx * dt) + (1.0 - ALPHA) * accelRoll;
-    pitch1 = ALPHA * (pitch1 + gy * dt) + (1.0 - ALPHA) * accelPitch;
+    float accelRoll = atan2(ay, az) * 180.0 / M_PI;
+    roll1 = ALPHA * (roll1 + gx * dt) + (1.0 - ALPHA) * accelRoll;
   }
 
+  // 2. Read and filter Sensor 2 (Upper Arm)
   if (readSensor(MPU2_ADDR, d2)) {
-    float ax = d2.ax / 16384.0, ay = d2.ay / 16384.0, az = d2.az / 16384.0;
+    float ay = d2.ay / 16384.0, az = d2.az / 16384.0;
     float gx = (d2.gx / 131.0) - calib2.gx;
-    float gy = (d2.gy / 131.0) - calib2.gy;
-
-    float accelRoll  = atan2(ay, az) * 180.0 / M_PI;
-    float accelPitch = atan2(-ax, sqrt(ay * ay + az * az)) * 180.0 / M_PI;
-
-    roll2  = ALPHA * (roll2 + gx * dt) + (1.0 - ALPHA) * accelRoll;
-    pitch2 = ALPHA * (pitch2 + gy * dt) + (1.0 - ALPHA) * accelPitch;
+    float accelRoll = atan2(ay, az) * 180.0 / M_PI;
+    roll2 = ALPHA * (roll2 + gx * dt) + (1.0 - ALPHA) * accelRoll;
   }
 
-  float flexion = 90.0 - roll1;
-  float drift   = 90.0 - roll2;
+  // 3. Sensor angle formulas (the original hub code, confirmed working on the rig)
+  float flexion = 90 - roll1; // Sensor 1
+  float drift   = roll2 - 90; // Sensor 2
 
   // Stream live values to the app, if it's connected. Rep counting, drift
   // faults and the haptic decision all live in the app; this board only

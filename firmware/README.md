@@ -32,11 +32,10 @@ on the rig**: set it a little above the largest `EMG:` value the Serial
 Monitor shows during a firm curl. The app turns the 0-1 value into % effort
 using the patient's own resting and firm readings from the Check screen.
 
-**IMUs:** flexion = `90 - roll1` (forearm), drift = `90 - roll2` (upper
-arm), from a complementary filter (`ALPHA` = 0.96) with gyro offsets
-calibrated at boot. The previous sketch had drift as `roll2 - 90`, which
-was wrong. The app's drift fault uses the change from the arm's starting
-position, so it is unaffected by the sign.
+**IMUs:** flexion = `90 - roll1` (forearm), drift = `roll2 - 90` (upper
+arm), from a complementary filter (`ALPHA` = 0.96) on the roll axis with
+gyro x offsets calibrated at boot. This is the original hub code, confirmed
+working on the rig.
 
 ## What you need
 
@@ -57,7 +56,7 @@ position, so it is unaffected by the sign.
 |                        | SDA / SCL       | GPIO 21 / GPIO 22 (shared bus) |
 |                        | AD0             | 3.3V (address `0x69`) |
 | Sichiray sEMG sensor (bicep) | Signal out | GPIO 34 (ADC1: ADC2 pins can't be read while WiFi is on) |
-| Vibration motor (bicep, correct-form feedback) | Control | GPIO 25, through an NPN transistor |
+| Vibration motor (bicep, correct-form feedback) | Control | GPIO 27, through an NPN transistor |
 
 Both MPU6050s share the same I2C bus (SDA/SCL) — tying one's `AD0` pin to
 GND and the other's to 3.3V gives them different addresses (`0x68`/`0x69`)
