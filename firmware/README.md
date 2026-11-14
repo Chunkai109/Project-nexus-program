@@ -32,10 +32,11 @@ on the rig**: set it a little above the largest `EMG:` value the Serial
 Monitor shows during a firm curl. The app turns the 0-1 value into % effort
 using the patient's own resting and firm readings from the Check screen.
 
-**IMUs:** flexion = `90 - roll1` (forearm), drift = `roll2 - 90` (upper
+**IMUs:** flexion = `90 - roll1` (forearm), drift = `90 - roll2` (upper
 arm), from a complementary filter (`ALPHA` = 0.96) on the roll axis with
-gyro x offsets calibrated at boot. This is the original hub code, confirmed
-working on the rig.
+gyro x offsets calibrated at boot, as in the team's new-setup sketch. The
+app's drift fault uses the size of the change from the patient's baseline,
+so the sign of drift does not affect it.
 
 ## What you need
 

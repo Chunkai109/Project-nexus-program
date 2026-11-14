@@ -10,8 +10,8 @@
 // Streams flexion, drift and the filtered EMG envelope to the app over its
 // own WiFi network + WebSocket, and pulses the motor when the app asks.
 //
-// IMU maths is the original hub code (flexion = 90 - roll1, drift =
-// roll2 - 90), confirmed working on the rig. EMG follows the team's
+// IMU maths follows the team's new-setup sketch (flexion = 90 - roll1,
+// drift = 90 - roll2). EMG follows the same
 // "Filtered Sensor Reader (Dual MPU + Sichiray EMG)" sketch (high-pass ->
 // 50 Hz notch -> RMS -> smoothing). This file adds the WiFi /
 // WebSocket link and the motor around it.
@@ -382,9 +382,9 @@ void loop() {
     roll2 = ALPHA * (roll2 + gx * dt) + (1.0 - ALPHA) * accelRoll;
   }
 
-  // 3. Sensor angle formulas (the original hub code, confirmed working on the rig)
-  float flexion = 90 - roll1; // Sensor 1
-  float drift   = roll2 - 90; // Sensor 2
+  // 3. Sensor angle formulas, as in the new-setup sketch
+  float flexion = 90.0 - roll1; // Sensor 1
+  float drift   = 90.0 - roll2; // Sensor 2
 
   // Stream live values to the app, if it's connected. Rep counting, drift
   // faults and the haptic decision all live in the app; this board only
