@@ -39,17 +39,22 @@ sessions in Supabase. A browser version can come later from the same code in
       Practices: `apex`, `summit`, `meridian`.
 4. Patients sign up themselves with **Register New Account** in the app.
 5. Turn on the patient chat ("Ask about this patient" on each patient's page in
-   the physio portal). It runs as a Supabase Edge Function that calls Claude,
-   so it needs an Anthropic API key (console.anthropic.com → API keys). Set a
-   monthly spend limit there too; each question costs roughly 1-3 US cents.
+   the physio portal). It runs as a Supabase Edge Function that calls Google
+   Gemini on the free tier. Get a key at aistudio.google.com → Get API key.
+   Free tier: no cost, but there are per-minute and per-day limits, and
+   Google's free-tier terms may let Google use what is sent (anonymised
+   session numbers, no name or email) to improve its products. Read the
+   current terms before using it with real patients.
    From the repository root, with the Supabase CLI:
    ```sh
    npx supabase login
    npx supabase link --project-ref <your project ref>   # Settings → General
-   npx supabase secrets set ANTHROPIC_API_KEY=<your key>
+   npx supabase secrets set GEMINI_API_KEY=<your key>
    npx supabase functions deploy patient-chat
    ```
    The key stays on Supabase; it is never in the app or this repository.
+   Optional: `npx supabase secrets set GEMINI_MODEL=<model>` to change the
+   model (default `gemini-2.5-flash`).
    Without these steps the panel shows "The chat is not set up on the server yet".
 
 ### 2. GitHub secrets

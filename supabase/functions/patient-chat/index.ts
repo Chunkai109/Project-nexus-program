@@ -3,21 +3,24 @@
  *
  * The physio portal sends a summary of the patient's sessions (numbers only,
  * no name or email) and the conversation so far. This function checks the
- * caller is a signed-in physio (or admin), asks Claude, and streams the
- * answer back as newline-delimited JSON:
+ * caller is a signed-in physio (or admin), asks Google Gemini, and streams
+ * the answer back as newline-delimited JSON:
  *   {"text":"..."}            a piece of the answer
- *   {"done":true,"stop":"…"}  the answer is complete ("refusal" = declined)
+ *   {"done":true,"stop":"…"}  complete ("refusal" = declined, "max_tokens" = cut short)
  *   {"error":"…"}             something went wrong part-way
  *
- * Needs the secret ANTHROPIC_API_KEY (supabase secrets set). The key never
- * reaches the browser. SUPABASE_URL and SUPABASE_ANON_KEY are provided by
- * Supabase automatically.
+ * Needs the secret GEMINI_API_KEY (Google AI Studio; supabase secrets set).
+ * The key never reaches the browser. Optional GEMINI_MODEL overrides the
+ * model. SUPABASE_URL and SUPABASE_ANON_KEY are provided by Supabase.
+ *
+ * Free tier: Google's free-tier terms may let Google use what is sent to
+ * improve its products, and it has rate limits. Check the current terms.
  */
-import Anthropic from 'npm:@anthropic-ai/sdk@1.3.0'
+import { ApiError, FinishReason, GoogleGenAI, type Content } from 'npm:@google/genai@2.32.0'
 import { createClient } from 'npm:@supabase/supabase-js@2.117.2'
 import { SYSTEM_PROMPT } from './prompt.ts'
 
-const MODEL = 'claude-opus-5-5'
+const MODEL = Deno.env.get('GEMINI_MODEL') || 'gemini-2.5-flash'
 const MAX_CONTEXT_CHARS = 80_000
 const MAX_MESSAGES = 30
 const MAX_MESSAGE_CHARS = 4_000
@@ -59,8 +62,8 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
   if (req.method !== 'POST') return json(405, { error: 'Use POST.' })
 
-  const apiKey = Deno.env.get('ANTHROPIC_API_KEY')
-  if (!apiKey) return json(500, { error: 'The chat is not set up yet: ANTHROPIC_API_KEY is missing on the server.' })
+  const apiKey = Deno.env.get('GEMINI_API_KEY')
+  if (!apiKey) return json(500, { error: 'The chat is not set up yet: GEMINI_API_KEY is missing on the server.' })
 
   // Only physios (and admins, whom my_role() reports as physio) may ask.
   const authHeader = req.headers.get('Authorization') ?? ''
@@ -83,54 +86,45 @@ Deno.serve(async (req) => {
   if (problem) return json(400, { error: problem })
   const { context, messages } = body as { context: string; messages: ChatTurn[] }
 
-  // The patient data rides in front of the first question, so it stays the
-  // same on every turn of the chat and can be cached.
-  const apiMessages: Anthropic.Beta.Messages.BetaMessageParam[] = messages.map((m, i) =>
-    i === 0
-      ? {
-          role: 'user',
-          content: [
-            { type: 'text', text: `<patient_data>\n${context}\n</patient_data>` },
-            { type: 'text', text: m.content },
-          ],
-        }
-      : { role: m.role, content: m.content },
-  )
+  // The patient data rides in front of the first question, so every turn sees it.
+  const contents: Content[] = messages.map((m, i) => ({
+    role: m.role === 'assistant' ? 'model' : 'user',
+    parts: i === 0 ? [{ text: `<patient_data>\n${context}\n</patient_data>` }, { text: m.content }] : [{ text: m.content }],
+  }))
 
-  const client = new Anthropic({ apiKey })
+  const baseUrl = Deno.env.get('GEMINI_BASE_URL') // tests only
+  const ai = new GoogleGenAI({ apiKey, ...(baseUrl ? { httpOptions: { baseUrl } } : {}) })
   const encoder = new TextEncoder()
   const send = (controller: ReadableStreamDefaultController<Uint8Array>, obj: unknown) => controller.enqueue(encoder.encode(JSON.stringify(obj) + '\n'))
+  const DECLINED: string[] = [FinishReason.SAFETY, FinishReason.PROHIBITED_CONTENT, FinishReason.BLOCKLIST, FinishReason.SPII, FinishReason.RECITATION]
 
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       try {
-        const claude = client.beta.messages.stream(
-          {
-            model: MODEL,
-            max_tokens: 8000,
-            system: SYSTEM_PROMPT,
-            messages: apiMessages,
-            output_config: { effort: 'medium' },
-            cache_control: { type: 'ephemeral' },
-            // If Claude declines a question, Anthropic retries it on its default fallback model.
-            betas: ['server-side-fallback-2026-07-01'],
-            fallbacks: 'default',
-          },
-          { signal: req.signal },
-        )
-        for await (const event of claude) {
-          if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') send(controller, { text: event.delta.text })
+        const answer = await ai.models.generateContentStream({
+          model: MODEL,
+          contents,
+          config: { systemInstruction: SYSTEM_PROMPT, maxOutputTokens: 4096, abortSignal: req.signal },
+        })
+        let finish: string | undefined
+        let blocked = false
+        for await (const chunk of answer) {
+          if (chunk.promptFeedback?.blockReason) blocked = true
+          const text = chunk.text
+          if (text) send(controller, { text })
+          finish = chunk.candidates?.[0]?.finishReason ?? finish
         }
-        const final = await claude.finalMessage()
-        send(controller, { done: true, stop: final.stop_reason })
+        const stop = blocked || (finish && DECLINED.includes(finish)) ? 'refusal' : finish === FinishReason.MAX_TOKENS ? 'max_tokens' : 'end_turn'
+        send(controller, { done: true, stop })
       } catch (err) {
-        console.error('patient-chat failed', err instanceof Anthropic.APIError ? `${err.status} ${err.message}` : err)
+        console.error('patient-chat failed', err instanceof ApiError ? `${err.status} ${err.message}` : err)
+        const status = err instanceof ApiError ? err.status : 0
         const message =
-          err instanceof Anthropic.RateLimitError
-            ? 'The AI is busy. Try again in a minute.'
-            : err instanceof Anthropic.AuthenticationError
-              ? 'The chat is not set up correctly: the server API key was rejected.'
-              : err instanceof Anthropic.APIConnectionError
+          status === 429
+            ? 'The free AI limit is used up for now. Try again in a minute (or tomorrow if the daily limit is reached).'
+            : status === 400 || status === 401 || status === 403
+              ? 'The chat is not set up correctly: the server API key or model was rejected.'
+              : status === 0
                 ? 'Could not reach the AI service. Try again.'
                 : 'The AI could not answer. Try again.'
         send(controller, { error: message })

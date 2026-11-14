@@ -1,5 +1,5 @@
 /**
- * The instructions Claude gets for every patient chat. Kept in its own file
+ * The instructions the AI gets for every patient chat. Kept in its own file
  * so the clinic-facing rules are easy to review. Changing this text changes
  * how every answer is written.
  */
