@@ -5,6 +5,7 @@ import { PatientExercisePlan } from '@/components/dashboard/PatientExercisePlan'
 import { useAppData } from '@/lib/data/AppDataContext'
 import { historyFor } from '@/lib/sessionStats'
 import { PatientPageView } from './PatientPageView'
+import { PatientChatPanel } from './PatientChatPanel'
 import { sessionsOf, statusOf } from './physioModel'
 import { EmptyState, Skeleton } from './ui/States'
 
@@ -70,6 +71,7 @@ export function TelemetrySection({
         data={data}
         onBack={onBack}
         guard={guard}
+        chatPanel={<PatientChatPanel key={data.patient.id} data={data} />}
         planPanel={<PatientExercisePlan key={data.patient.id} patient={data.patient} onDirtyChange={handleDirtyChange} onOpenCreator={onOpenCreator} />}
       />
       <ConfirmDialog

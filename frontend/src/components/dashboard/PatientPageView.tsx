@@ -162,12 +162,15 @@ function ProgressPanel({ data, now }: { data: PatientPageData; now: number }) {
 export function PatientPageView({
   data,
   planPanel,
+  chatPanel,
   onBack,
   guard = (action) => action(),
   now: nowProp,
 }: {
   data: PatientPageData
   planPanel: ReactNode
+  /** Shown under the Progress tab. The live portal passes the patient chat; the demo passes nothing. */
+  chatPanel?: ReactNode
   onBack: () => void
   /** Runs an action that leaves the plan editor, asking first if it has unsaved changes. */
   guard?: (action: () => void) => void
@@ -234,6 +237,7 @@ export function PatientPageView({
       {tab === 'progress' ? (
         <div role="tabpanel" id="patient-tabpanel-progress" aria-labelledby="patient-tab-progress">
           <ProgressPanel data={data} now={now} />
+          {chatPanel && <div className="mt-6">{chatPanel}</div>}
         </div>
       ) : (
         <div role="tabpanel" id="patient-tabpanel-plan" aria-labelledby="patient-tab-plan">

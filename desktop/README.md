@@ -38,6 +38,19 @@ sessions in Supabase. A browser version can come later from the same code in
       ```
       Practices: `apex`, `summit`, `meridian`.
 4. Patients sign up themselves with **Register New Account** in the app.
+5. Turn on the patient chat ("Ask about this patient" on each patient's page in
+   the physio portal). It runs as a Supabase Edge Function that calls Claude,
+   so it needs an Anthropic API key (console.anthropic.com → API keys). Set a
+   monthly spend limit there too; each question costs roughly 1-3 US cents.
+   From the repository root, with the Supabase CLI:
+   ```sh
+   npx supabase login
+   npx supabase link --project-ref <your project ref>   # Settings → General
+   npx supabase secrets set ANTHROPIC_API_KEY=<your key>
+   npx supabase functions deploy patient-chat
+   ```
+   The key stays on Supabase; it is never in the app or this repository.
+   Without these steps the panel shows "The chat is not set up on the server yet".
 
 ### 2. GitHub secrets
 
@@ -97,6 +110,9 @@ The database rules can only be tested against your real Supabase project.
 - [ ] Complete a session on the hub's WiFi, reconnect to normal WiFi, and confirm the physio sees it within about 20 seconds.
 - [ ] The AI Form Check card shows verdicts. If it says "unavailable", the AI server log is at `%APPDATA%\SmartPhysio\logs\ai-server.log`.
 - [ ] Closing the app leaves no `smartphysio-ai.exe` in Task Manager.
+- [ ] Patient chat: as a physio, open a patient with real sessions and click "Is this patient improving?". The answer streams in, names sessions ("Session 4 (2 days ago)"), and ends with "Based on recorded session data only".
+- [ ] Patient chat: signed in as a patient, the chat is not shown, and the function refuses patient accounts (it answers "Only physiotherapists can use the patient chat").
+- [ ] Patient chat needs internet: it won't answer while the laptop is on the hub's WiFi.
 
 ## Not built yet
 
