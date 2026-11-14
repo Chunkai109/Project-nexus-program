@@ -137,8 +137,14 @@ function normalizeExercise(raw: StoredExercise): Exercise {
   }
 }
 
-function loadExercisesFromLocalStorage(): Exercise[] {
-  return readJson<StoredExercise[]>(EXERCISES_KEY, []).map(normalizeExercise)
+function loadExercisesFromLocalStorage(key: string = EXERCISES_KEY): Exercise[] {
+  return readJson<StoredExercise[]>(key, []).map(normalizeExercise)
+}
+
+/** Storage keys for the normal local mode, or a separate set for a developer preview sandbox. */
+function storageKeys(sandbox?: string) {
+  if (!sandbox) return { exercises: EXERCISES_KEY, patients: PATIENTS_KEY, sessions: SESSIONS_KEY }
+  return { exercises: `smartphysio-${sandbox}:exercises`, patients: `smartphysio-${sandbox}:patients`, sessions: `smartphysio-${sandbox}:sessions` }
 }
 
 /**
@@ -289,306 +295,318 @@ function applyRealtimeChange<TRow extends { id: string }, T extends { id: string
   })
 }
 
-export function AppDataProvider({ children }: { children: ReactNode }) {
-  const [exercises, setExercises] = useState<Exercise[]>(() => (supabase ? [] : loadExercisesFromLocalStorage()))
-  const [patients, setPatients] = useState<PatientRecord[]>(() => (supabase ? [] : readJson(PATIENTS_KEY, [])))
-  const [sessions, setSessions] = useState<SessionRecord[]>(() => (supabase ? [] : readJson(SESSIONS_KEY, [])))
-  const { user } = useAuth()
-  const userId = supabase ? (user?.id ?? null) : null
-  // An admin works in one clinic at a time. The database lets an admin read every account,
-  // so the patient list is narrowed here to the clinic the admin has open.
-  const adminClinic = user?.role === 'admin' ? user.practiceId : null
-  // Which account's data has finished loading; loading is derived from it.
-  const [loadedFor, setLoadedFor] = useState<string | null>(null)
-  const loading = userId !== null && loadedFor !== userId
-  const patientsRef = useRef<PatientRecord[]>(patients)
-  useEffect(() => {
-    patientsRef.current = patients
-  }, [patients])
+function makeAppDataProvider(db: typeof supabase, keys: ReturnType<typeof storageKeys>) {
+  return function AppDataProviderFor({ children }: { children: ReactNode }) {
+    const [exercises, setExercises] = useState<Exercise[]>(() => (db ? [] : loadExercisesFromLocalStorage(keys.exercises)))
+    const [patients, setPatients] = useState<PatientRecord[]>(() => (db ? [] : readJson(keys.patients, [])))
+    const [sessions, setSessions] = useState<SessionRecord[]>(() => (db ? [] : readJson(keys.sessions, [])))
+    const { user } = useAuth()
+    const userId = db ? (user?.id ?? null) : null
+    // An admin works in one clinic at a time. The database lets an admin read every account,
+    // so the patient list is narrowed here to the clinic the admin has open.
+    const adminClinic = user?.role === 'admin' ? user.practiceId : null
+    // Which account's data has finished loading; loading is derived from it.
+    const [loadedFor, setLoadedFor] = useState<string | null>(null)
+    const loading = userId !== null && loadedFor !== userId
+    const patientsRef = useRef<PatientRecord[]>(patients)
+    useEffect(() => {
+      patientsRef.current = patients
+    }, [patients])
 
-  // --- Supabase mode: fetch + realtime, per signed-in account ---
-  // Keyed on the signed-in user: the database's access rules only return
-  // rows that account may see, so data is reloaded whenever a different
-  // person signs in, and cleared on sign-out.
-  useEffect(() => {
-    if (!supabase || !userId) return
-    let cancelled = false
-    Promise.all([
-      supabase.from('exercises').select('*').order('created_at', { ascending: true }),
-      (adminClinic
-        ? supabase.from('profiles').select('id, name, email, first_seen_at, last_seen_at').eq('role', 'patient').eq('practice_id', adminClinic)
-        : supabase.from('profiles').select('id, name, email, first_seen_at, last_seen_at').eq('role', 'patient')
-      ).order('first_seen_at', { ascending: true }),
-      supabase.from('sessions').select('*').order('completed_at', { ascending: true }),
-    ]).then(([exercisesRes, patientsRes, sessionsRes]) => {
-      if (cancelled) return
-      if (exercisesRes.error) console.error('Failed to load exercises from Supabase', exercisesRes.error)
-      else setExercises((exercisesRes.data as ExerciseRow[]).map(exerciseFromRow))
-      if (patientsRes.error) console.error('Failed to load patients from Supabase', patientsRes.error)
-      else setPatients((patientsRes.data as PatientRow[]).map(patientFromRow))
-      if (sessionsRes.error) console.error('Failed to load sessions from Supabase', sessionsRes.error)
-      else {
-        // Sessions still waiting to upload stay visible to the patient who recorded them.
-        const saved = (sessionsRes.data as SessionRow[]).map(sessionFromRow)
-        const savedIds = new Set(saved.map((sv) => sv.id))
-        const pending = readPendingSessions(userId).filter((r) => !savedIds.has(r.id)).map(sessionFromRow)
-        setSessions([...saved, ...pending].sort((a, b) => a.completedAt - b.completedAt))
+    // --- Supabase mode: fetch + realtime, per signed-in account ---
+    // Keyed on the signed-in user: the database's access rules only return
+    // rows that account may see, so data is reloaded whenever a different
+    // person signs in, and cleared on sign-out.
+    useEffect(() => {
+      if (!db || !userId) return
+      let cancelled = false
+      Promise.all([
+        db.from('exercises').select('*').order('created_at', { ascending: true }),
+        (adminClinic
+          ? db.from('profiles').select('id, name, email, first_seen_at, last_seen_at').eq('role', 'patient').eq('practice_id', adminClinic)
+          : db.from('profiles').select('id, name, email, first_seen_at, last_seen_at').eq('role', 'patient')
+        ).order('first_seen_at', { ascending: true }),
+        db.from('sessions').select('*').order('completed_at', { ascending: true }),
+      ]).then(([exercisesRes, patientsRes, sessionsRes]) => {
+        if (cancelled) return
+        if (exercisesRes.error) console.error('Failed to load exercises from Supabase', exercisesRes.error)
+        else setExercises((exercisesRes.data as ExerciseRow[]).map(exerciseFromRow))
+        if (patientsRes.error) console.error('Failed to load patients from Supabase', patientsRes.error)
+        else setPatients((patientsRes.data as PatientRow[]).map(patientFromRow))
+        if (sessionsRes.error) console.error('Failed to load sessions from Supabase', sessionsRes.error)
+        else {
+          // Sessions still waiting to upload stay visible to the patient who recorded them.
+          const saved = (sessionsRes.data as SessionRow[]).map(sessionFromRow)
+          const savedIds = new Set(saved.map((sv) => sv.id))
+          const pending = readPendingSessions(userId).filter((r) => !savedIds.has(r.id)).map(sessionFromRow)
+          setSessions([...saved, ...pending].sort((a, b) => a.completedAt - b.completedAt))
+        }
+        setLoadedFor(userId)
+      })
+      return () => {
+        // Runs on sign-out or account switch: drop the previous account's data.
+        cancelled = true
+        setExercises([])
+        setPatients([])
+        setSessions([])
+        setLoadedFor(null)
       }
-      setLoadedFor(userId)
-    })
-    return () => {
-      // Runs on sign-out or account switch: drop the previous account's data.
-      cancelled = true
-      setExercises([])
-      setPatients([])
-      setSessions([])
-      setLoadedFor(null)
-    }
-  }, [userId, adminClinic])
+    }, [userId, adminClinic])
 
-  useEffect(() => {
-    const client = supabase
-    if (!client || !userId) return
-    const channel = client
-      .channel(`smartphysio-sync-${userId}`)
-      .on<ExerciseRow>('postgres_changes', { event: '*', schema: 'public', table: 'exercises' }, (payload) =>
-        applyRealtimeChange(setExercises, payload, exerciseFromRow),
-      )
-      .on<PatientRow>(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'profiles', filter: 'role=eq.patient' },
-        (payload) => applyRealtimeChange(setPatients, payload, patientFromRow),
-      )
-      .on<SessionRow>('postgres_changes', { event: '*', schema: 'public', table: 'sessions' }, (payload) =>
-        applyRealtimeChange(setSessions, payload, sessionFromRow),
-      )
-      .subscribe()
-    return () => {
-      client.removeChannel(channel)
-    }
-  }, [userId])
+    useEffect(() => {
+      const client = db
+      if (!client || !userId) return
+      const channel = client
+        .channel(`smartphysio-sync-${userId}`)
+        .on<ExerciseRow>('postgres_changes', { event: '*', schema: 'public', table: 'exercises' }, (payload) =>
+          applyRealtimeChange(setExercises, payload, exerciseFromRow),
+        )
+        .on<PatientRow>(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'profiles', filter: 'role=eq.patient' },
+          (payload) => applyRealtimeChange(setPatients, payload, patientFromRow),
+        )
+        .on<SessionRow>('postgres_changes', { event: '*', schema: 'public', table: 'sessions' }, (payload) =>
+          applyRealtimeChange(setSessions, payload, sessionFromRow),
+        )
+        .subscribe()
+      return () => {
+        client.removeChannel(channel)
+      }
+    }, [userId])
 
-  // Retry uploading queued sessions: right after sign-in, whenever the
-  // browser reports it's back online, and every 20s as a fallback.
-  useEffect(() => {
-    if (!supabase || !userId) return
-    const client = supabase
-    const uid = userId
-    let flushing = false
-    async function flush() {
-      if (flushing) return
-      const pending = readPendingSessions(uid)
-      if (pending.length === 0) return
-      flushing = true
-      const done = new Set<string>()
-      for (const row of pending) {
-        const { error } = await client.from('sessions').insert(row)
-        if (!error || isAlreadySaved(error)) {
-          done.add(row.id)
-        } else if (isServerRefusal(error)) {
-          console.error('Server refused a queued session; dropping it', error, row)
-          done.add(row.id)
-        } else {
-          break // still offline: keep the rest for the next try
+    // Retry uploading queued sessions: right after sign-in, whenever the
+    // browser reports it's back online, and every 20s as a fallback.
+    useEffect(() => {
+      if (!db || !userId) return
+      const client = db
+      const uid = userId
+      let flushing = false
+      async function flush() {
+        if (flushing) return
+        const pending = readPendingSessions(uid)
+        if (pending.length === 0) return
+        flushing = true
+        const done = new Set<string>()
+        for (const row of pending) {
+          const { error } = await client.from('sessions').insert(row)
+          if (!error || isAlreadySaved(error)) {
+            done.add(row.id)
+          } else if (isServerRefusal(error)) {
+            console.error('Server refused a queued session; dropping it', error, row)
+            done.add(row.id)
+          } else {
+            break // still offline: keep the rest for the next try
+          }
+        }
+        // Re-read so sessions queued while this was running aren't lost.
+        writeJson(pendingSessionsKey(uid), readPendingSessions(uid).filter((r) => !done.has(r.id)))
+        flushing = false
+      }
+      flush()
+      window.addEventListener('online', flush)
+      const timer = window.setInterval(flush, 20_000)
+      return () => {
+        window.removeEventListener('online', flush)
+        window.clearInterval(timer)
+      }
+    }, [userId])
+
+    // --- localStorage mode: cross-tab sync only (used when Supabase isn't configured) ---
+    useEffect(() => {
+      if (db) return
+      function onStorage(e: StorageEvent) {
+        if (e.key === keys.exercises) setExercises(loadExercisesFromLocalStorage(keys.exercises))
+        if (e.key === keys.patients) setPatients(readJson(keys.patients, []))
+        if (e.key === keys.sessions) setSessions(readJson(keys.sessions, []))
+      }
+      window.addEventListener('storage', onStorage)
+      return () => window.removeEventListener('storage', onStorage)
+    }, [])
+
+    // Persisting to localStorage is split into its own effect per collection,
+    // keyed off committed state, rather than called inline inside each setState
+    // updater. Updater functions must stay pure — React (in StrictMode dev)
+    // invokes them twice to check for that, and a side effect inside one would
+    // fire twice with two different results, letting localStorage and the real
+    // in-memory state drift apart. Skipped entirely once Supabase is configured.
+    useEffect(() => {
+      if (!db) writeJson(keys.exercises, exercises)
+    }, [exercises])
+    useEffect(() => {
+      if (!db) writeJson(keys.patients, patients)
+    }, [patients])
+    useEffect(() => {
+      if (!db) writeJson(keys.sessions, sessions)
+    }, [sessions])
+
+    const exercisesRef = useRef<Exercise[]>(exercises)
+    useEffect(() => {
+      exercisesRef.current = exercises
+    }, [exercises])
+
+    const addExercise = useCallback((input: NewExercise) => {
+      const now = Date.now()
+      const exercise: Exercise = {
+        ...input,
+        id: crypto.randomUUID(),
+        basedOnPresetId: null,
+        createdAt: now,
+        updatedAt: now,
+        presetSnapshotAt: null,
+      }
+      setExercises((prev) => [...prev, exercise])
+      if (db) {
+        db
+          .from('exercises')
+          .insert(exerciseToRow(exercise))
+          .then(({ error }) => {
+            if (error) console.error('Failed to save exercise to Supabase', error)
+          })
+      }
+      return exercise
+    }, [])
+
+    // Seed the default Bicep Curl exercise the moment the exercise list is
+    // confirmed empty — after the initial Supabase fetch resolves (or
+    // immediately in localStorage mode, which never has a loading phase).
+    // Guarded by a ref rather than relying on exercises.length alone so a
+    // slow network response landing after this already fired can't cause a
+    // duplicate.
+    const seededDefaultRef = useRef(false)
+    useEffect(() => {
+      // With Supabase, starter exercises are created by supabase/schema.sql per practice.
+      if (db || seededDefaultRef.current || loading || exercises.length > 0) return
+      seededDefaultRef.current = true
+      for (const build of [
+        buildDefaultBicepCurlExercise,
+        buildDefaultSquatsExercise,
+        buildDefaultPushUpExercise,
+        buildDefaultShoulderPressExercise,
+      ]) {
+        addExercise(build())
+      }
+    }, [loading, exercises.length, addExercise])
+
+    const createPlanFromPreset = useCallback(async (presetId: string, patientId: string, fields: NewExercise) => {
+      const preset = exercisesRef.current.find((e) => e.id === presetId)
+      if (!preset) throw new Error('Preset not found')
+      const now = Date.now()
+      const plan: Exercise = {
+        ...fields,
+        id: crypto.randomUUID(),
+        assignedPatientId: patientId,
+        basedOnPresetId: presetId,
+        presetSnapshotAt: preset.updatedAt,
+        createdAt: now,
+        updatedAt: now,
+      }
+      if (db) {
+        const { error } = await db.from('exercises').insert(exerciseToRow(plan))
+        if (error) {
+          console.error('Failed to save patient plan to Supabase', error)
+          throw error
         }
       }
-      // Re-read so sessions queued while this was running aren't lost.
-      writeJson(pendingSessionsKey(uid), readPendingSessions(uid).filter((r) => !done.has(r.id)))
-      flushing = false
-    }
-    flush()
-    window.addEventListener('online', flush)
-    const timer = window.setInterval(flush, 20_000)
-    return () => {
-      window.removeEventListener('online', flush)
-      window.clearInterval(timer)
-    }
-  }, [userId])
+      // Added after the save so a failed save never shows a plan that isn't stored.
+      // The realtime echo of the insert converges by id, so this can't duplicate.
+      setExercises((prev) => (prev.some((e) => e.id === plan.id) ? prev : [...prev, plan]))
+      return plan
+    }, [])
 
-  // --- localStorage mode: cross-tab sync only (used when Supabase isn't configured) ---
-  useEffect(() => {
-    if (supabase) return
-    function onStorage(e: StorageEvent) {
-      if (e.key === EXERCISES_KEY) setExercises(loadExercisesFromLocalStorage())
-      if (e.key === PATIENTS_KEY) setPatients(readJson(PATIENTS_KEY, []))
-      if (e.key === SESSIONS_KEY) setSessions(readJson(SESSIONS_KEY, []))
-    }
-    window.addEventListener('storage', onStorage)
-    return () => window.removeEventListener('storage', onStorage)
-  }, [])
-
-  // Persisting to localStorage is split into its own effect per collection,
-  // keyed off committed state, rather than called inline inside each setState
-  // updater. Updater functions must stay pure — React (in StrictMode dev)
-  // invokes them twice to check for that, and a side effect inside one would
-  // fire twice with two different results, letting localStorage and the real
-  // in-memory state drift apart. Skipped entirely once Supabase is configured.
-  useEffect(() => {
-    if (!supabase) writeJson(EXERCISES_KEY, exercises)
-  }, [exercises])
-  useEffect(() => {
-    if (!supabase) writeJson(PATIENTS_KEY, patients)
-  }, [patients])
-  useEffect(() => {
-    if (!supabase) writeJson(SESSIONS_KEY, sessions)
-  }, [sessions])
-
-  const exercisesRef = useRef<Exercise[]>(exercises)
-  useEffect(() => {
-    exercisesRef.current = exercises
-  }, [exercises])
-
-  const addExercise = useCallback((input: NewExercise) => {
-    const now = Date.now()
-    const exercise: Exercise = {
-      ...input,
-      id: crypto.randomUUID(),
-      basedOnPresetId: null,
-      createdAt: now,
-      updatedAt: now,
-      presetSnapshotAt: null,
-    }
-    setExercises((prev) => [...prev, exercise])
-    if (supabase) {
-      supabase
-        .from('exercises')
-        .insert(exerciseToRow(exercise))
-        .then(({ error }) => {
-          if (error) console.error('Failed to save exercise to Supabase', error)
-        })
-    }
-    return exercise
-  }, [])
-
-  // Seed the default Bicep Curl exercise the moment the exercise list is
-  // confirmed empty — after the initial Supabase fetch resolves (or
-  // immediately in localStorage mode, which never has a loading phase).
-  // Guarded by a ref rather than relying on exercises.length alone so a
-  // slow network response landing after this already fired can't cause a
-  // duplicate.
-  const seededDefaultRef = useRef(false)
-  useEffect(() => {
-    // With Supabase, starter exercises are created by supabase/schema.sql per practice.
-    if (supabase || seededDefaultRef.current || loading || exercises.length > 0) return
-    seededDefaultRef.current = true
-    for (const build of [
-      buildDefaultBicepCurlExercise,
-      buildDefaultSquatsExercise,
-      buildDefaultPushUpExercise,
-      buildDefaultShoulderPressExercise,
-    ]) {
-      addExercise(build())
-    }
-  }, [loading, exercises.length, addExercise])
-
-  const createPlanFromPreset = useCallback(async (presetId: string, patientId: string, fields: NewExercise) => {
-    const preset = exercisesRef.current.find((e) => e.id === presetId)
-    if (!preset) throw new Error('Preset not found')
-    const now = Date.now()
-    const plan: Exercise = {
-      ...fields,
-      id: crypto.randomUUID(),
-      assignedPatientId: patientId,
-      basedOnPresetId: presetId,
-      presetSnapshotAt: preset.updatedAt,
-      createdAt: now,
-      updatedAt: now,
-    }
-    if (supabase) {
-      const { error } = await supabase.from('exercises').insert(exerciseToRow(plan))
-      if (error) {
-        console.error('Failed to save patient plan to Supabase', error)
-        throw error
+    const updateExercise = useCallback(async (id: string, patch: NewExercise) => {
+      const updatedAt = Date.now()
+      if (db) {
+        const { error } = await db.from('exercises').update(exercisePatchToRow(patch, updatedAt)).eq('id', id)
+        if (error) {
+          console.error('Failed to update exercise in Supabase', error)
+          throw error
+        }
       }
-    }
-    // Added after the save so a failed save never shows a plan that isn't stored.
-    // The realtime echo of the insert converges by id, so this can't duplicate.
-    setExercises((prev) => (prev.some((e) => e.id === plan.id) ? prev : [...prev, plan]))
-    return plan
-  }, [])
+      setExercises((prev) => prev.map((e) => (e.id === id ? { ...e, ...patch, updatedAt } : e)))
+    }, [])
 
-  const updateExercise = useCallback(async (id: string, patch: NewExercise) => {
-    const updatedAt = Date.now()
-    if (supabase) {
-      const { error } = await supabase.from('exercises').update(exercisePatchToRow(patch, updatedAt)).eq('id', id)
-      if (error) {
-        console.error('Failed to update exercise in Supabase', error)
-        throw error
+    const deleteExercise = useCallback((id: string) => {
+      // Plans copied from a deleted preset keep working as their own plan (the database does the same with "on delete set null").
+      setExercises((prev) => prev.filter((e) => e.id !== id).map((e) => (e.basedOnPresetId === id ? { ...e, basedOnPresetId: null } : e)))
+      if (db) {
+        db
+          .from('exercises')
+          .delete()
+          .eq('id', id)
+          .then(({ error }) => {
+            if (error) console.error('Failed to delete exercise in Supabase', error)
+          })
       }
-    }
-    setExercises((prev) => prev.map((e) => (e.id === id ? { ...e, ...patch, updatedAt } : e)))
-  }, [])
+    }, [])
 
-  const deleteExercise = useCallback((id: string) => {
-    // Plans copied from a deleted preset keep working as their own plan (the database does the same with "on delete set null").
-    setExercises((prev) => prev.filter((e) => e.id !== id).map((e) => (e.basedOnPresetId === id ? { ...e, basedOnPresetId: null } : e)))
-    if (supabase) {
-      supabase
-        .from('exercises')
-        .delete()
-        .eq('id', id)
-        .then(({ error }) => {
-          if (error) console.error('Failed to delete exercise in Supabase', error)
-        })
-    }
-  }, [])
+    const registerPatientVisit = useCallback((name: string, email: string) => {
+      // With Supabase, the patient's profile is created at sign-up (database trigger).
+      if (db) return
+      const now = Date.now()
+      const existing = patientsRef.current.find((p) => p.email === email)
+      const optimistic: PatientRecord = existing
+        ? { ...existing, name, lastSeenAt: now }
+        : { id: crypto.randomUUID(), name, email, firstSeenAt: now, lastSeenAt: now }
+      setPatients((prev) => {
+        const idx = prev.findIndex((p) => p.email === email)
+        if (idx === -1) return [...prev, optimistic]
+        const next = [...prev]
+        next[idx] = optimistic
+        return next
+      })
+    }, [])
 
-  const registerPatientVisit = useCallback((name: string, email: string) => {
-    // With Supabase, the patient's profile is created at sign-up (database trigger).
-    if (supabase) return
-    const now = Date.now()
-    const existing = patientsRef.current.find((p) => p.email === email)
-    const optimistic: PatientRecord = existing
-      ? { ...existing, name, lastSeenAt: now }
-      : { id: crypto.randomUUID(), name, email, firstSeenAt: now, lastSeenAt: now }
-    setPatients((prev) => {
-      const idx = prev.findIndex((p) => p.email === email)
-      if (idx === -1) return [...prev, optimistic]
-      const next = [...prev]
-      next[idx] = optimistic
-      return next
-    })
-  }, [])
+    const recordSession = useCallback((input: NewSessionRecord) => {
+      const session: SessionRecord = { ...input, id: crypto.randomUUID() }
+      setSessions((prev) => [...prev, session])
+      if (db) {
+        const row = sessionToRow(session)
+        db
+          .from('sessions')
+          .insert(row)
+          .then(({ error }) => {
+            if (!error || isAlreadySaved(error)) return
+            if (isServerRefusal(error)) {
+              console.error('Failed to save session to Supabase', error)
+              return
+            }
+            // No internet (e.g. still on the hub's WiFi): keep it and upload later.
+            queuePendingSession(row)
+          })
+      }
+      return session
+    }, [])
 
-  const recordSession = useCallback((input: NewSessionRecord) => {
-    const session: SessionRecord = { ...input, id: crypto.randomUUID() }
-    setSessions((prev) => [...prev, session])
-    if (supabase) {
-      const row = sessionToRow(session)
-      supabase
-        .from('sessions')
-        .insert(row)
-        .then(({ error }) => {
-          if (!error || isAlreadySaved(error)) return
-          if (isServerRefusal(error)) {
-            console.error('Failed to save session to Supabase', error)
-            return
-          }
-          // No internet (e.g. still on the hub's WiFi): keep it and upload later.
-          queuePendingSession(row)
-        })
-    }
-    return session
-  }, [])
+    const value = useMemo<AppDataValue>(
+      () => ({
+        exercises,
+        patients,
+        sessions,
+        loading,
+        addExercise,
+        createPlanFromPreset,
+        updateExercise,
+        deleteExercise,
+        registerPatientVisit,
+        recordSession,
+      }),
+      [exercises, patients, sessions, loading, addExercise, createPlanFromPreset, updateExercise, deleteExercise, registerPatientVisit, recordSession],
+    )
 
-  const value = useMemo<AppDataValue>(
-    () => ({
-      exercises,
-      patients,
-      sessions,
-      loading,
-      addExercise,
-      createPlanFromPreset,
-      updateExercise,
-      deleteExercise,
-      registerPatientVisit,
-      recordSession,
-    }),
-    [exercises, patients, sessions, loading, addExercise, createPlanFromPreset, updateExercise, deleteExercise, registerPatientVisit, recordSession],
-  )
-
-  return <AppDataContext.Provider value={value}>{children}</AppDataContext.Provider>
+    return <AppDataContext.Provider value={value}>{children}</AppDataContext.Provider>
+  }
 }
+
+/** The app's data: Supabase when configured, otherwise this browser's localStorage. */
+export const AppDataProvider = makeAppDataProvider(supabase, storageKeys())
+
+/**
+ * Developer preview only: keeps all data in this browser under a separate
+ * storage prefix and never talks to Supabase, so an admin's preview of the
+ * app can't read or change real records.
+ */
+export const PreviewAppDataProvider = makeAppDataProvider(null, storageKeys('preview'))
 
 export function useAppData(): AppDataValue {
   const ctx = useContext(AppDataContext)

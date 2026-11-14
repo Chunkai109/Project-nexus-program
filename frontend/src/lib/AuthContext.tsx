@@ -158,3 +158,25 @@ export function useAuth(): AuthContextValue {
   if (!ctx) throw new Error('useAuth must be used within AuthProvider')
   return ctx
 }
+
+/**
+ * Developer preview only (see components/layout/DevPreview.tsx): a test
+ * account that is already signed in, so an admin can see the app as a
+ * patient or a physio without a login. It never touches Supabase: signing
+ * in or out of it only ends the preview. Pair it with PreviewAppDataProvider.
+ */
+export function PreviewAuthProvider({ user, onEnd, children }: { user: AuthUser; onEnd: () => void; children: ReactNode }) {
+  const value = useMemo<AuthContextValue>(
+    () => ({
+      user,
+      initializing: false,
+      realAccounts: false,
+      signIn: async () => ({ user }),
+      signUp: async () => ({ user }),
+      signOut: async () => onEnd(),
+      refreshUser: async () => {},
+    }),
+    [user, onEnd],
+  )
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
+}

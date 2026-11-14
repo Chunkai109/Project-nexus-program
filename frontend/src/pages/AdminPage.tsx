@@ -11,6 +11,7 @@ import { ThemeToggle } from '@/components/ui/ThemeToggle'
 import { useAuth } from '@/lib/AuthContext'
 import { listAccounts, openClinic, setAccount, type AdminAccount } from '@/lib/admin'
 import { DeveloperTools } from '@/components/admin/DeveloperTools'
+import { PreviewAppButton } from '@/components/admin/PreviewAppButton'
 import { PRACTICES } from '@/lib/mockData'
 
 const ROLE = {
@@ -126,6 +127,7 @@ export function AdminPage() {
           </div>
           <div className="flex items-center gap-2">
             <span className="hidden text-[15px] text-ink-muted sm:inline">{user?.email}</span>
+            <PreviewAppButton />
             <ThemeToggle />
             <Button
               variant="secondary"

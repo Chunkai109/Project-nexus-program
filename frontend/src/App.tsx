@@ -17,6 +17,7 @@ import { BodyCheck } from '@/demo/BodyCheck'
 import { AdminPage } from '@/pages/AdminPage'
 import { homeFor } from '@/lib/homeFor'
 import { useAppZoom } from '@/components/layout/useAppZoom'
+import { DevPreviewProvider, WithDevPreview } from '@/components/layout/DevPreview'
 import type { UserRole } from '@/types'
 import type { ReactNode } from 'react'
 
@@ -117,13 +118,16 @@ function App() {
         <Route
           path="*"
           element={
-            <AuthProvider>
-              <AppDataProvider>
-                <HubProvider>
-                  <AppRoutes />
-                </HubProvider>
-              </AppDataProvider>
-            </AuthProvider>
+            <DevPreviewProvider>
+              <AuthProvider>
+                {/* On a development build an admin can swap in the preview's own sign-in and sandbox data (DevPreview.tsx). */}
+                <WithDevPreview real={(routes) => <AppDataProvider>{routes}</AppDataProvider>}>
+                  <HubProvider>
+                    <AppRoutes />
+                  </HubProvider>
+                </WithDevPreview>
+              </AuthProvider>
+            </DevPreviewProvider>
           }
         />
       </Routes>
