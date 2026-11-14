@@ -10,8 +10,9 @@
 // Streams flexion, drift and the filtered EMG envelope to the app over its
 // own WiFi network + WebSocket, and pulses the motor when the app asks.
 //
-// IMU maths follows the team's new-setup sketch (flexion = 90 - roll1,
-// drift = 90 - roll2). EMG follows the same
+// Flexion follows the team's new-setup sketch (90 - roll1). Drift is the
+// upper arm's sideways swing (rotation about the board's z axis, see the
+// angle variables below), not roll. EMG follows the team's
 // "Filtered Sensor Reader (Dual MPU + Sichiray EMG)" sketch (high-pass ->
 // 50 Hz notch -> RMS -> smoothing). This file adds the WiFi /
 // WebSocket link and the motor around it.
@@ -51,7 +52,8 @@ struct MPUData {
 };
 
 struct GyroOffsets {
-  float gx = 0.0;
+  float gx = 0.0;  // forearm flexion axis
+  float gz = 0.0;  // upper-arm sideways axis
 };
 
 // ---------------------------------------------------------------------------
@@ -82,9 +84,16 @@ unsigned long formMotorOffAt = 0;  // millis() deadline for the motor's app-comm
 
 GyroOffsets calib1, calib2;
 
-// Filtered Orientation Angles — only roll is needed (flexion from Sensor 1, drift from Sensor 2).
+// Filtered orientation angles.
+// Sensor 1 (forearm): roll about the board's x axis = elbow flexion.
+// Sensor 2 (upper arm): with the arm hanging, the board's y axis runs up the
+// arm and z points out of the board. A sideways swing of the upper arm turns
+// the board about z, so drift is that angle ("yaw" in the board's own axes).
+// It is measurable without a compass because the arm hangs down: the swing
+// tilts the board against gravity, which the accelerometer sees as
+// atan2(ax, ay). 0 = arm hanging straight down.
 float roll1 = 0.0; // Forearm
-float roll2 = 0.0; // Upper Arm
+float side2 = 0.0; // Upper Arm, sideways
 const float ALPHA = 0.96;
 
 // Timing. EMG is sampled at 1000 Hz in its own task (see emgTask below);
@@ -208,15 +217,17 @@ bool readSensor(uint8_t addr, MPUData &data) {
 void calibrateGyro(uint8_t addr, GyroOffsets &calib, const char* name) {
   Serial.print("Calibrating "); Serial.print(name);
   Serial.println("... Keep arm still!");
-  long sum_gx = 0;
+  long sum_gx = 0, sum_gz = 0;
   MPUData d;
   for (int i = 0; i < 400; i++) {
     if (readSensor(addr, d)) {
       sum_gx += d.gx;
+      sum_gz += d.gz;
     }
     delay(3);
   }
   calib.gx = (sum_gx / 400.0) / 131.0;
+  calib.gz = (sum_gz / 400.0) / 131.0;
 }
 
 // ---------------------------------------------------------------------------
@@ -295,8 +306,8 @@ void setup() {
     roll1 = atan2(ay, az) * 180.0 / M_PI;
   }
   if (readSensor(MPU2_ADDR, d2)) {
-    float ay = d2.ay / 16384.0, az = d2.az / 16384.0;
-    roll2 = atan2(ay, az) * 180.0 / M_PI;
+    float ax = d2.ax / 16384.0, ay = d2.ay / 16384.0;
+    side2 = atan2(ax, ay) * 180.0 / M_PI;
   }
 
 #if WIFI_ENABLED
@@ -376,15 +387,15 @@ void loop() {
 
   // 2. Read and filter Sensor 2 (Upper Arm)
   if (readSensor(MPU2_ADDR, d2)) {
-    float ay = d2.ay / 16384.0, az = d2.az / 16384.0;
-    float gx = (d2.gx / 131.0) - calib2.gx;
-    float accelRoll = atan2(ay, az) * 180.0 / M_PI;
-    roll2 = ALPHA * (roll2 + gx * dt) + (1.0 - ALPHA) * accelRoll;
+    float ax = d2.ax / 16384.0, ay = d2.ay / 16384.0;
+    float gz = (d2.gz / 131.0) - calib2.gz;
+    float accelSide = atan2(ax, ay) * 180.0 / M_PI;
+    side2 = ALPHA * (side2 + gz * dt) + (1.0 - ALPHA) * accelSide;
   }
 
-  // 3. Sensor angle formulas, as in the new-setup sketch
-  float flexion = 90.0 - roll1; // Sensor 1
-  float drift   = 90.0 - roll2; // Sensor 2
+  // 3. Sensor angle formulas
+  float flexion = 90.0 - roll1; // Sensor 1: elbow flexion, as in the new-setup sketch
+  float drift   = side2;        // Sensor 2: sideways upper-arm swing, 0 = hanging straight
 
   // Stream live values to the app, if it's connected. Rep counting, drift
   // faults and the haptic decision all live in the app; this board only

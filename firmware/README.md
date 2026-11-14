@@ -32,11 +32,18 @@ on the rig**: set it a little above the largest `EMG:` value the Serial
 Monitor shows during a firm curl. The app turns the 0-1 value into % effort
 using the patient's own resting and firm readings from the Check screen.
 
-**IMUs:** flexion = `90 - roll1` (forearm), drift = `90 - roll2` (upper
-arm), from a complementary filter (`ALPHA` = 0.96) on the roll axis with
-gyro x offsets calibrated at boot, as in the team's new-setup sketch. The
-app's drift fault uses the size of the change from the patient's baseline,
-so the sign of drift does not affect it.
+**IMUs:** both use a complementary filter (`ALPHA` = 0.96) with gyro
+offsets calibrated at boot (keep the arm still).
+- Flexion (forearm, 0x68) = `90 - roll1`, roll = `atan2(ay, az)` with the
+  x gyro, as in the team's new-setup sketch.
+- Drift (upper arm, 0x69) = the **sideways** swing of the upper arm:
+  `atan2(ax, ay)` with the z gyro. With the arm hanging, the board's y axis
+  runs up the arm and z points out of the board, so a sideways swing turns
+  the board about z ("yaw" in the board's axes). It is measurable without a
+  compass because that swing tilts the board against gravity. 0 = hanging
+  straight. Forward/back swing of the upper arm is **not** measured.
+- The app's drift fault uses the size of the change from the patient's
+  baseline, so the sign of drift does not matter.
 
 ## What you need
 

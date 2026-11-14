@@ -545,7 +545,7 @@ export function BodyModel3D({
   /** Right elbow angle: 0 = straight, 135 = fully curled. */
   elbowAngleDeg?: number
   targetRange?: { min: number; max: number }
-  /** How far the right upper arm is swung forward, in degrees. */
+  /** How far the right upper arm has moved out sideways, in degrees. */
   upperArmDriftDeg?: number
   driftFault?: boolean
   showPods?: boolean

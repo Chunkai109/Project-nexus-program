@@ -71,17 +71,19 @@ function setWorldDelta(rig: Rig, key: BoneKey, delta: THREE.Quaternion) {
   rig.bones[key].quaternion.copy(r.parentWorld).invert().multiply(delta).multiply(r.parentWorld).multiply(r.local)
 }
 
-/** World-space turn that takes the right upper arm from the T-pose to hanging at the side, swung forward by `driftDeg`. */
+/**
+ * World-space turn that takes the right upper arm from the T-pose to hanging
+ * at the side, moved out sideways (away from the body) by `driftDeg`. The
+ * drift pod on the back of the upper arm measures this sideways tilt.
+ */
 export function upperArmDelta(driftDeg: number): THREE.Quaternion {
-  const lower = new THREE.Quaternion().setFromAxisAngle(WORLD_Z, rad(ARM_LOWER_DEG))
-  const swing = new THREE.Quaternion().setFromAxisAngle(WORLD_X, rad(-driftDeg))
-  return swing.multiply(lower)
+  return new THREE.Quaternion().setFromAxisAngle(WORLD_Z, rad(ARM_LOWER_DEG - driftDeg))
 }
 
 /**
  * Poses the figure: both arms hang at the sides; the right elbow is bent by
  * `elbowDeg` (0 = straight, 135 = fully curled) and the right upper arm is
- * swung forward by `driftDeg`.
+ * moved out sideways by `driftDeg`.
  */
 export function poseRig(rig: Rig, elbowDeg: number, driftDeg: number) {
   setWorldDelta(rig, 'rightUpperArm', upperArmDelta(driftDeg))
