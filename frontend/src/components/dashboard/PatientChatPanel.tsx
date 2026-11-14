@@ -57,7 +57,7 @@ const END_NOTE: Partial<Record<NonNullable<Message['state']>, string>> = {
 /**
  * "Ask about this patient": a chat on the patient's page for the physio.
  * Sends a summary of the patient's sessions (no name or email) to the
- * patient-chat Edge Function, which asks Claude. Nothing is saved: the chat
+ * patient-chat Edge Function, which asks Google Gemini. Nothing is saved: the chat
  * is gone when the physio leaves the page.
  */
 export function PatientChatPanel({ data }: { data: PatientPageData }) {
