@@ -72,7 +72,7 @@ function SortHeader({ label, k, sort, onSort, className }: { label: string; k: S
   const Icon = !active ? ChevronsUpDown : sort.dir === 'asc' ? ArrowUp : ArrowDown
   return (
     <th scope="col" aria-sort={active ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'} className={clsx('sticky top-14 z-10 border-b border-border bg-surface px-3 py-0 text-left first:pl-5', className)}>
-      <button type="button" onClick={() => onSort(k)} className="inline-flex min-h-[44px] items-center gap-1 whitespace-nowrap text-[13px] font-semibold text-ink-muted hover:text-ink">
+      <button type="button" onClick={() => onSort(k)} className="inline-flex min-h-[44px] items-center gap-1 text-left text-[13px] md:whitespace-nowrap font-semibold text-ink-muted hover:text-ink">
         {label}
         <Icon className={clsx('h-3.5 w-3.5', active ? 'text-ink' : 'text-ink-faint')} aria-hidden />
       </button>
