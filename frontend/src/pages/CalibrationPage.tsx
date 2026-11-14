@@ -46,6 +46,15 @@ export function CalibrationPage() {
   const [baselineByPod, setBaselineByPod] = useState<Partial<Record<PodId, number>>>({})
   const [mvcByPod, setMvcByPod] = useState<Partial<Record<PodId, number>>>({})
   const samplesRef = useRef<Partial<Record<PodId, number[]>>>({})
+  // Whether this step reads the real muscle sensor: the hub is connected and Pod 1 is sending EMG.
+  // Fixed when a step starts, so one step never mixes real and simulated samples.
+  const emgLive = hub.connectionState === 'connected' && EMG_PODS.every((p) => hub.pods[p.id]?.vrmsRaw !== undefined)
+  const [emgSource, setEmgSource] = useState<'hub' | 'simulated'>('simulated')
+  const useRealRef = useRef(false)
+  const podsRef = useRef(hub.pods)
+  useEffect(() => {
+    podsRef.current = hub.pods
+  }, [hub.pods])
 
   useEffect(() => {
     if (phase !== 'baseline' && phase !== 'mvc') return
@@ -57,7 +66,9 @@ export function CalibrationPage() {
       const elapsedSec = (performance.now() - startedAt) / 1000
       const nextLive: Partial<Record<PodId, number>> = {}
       for (const pod of EMG_PODS) {
-        const raw = simulateRawSample(phase, elapsedSec, pod.id)
+        // Real sEMG envelope from the hub when it is streaming; simulated otherwise (and labelled so on screen).
+        const real = podsRef.current[pod.id]?.vrmsRaw
+        const raw = useRealRef.current && real !== undefined ? real : simulateRawSample(phase, elapsedSec, pod.id)
         samplesRef.current[pod.id]?.push(raw)
         nextLive[pod.id] = raw
       }
@@ -108,11 +119,14 @@ export function CalibrationPage() {
   }
 
   function startBaseline() {
+    useRealRef.current = emgLive
+    setEmgSource(emgLive ? 'hub' : 'simulated')
     setRemainingMs(PHASE_DURATION_MS)
     setPhase('baseline')
   }
 
   function startMvc() {
+    // Step 2 uses the same source as step 1, so resting and firm are comparable.
     setRemainingMs(PHASE_DURATION_MS)
     setPhase('mvc')
   }
@@ -121,16 +135,23 @@ export function CalibrationPage() {
     setBaselineByPod({})
     setMvcByPod({})
     setLiveByPod({})
+    useRealRef.current = false
     setPhase('idle')
   }
 
   function confirmAndContinue() {
     if (!exercise) return
-    for (const pod of EMG_PODS) {
-      const baseline = baselineByPod[pod.id] ?? 0.08
-      const mvcRaw = mvcByPod[pod.id] ?? 1.0
-      const mvc = mvcRaw > baseline ? mvcRaw : baseline + 0.1
-      hub.setCalibration(pod.id, { baseline, mvc })
+    // Only a real reading of both steps calibrates the muscle sensor. Without it, Live keeps
+    // muscle effort simulated (and says so) rather than scaling real readings with made-up values.
+    if (phase === 'mvc-done' && emgSource === 'hub') {
+      for (const pod of EMG_PODS) {
+        const baseline = baselineByPod[pod.id]
+        const mvcRaw = mvcByPod[pod.id]
+        if (baseline === undefined || mvcRaw === undefined) continue
+        // A firm reading no higher than resting can't scale anything; keep a small usable gap.
+        const mvc = mvcRaw > baseline ? mvcRaw : baseline + 0.01
+        hub.setCalibration(pod.id, { baseline, mvc })
+      }
     }
     navigate(`/patient/session/${exercise.id}`)
   }
@@ -159,6 +180,7 @@ export function CalibrationPage() {
         remainingSec={remainingSec}
         liveEffortPct={liveEffortPct}
         results={results}
+        emgSource={phase === 'idle' ? (emgLive ? 'hub' : 'simulated') : emgSource}
         onStartBaseline={startBaseline}
         onStartMvc={startMvc}
         onRecalibrate={recalibrate}

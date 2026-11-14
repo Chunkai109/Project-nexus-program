@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { AlertTriangle, CheckCircle2, CircleSlash, FlaskConical, type LucideIcon } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, CircleSlash, FlaskConical, type LucideIcon, Activity } from 'lucide-react'
 import { clsx } from 'clsx'
 
 export type StatusTone = 'good' | 'warning' | 'fault' | 'neutral'
@@ -27,10 +27,23 @@ export function SimulatedTag() {
   return (
     <span
       className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-amber/10 px-2.5 py-1 text-[13px] font-semibold text-amber-ink"
-      title="This reading is simulated in this version. The muscle sensor is not read yet."
+      title="This reading is simulated: the muscle sensor was not connected or not set up."
     >
       <FlaskConical className="h-3.5 w-3.5" aria-hidden />
       Simulated
+    </span>
+  )
+}
+
+/** Marks a reading that really comes from the muscle sensor (Pod 1). */
+export function MeasuredTag() {
+  return (
+    <span
+      className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-surface-secondary px-2.5 py-1 text-[13px] font-semibold text-ink"
+      title="Read from the muscle sensor on the bicep (Pod 1)."
+    >
+      <Activity className="h-3.5 w-3.5" aria-hidden />
+      Muscle sensor
     </span>
   )
 }

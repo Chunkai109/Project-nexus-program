@@ -15,23 +15,35 @@ board just streams raw flexion/drift/EMG and pulses the motor whenever a
 `{"type":"haptic",...}` command arrives; it has no rep-counting or
 vibration decision logic of its own; see [Protocol](#protocol) below.
 
-**EMG is enabled** (`EMG_ENABLED = true` near the top of the sketch). Raw
-ADC readings above `EMG_NOISE_THRESHOLD` (1000, out of the ESP32's 12-bit
-0-4095 range) are treated as motion/contact noise rather than muscle
-activation and are filtered out in `processEmgSample()` before the value is
-sent to the dashboard — that function holds the last accepted reading
-instead of letting a spike through, so the processed value is always
-`<= EMG_NOISE_THRESHOLD`. Set `EMG_ENABLED` back to `false` if you're running
-without the EMG sensor wired up — the two MPU6050s, WiFi/WebSocket link and
-vibration motor all work fully without it.
+**EMG: Sichiray dry-electrode sEMG on GPIO 34.** The signal is sampled at
+1000 Hz in its own FreeRTOS task (so WiFi and WebSocket work in `loop()`
+can't make it skip samples; the filters assume exactly 1000 Hz) and
+cleaned in three stages, taken from the team's "Filtered Sensor Reader"
+sketch:
+
+1. ~20 Hz high-pass: removes the sensor's ~1.5 V DC offset and slow
+   movement drift.
+2. 50 Hz notch (Q = 15): removes mains hum.
+3. RMS over each 20 ms window, then smoothed (`EMG_SMOOTH_ALPHA` = 0.25).
+
+The result, `emgFiltered`, is an RMS in ADC counts. It is sent to the app
+divided by `EMG_FULL_SCALE_RMS` (500, capped at 1.0). **Tune that constant
+on the rig**: set it a little above the largest `EMG:` value the Serial
+Monitor shows during a firm curl. The app turns the 0-1 value into % effort
+using the patient's own resting and firm readings from the Check screen.
+
+**IMUs:** flexion = `90 - roll1` (forearm), drift = `90 - roll2` (upper
+arm), from a complementary filter (`ALPHA` = 0.96) with gyro offsets
+calibrated at boot. The previous sketch had drift as `roll2 - 90`, which
+was wrong. The app's drift fault uses the change from the arm's starting
+position, so it is unaffected by the sign.
 
 ## What you need
 
 - An ESP32 dev board (written against an ESP32-WROOM-32D)
 - Two MPU6050 IMU breakouts, wired over the same I2C bus at different
   addresses (via the AD0 pin)
-- An EMG sensor module with an analog envelope output (required while
-  `EMG_ENABLED` is `true`, the default)
+- A Sichiray sEMG sensor with dry electrodes (analog output)
 - One vibration motor for haptic feedback, driven through its own transistor
 
 ## Wiring
@@ -44,7 +56,7 @@ vibration motor all work fully without it.
 | MPU6050 #2 (upper arm)| VCC / GND       | 3V3 / GND |
 |                        | SDA / SCL       | GPIO 21 / GPIO 22 (shared bus) |
 |                        | AD0             | 3.3V (address `0x69`) |
-| EMG sensor (required while `EMG_ENABLED` is `true`) | Signal / envelope out | GPIO 35 (ADC1) |
+| Sichiray sEMG sensor (bicep) | Signal out | GPIO 34 (ADC1: ADC2 pins can't be read while WiFi is on) |
 | Vibration motor (bicep, correct-form feedback) | Control | GPIO 25, through an NPN transistor |
 
 Both MPU6050s share the same I2C bus (SDA/SCL) — tying one's `AD0` pin to
@@ -75,6 +87,8 @@ supply the current a motor needs.
    ```
    Access point "SmartPhysio-Hub" started. Connect the dashboard to ws://192.168.4.1:81
    ```
+   then one line per 20 ms, in the same format as the team's reference
+   sketch: `Flex:  12.3 | Drift:   1.8 | EMG:  42.7`
 
 ## Connecting from the app
 
@@ -91,7 +105,7 @@ that's expected.
 
 | Pod ID | Sensor / actuator                          |
 |--------|----------------------------------------------|
-| 1      | EMG envelope (bicep) — not reported if `EMG_ENABLED` is set back to `false` |
+| 1      | sEMG envelope (bicep)           |
 | 2      | MPU6050 #1 — forearm flexion     |
 | 3      | MPU6050 #2 — upper-arm drift     |
 | 15     | Vibration motor — correct-form feedback (bicep) |
@@ -128,16 +142,12 @@ The exact JSON message shapes this firmware sends and accepts are documented
 in [`frontend/src/lib/hub/protocol.ts`](../frontend/src/lib/hub/protocol.ts).
 In short:
 
-- Hub → app, at a fixed 50 Hz (`SAMPLE_INTERVAL_MS` = 20ms — the same
-  interval both IMU pods and the EMG pod are sampled and broadcast on, so
-  the three stay aligned to the same instant rather than drifting apart):
-  `{"type":"imu","podId":2,"pitch":12.3}` (flexion) and
-  `{"type":"imu","podId":3,"pitch":1.8}` (drift) — no roll/yaw, since only
-  these two values feed anything on either end. Also
-  `{"type":"emg","podId":1,"vrms":0.34}` — `vrms` is the noise-filtered
-  envelope (raw ADC reading, spikes over `EMG_NOISE_THRESHOLD` rejected)
-  normalized to 0.0-1.0 against that threshold; plus `{"type":"status", ...}`
-  battery/signal messages every 2 seconds.
+- Hub → app, at 50 Hz (every 20 ms, all three values from the same
+  pass): `{"type":"imu","podId":2,"pitch":12.3}` (flexion) and
+  `{"type":"imu","podId":3,"pitch":1.8}` (drift), plus
+  `{"type":"emg","podId":1,"vrms":0.34}`, where `vrms` is the filtered
+  sEMG envelope divided by `EMG_FULL_SCALE_RMS`, capped at 1.0. Also
+  `{"type":"status", ...}` battery/signal messages every 2 seconds.
 - App → hub: `{"type":"haptic","podId":15,"durationMs":400}` to pulse the
   vibration motor.
 

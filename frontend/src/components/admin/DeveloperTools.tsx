@@ -81,9 +81,9 @@ export function DeveloperTools() {
           <Row label="Pod 2, forearm angle">{connected ? deg(flex?.pitchDeg) : 'Hub not connected'}</Row>
           <Row label="Pod 3, upper-arm angle">{connected ? deg(drift?.pitchDeg) : 'Hub not connected'}</Row>
           <Row label="Reps counted by the hub data">{connected ? hub.curl.repCount : 'Hub not connected'}</Row>
-          <Row label="Pod 1, muscle sensor (raw)">
-            {connected ? (emg?.vrmsRaw === undefined ? 'No reading yet' : emg.vrmsRaw.toFixed(3)) : 'Hub not connected'}
-            <span className="block text-[14px] text-ink-muted">Shown here only. The patient screens still use a simulated muscle value.</span>
+          <Row label="Pod 1, muscle sensor (0–1 envelope)">
+            {connected ? (emg?.vrmsRaw === undefined ? 'No reading yet' : emg.vrmsRaw.toFixed(4)) : 'Hub not connected'}
+            <span className="block text-[14px] text-ink-muted">Filtered sEMG envelope ÷ EMG_FULL_SCALE_RMS in the hub sketch. Patient screens use it once the patient does the muscle effort step.</span>
           </Row>
         </dl>
         {hub.errorMessage && (

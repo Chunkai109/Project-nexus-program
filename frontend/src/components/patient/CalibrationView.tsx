@@ -5,7 +5,7 @@ import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { ProgressBar } from '@/components/ui/ProgressBar'
 import { SessionHeader } from './PatientHeader'
-import { Details, SimulatedTag, StatusLabel } from './PatientBits'
+import { Details, MeasuredTag, SimulatedTag, StatusLabel } from './PatientBits'
 import { PatientContainer } from './PatientContainer'
 
 export type EffortPhase = 'idle' | 'baseline' | 'baseline-done' | 'mvc' | 'mvc-done'
@@ -45,6 +45,7 @@ export function CalibrationView({
   phase,
   remainingSec,
   liveEffortPct,
+  emgSource = 'simulated',
   results,
   onStartBaseline,
   onStartMvc,
@@ -61,6 +62,8 @@ export function CalibrationView({
   phase: EffortPhase
   remainingSec: number
   liveEffortPct: number
+  /** Where muscle effort comes from: the hub's sEMG sensor, or simulated (no hub or no EMG signal). */
+  emgSource?: 'hub' | 'simulated'
   results: { label: string; baseline: number; mvc: number }[]
   onStartBaseline: () => void
   onStartMvc: () => void
@@ -129,14 +132,16 @@ export function CalibrationView({
             )}
           </Card>
 
-          {/* Part 2: the optional, simulated effort step */}
+          {/* Part 2: the optional effort step. Real with the hub's muscle sensor, simulated without it. */}
           <Card className="flex flex-col p-6 sm:p-7">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <h2 className="text-[20px] font-bold text-ink">2. Muscle effort (optional)</h2>
-              <SimulatedTag />
+              {emgSource === 'hub' ? <MeasuredTag /> : <SimulatedTag />}
             </div>
             <p className="mt-2 text-[16px] text-ink-muted">
-              Muscle readings are simulated in this version, so this step does not measure your real muscle yet. You can skip it.
+              {emgSource === 'hub'
+                ? 'This reads the muscle sensor on your bicep, so the next screen can show how hard your muscle works. You can skip it.'
+                : 'The muscle sensor is not connected, so this step is simulated and does not measure your muscle. You can skip it.'}
             </p>
 
             {phase === 'idle' && (
@@ -194,7 +199,7 @@ export function CalibrationView({
 
             {results.length > 0 && (
               <div className="mt-auto pt-4">
-                <Details summary="Details (simulated values)">
+                <Details summary={emgSource === 'hub' ? 'Details (sensor readings)' : 'Details (simulated values)'}>
                   <p>Effort is shown as (reading − resting) ÷ (firm − resting) × 100%.</p>
                   {results.map((r) => (
                     <p key={r.label}>

@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
 import { PageShell } from '@/components/layout/PageShell'
 import { Button } from '@/components/ui/Button'
@@ -10,6 +10,7 @@ import { sessionStats } from '@/lib/sessionStats'
 export function SessionSummary() {
   const { sessionId } = useParams()
   const navigate = useNavigate()
+  const location = useLocation()
   const { sessions } = useAppData()
   const session = useMemo(() => sessions.find((s) => s.id === sessionId) ?? null, [sessions, sessionId])
   const priorSession = useMemo(() => {
@@ -41,14 +42,17 @@ export function SessionSummary() {
   }
 
   const stats = sessionStats(session)
+  const handed = (location.state as { emgSource?: string } | null)?.emgSource
+  const emgSource = handed === 'hub' || handed === 'mixed' || handed === 'simulated' ? handed : 'unknown'
   const previous = priorSession ? sessionStats(priorSession) : null
-  // emgLeft is the single (simulated) bicep channel on this rig; shown only under Details, tagged Simulated.
+  // emgLeft is the single bicep channel on this rig; shown only under Details. Where it came from
+  // (sensor or simulated) isn't stored with the session, only handed over by Live when it ends.
   const avgEffortPct =
     session.reps.length === 0 ? null : Math.round(session.reps.reduce((sum, r) => sum + r.emgLeft, 0) / session.reps.length)
 
   return (
     <PageShell fullWidth>
-      <SessionSummaryView stats={stats} previous={previous} avgEffortPct={avgEffortPct} onDone={() => navigate('/patient/exercises')} />
+      <SessionSummaryView stats={stats} previous={previous} avgEffortPct={avgEffortPct} emgSource={emgSource} onDone={() => navigate('/patient/exercises')} />
     </PageShell>
   )
 }

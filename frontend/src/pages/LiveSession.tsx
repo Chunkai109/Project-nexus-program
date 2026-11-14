@@ -56,6 +56,8 @@ const SETTLE_WINDOW_MS = 1000
 // RadialGauge's default target are all keyed to), not the exercise's own
 // configurable target corridor, so it behaves the same regardless of what
 // target zone a physio has prescribed.
+/** The bicep sEMG sensor's pod id (POD_EMG in firmware/smartphysio_hub). */
+const EMG_POD_ID = 1
 const EMG_FLEX_REST_DEG = 0
 const EMG_FLEX_PEAK_DEG = 135
 
@@ -148,7 +150,20 @@ export function LiveSession() {
   // cycle). Duplicated into both emgLeft/emgRight when stored in a
   // RepSample below, since that's the shared shape every exercise's
   // session analytics reads and this rig only has one EMG channel.
-  const emgBicep = emgFromFlexion(kneeFlexionDeg)
+  // Since the dry-electrode sEMG sensor: real muscle effort from Pod 1 when the hub is
+  // streaming it AND the patient did the muscle effort step on the Check screen (that step's
+  // resting and firm readings are what turn the sensor value into % effort). Otherwise the
+  // flexion-based dummy above, and the screen and summary say it is simulated.
+  const emgPod = hub.pods[EMG_POD_ID]
+  const emgReal = hub.connectionState === 'connected' && hub.calibration[EMG_POD_ID] !== undefined && emgPod?.emgActivationPct !== undefined
+  const emgBicep = emgReal ? Math.round(emgPod!.emgActivationPct!) : emgFromFlexion(kneeFlexionDeg)
+  const emgRepSources = useRef({ hub: 0, simulated: 0 })
+  // Peak muscle effort since the last rep was counted. A rep is counted once the arm is back
+  // down, when effort has already dropped, so each rep stores its peak rather than that moment.
+  const emgPeakRef = useRef(0)
+  useEffect(() => {
+    emgPeakRef.current = Math.max(emgPeakRef.current, emgBicep)
+  }, [emgBicep])
 
   // AI form check (ml/'s trained bicep-curl classifier, via the ensemble
   // API's vision-only endpoint — see ensemble/FRONTEND_INTEGRATION.md
@@ -289,9 +304,12 @@ export function LiveSession() {
       prevRepCount.current += 1
       const thisRep = prevRepCount.current
       setRepCount(thisRep)
+      emgRepSources.current[emgReal ? 'hub' : 'simulated'] += 1
+      const repEmg = Math.max(emgPeakRef.current, emgBicep)
+      emgPeakRef.current = 0
       setRepSamples((prev) => [
         ...prev,
-        { rep: thisRep, angle: Math.round(kneeFlexionDeg), emgLeft: emgBicep, emgRight: emgBicep, faultActive },
+        { rep: thisRep, angle: Math.round(kneeFlexionDeg), emgLeft: repEmg, emgRight: repEmg, faultActive },
       ])
 
       const frames = visionFramesRef.current
@@ -338,7 +356,7 @@ export function LiveSession() {
         }
       }
     }
-  }, [kneeFlexionDeg, inCorridor, emgBicep, faultActive, hub, usingHubCurl])
+  }, [kneeFlexionDeg, inCorridor, emgBicep, emgReal, faultActive, hub, usingHubCurl])
 
   if (!exercise) {
     return (
@@ -385,7 +403,10 @@ export function LiveSession() {
     // running full-tilt in the background (now stopped immediately above via
     // CameraViewport's poseDetectionEnabled={... && !ending}) made ending a
     // session feel sluggish for no real reason.
-    setTimeout(() => navigate(session ? `/patient/session-summary/${session.id}` : '/patient/exercises'), 200)
+    // Tell the summary where this session's muscle effort came from (it is not stored with the session).
+    const src = emgRepSources.current
+    const emgSource = src.hub > 0 && src.simulated === 0 ? 'hub' : src.hub > 0 ? 'mixed' : 'simulated'
+    setTimeout(() => navigate(session ? `/patient/session-summary/${session.id}` : '/patient/exercises', { state: { emgSource } }), 200)
   }
 
   // ---- Display only (no effect on rep counting, the AI check or what is saved) ----
@@ -435,6 +456,16 @@ export function LiveSession() {
                 : usingHubCurl
                   ? 'camera + hub sensors.'
                   : 'camera only.'}
+            </p>
+            <p>
+              Muscle effort:{' '}
+              {emgReal
+                ? 'from the muscle sensor on the bicep (Pod 1).'
+                : hub.connectionState !== 'connected'
+                  ? 'simulated, because the hub is not connected.'
+                  : emgPod?.vrmsRaw === undefined
+                    ? 'simulated, because the muscle sensor is not sending readings.'
+                    : 'simulated, because the muscle effort step on the Check screen was skipped.'}
             </p>
             {formCheck.status === 'result' && 'source' in formCheck.result && <p>Last result source: {formCheck.result.source}</p>}
             {faultLabel && <p>{faultLabel}</p>}
