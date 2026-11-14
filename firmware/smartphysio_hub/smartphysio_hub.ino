@@ -17,6 +17,14 @@
 // WebSocket link and the motor around it.
 // ===========================================================================
 
+// ---- Diagnostics (set to 1, upload, read the Serial Monitor, then set back to 0) ----
+// EMG_DEBUG 1: adds the raw ADC reading per 20 ms window (min / mean / max, 0-4095)
+//   to each Serial line, so you can see what the sensor itself sends.
+// WIFI_ENABLED 0: runs with WiFi off, to test whether WiFi adds noise to the EMG.
+//   The app can't connect in this mode.
+#define EMG_DEBUG    0
+#define WIFI_ENABLED 1
+
 #define I2C_SDA 21
 #define I2C_SCL 22
 
@@ -105,6 +113,9 @@ float notchY1 = 0.0, notchY2 = 0.0;
 // reset by loop(), so both sides go through emgMux.
 double emgSumSquared = 0.0;
 int emgSampleCount = 0;
+// Raw ADC readings in the current window, for EMG_DEBUG.
+int emgRawMin = 4095, emgRawMax = 0;
+double emgRawSum = 0.0;
 portMUX_TYPE emgMux = portMUX_INITIALIZER_UNLOCKED;
 float emgRMS = 0.0;
 float emgFiltered = 0.0;
@@ -239,9 +250,13 @@ void emgTask(void *) {
     vTaskDelayUntil(&lastWake, pdMS_TO_TICKS(1));
     float rawEmg = (float)analogRead(EMG_PIN);
     float cleanEmg = filterEMG(rawEmg);
+    int rawInt = (int)rawEmg;
     portENTER_CRITICAL(&emgMux);
     emgSumSquared += (double)(cleanEmg * cleanEmg);
     emgSampleCount++;
+    if (rawInt < emgRawMin) emgRawMin = rawInt;
+    if (rawInt > emgRawMax) emgRawMax = rawInt;
+    emgRawSum += rawInt;
     portEXIT_CRITICAL(&emgMux);
   }
 }
@@ -284,6 +299,7 @@ void setup() {
     roll2 = atan2(ay, az) * 180.0 / M_PI;
   }
 
+#if WIFI_ENABLED
   WiFi.softAP(AP_SSID, AP_PASSWORD);
   Serial.print("Access point \"");
   Serial.print(AP_SSID);
@@ -294,6 +310,10 @@ void setup() {
 
   webSocket.begin();
   webSocket.onEvent(onWebSocketEvent);
+#else
+  WiFi.mode(WIFI_OFF);
+  Serial.println("WIFI_ENABLED is 0: WiFi is off for this test. The app can't connect.");
+#endif
 
   // Start EMG sampling last, once the filter is seeded. Same core as loop()
   // (ARDUINO_RUNNING_CORE), one priority above it.
@@ -304,7 +324,9 @@ void setup() {
 }
 
 void loop() {
+#if WIFI_ENABLED
   webSocket.loop();
+#endif
 
   // The motor's pulse is switched off on time every pass, not only at 50 Hz.
   bool formVibActive = false;
@@ -327,8 +349,13 @@ void loop() {
   portENTER_CRITICAL(&emgMux);
   double sumSquared = emgSumSquared;
   int sampleCount = emgSampleCount;
+  int rawMin = emgRawMin, rawMax = emgRawMax;
+  double rawSum = emgRawSum;
   emgSumSquared = 0.0;
   emgSampleCount = 0;
+  emgRawMin = 4095;
+  emgRawMax = 0;
+  emgRawSum = 0.0;
   portEXIT_CRITICAL(&emgMux);
 
   if (sampleCount > 0) {
@@ -362,7 +389,7 @@ void loop() {
   // Stream live values to the app, if it's connected. Rep counting, drift
   // faults and the haptic decision all live in the app; this board only
   // relays readings. The app reads each IMU value from the "pitch" field.
-  if (connectedClientCount > 0) {
+  if (WIFI_ENABLED && connectedClientCount > 0) {
     JsonDocument forearmDoc;
     forearmDoc["type"] = "imu";
     forearmDoc["podId"] = POD_FOREARM;
@@ -399,6 +426,11 @@ void loop() {
   }
 
   // Same line format as the reference sketch, so Serial Monitor recordings match it.
+#if EMG_DEBUG
+  Serial.printf("Flex: %5.1f | Drift: %5.1f | EMG: %5.1f | raw min %4d mean %4d max %4d (%d samples)\n",
+                flexion, drift, emgFiltered, rawMin, sampleCount ? (int)(rawSum / sampleCount) : 0, rawMax, sampleCount);
+#else
   Serial.printf("Flex: %5.1f | Drift: %5.1f | EMG: %5.1f\n",
                 flexion, drift, emgFiltered);
+#endif
 }
