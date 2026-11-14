@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/Button'
 import { ThemeToggle } from '@/components/ui/ThemeToggle'
 import { Logo } from '@/components/layout/Logo'
 import { TrendChart } from '@/components/charts/TrendChart'
-import { Details } from './PatientBits'
+import { MuscleActivationChart } from '@/components/charts/MuscleActivationChart'
 import { formatClock } from './format'
 import { TIP_RULES, sessionTip } from './sessionTip'
 import { aiClassOf, isInRange, type SessionStats } from '@/lib/sessionStats'
@@ -49,7 +49,7 @@ export function SessionSummaryView({
   stats: SessionStats
   /** The previous session of the same exercise, or null if this is the first. */
   previous: SessionStats | null
-  /** Average muscle effort, shown only under Details. */
+  /** Average muscle activation across the reps; the Muscle activation chart shows each rep. */
   avgEffortPct: number | null
   banner?: ReactNode
   onDone: () => void
@@ -126,6 +126,16 @@ export function SessionSummaryView({
           {TIP_RULES.driftFaultsAtLeast}+ drift faults; your most common fault; under {TIP_RULES.inRangeBelowPct}% in range.
         </p>
 
+        {avgEffortPct !== null && (
+          <Card className="p-6">
+            <h2 className="text-[19px] font-bold text-ink">Muscle activation</h2>
+            <p className="mb-3 mt-0.5 text-[16px] text-ink-muted">
+              How hard your muscle worked at the top of each rep. The dashed line is your average, {avgEffortPct}%.
+            </p>
+            <MuscleActivationChart reps={session.reps} />
+          </Card>
+        )}
+
         <Card className="p-6">
           <h2 className="mb-3 text-[19px] font-bold text-ink">Each rep</h2>
           <TrendChart reps={session.reps} targetMin={session.targetMin} targetMax={session.targetMax} height={220} />
@@ -188,14 +198,6 @@ export function SessionSummaryView({
             </table>
           </div>
         </Card>
-
-        {avgEffortPct !== null && (
-          <Details summary="Details">
-            <p className="flex flex-wrap items-center gap-2">
-              Average muscle effort: <span className="font-semibold text-ink">{avgEffortPct}%</span>
-            </p>
-          </Details>
-        )}
 
         <Button size="lg" className="min-h-[56px] w-full text-[18px]" onClick={onDone}>
           Back to today's exercises

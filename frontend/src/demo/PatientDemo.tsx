@@ -148,6 +148,7 @@ function DemoLive({ onEnd }: { onEnd: () => void }) {
       source="hub"
       driftFault={{ active: drifting, overLimitDeg: drifting ? 6 : null }}
       upperArmDriftDeg={drifting ? 28 : 3}
+      muscleActivationPct={Math.round(Math.min(100, (angle / 135) * 100))}
       showArmModel={new URLSearchParams(window.location.search).get('arm') !== 'off'}
       verdict={verdict}
       buzzOnPerfect

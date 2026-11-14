@@ -53,6 +53,32 @@ function AngleBar({ angle, targetMin, targetMax }: { angle: number; targetMin: n
   )
 }
 
+/** Live muscle activation, 0-100% of the patient's firm effort. Updates as the reading changes. */
+function MuscleBar({ pct }: { pct: number }) {
+  const shown = Math.round(Math.max(0, Math.min(100, pct)))
+  return (
+    <Card className="px-5 py-3">
+      <div className="flex items-baseline justify-between gap-4">
+        <p className="text-[15px] font-semibold text-ink-muted" id="muscle-bar-label">
+          Muscle activation
+        </p>
+        <p className="min-w-[2.8em] text-right text-[24px] font-bold leading-none text-ink">{shown}%</p>
+      </div>
+      <div
+        className="mt-2 h-4 overflow-hidden rounded-full bg-surface-secondary"
+        role="meter"
+        aria-labelledby="muscle-bar-label"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={shown}
+      >
+        {/* Width follows the reading directly: no transition, so it can't lag behind the arm. */}
+        <div className="h-full rounded-full bg-accent" style={{ width: `${shown}%` }} />
+      </div>
+    </Card>
+  )
+}
+
 function Verdict({ verdict, buzzed }: { verdict: VerdictDisplay; buzzed: boolean }) {
   const big = 'flex items-center gap-3 text-[clamp(40px,4.7vw,68px)] font-bold leading-none'
   const iconSize = 'h-[0.95em] w-[0.95em] flex-shrink-0'
@@ -102,6 +128,7 @@ export function LiveSessionView({
   source,
   driftFault,
   upperArmDriftDeg,
+  muscleActivationPct,
   showArmModel = true,
   verdict,
   buzzOnPerfect,
@@ -124,6 +151,8 @@ export function LiveSessionView({
   driftFault: { active: boolean; overLimitDeg: number | null }
   /** How far the upper arm has swung from its starting position, from the hub. Null when there is no hub (the model's upper arm then stays still). */
   upperArmDriftDeg: number | null
+  /** Current muscle activation, 0-100%. */
+  muscleActivationPct: number
   /** Set false to leave the 3D arm out (used to measure its cost, or on a laptop that cannot keep up). */
   showArmModel?: boolean
   verdict: VerdictDisplay
@@ -226,6 +255,8 @@ export function LiveSessionView({
             </Card>
 
             <Verdict verdict={verdict} buzzed={buzzOnPerfect} />
+
+            <MuscleBar pct={muscleActivationPct} />
 
             <div className="flex items-center justify-between gap-4">
               <p className="inline-flex min-w-[5.2em] items-center gap-2 text-[32px] font-bold text-ink">

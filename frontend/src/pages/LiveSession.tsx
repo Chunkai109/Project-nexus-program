@@ -431,6 +431,7 @@ export function LiveSession() {
         source={usingHubCurl ? 'hub' : 'simulated'}
         driftFault={{ active: faultActive, overLimitDeg }}
         upperArmDriftDeg={usingHubCurl ? curl.driftError : null}
+        muscleActivationPct={emgBicep}
         verdict={verdict}
         buzzOnPerfect={hub.connectionState === 'connected'}
         ending={ending}
