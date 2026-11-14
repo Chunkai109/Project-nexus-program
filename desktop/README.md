@@ -54,7 +54,7 @@ sessions in Supabase. A browser version can come later from the same code in
    ```
    The key stays on Supabase; it is never in the app or this repository.
    Optional: `npx supabase secrets set GEMINI_MODEL=<model>` to change the
-   model (default `gemini-3.8-flash`; Google retires older models, and the chat says so when that happens).
+   model (default `gemini-3.5-flash-lite`; Google retires older models, and the chat says so when that happens).
    If answers are slow to start, `npx supabase secrets set GEMINI_THINKING=MINIMAL`
    makes the model think less before answering (default `LOW`; `default`
    leaves it to the model).

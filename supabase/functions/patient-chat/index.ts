@@ -20,7 +20,7 @@ import { ApiError, FinishReason, GoogleGenAI, ThinkingLevel, type Content, type 
 import { createClient } from 'npm:@supabase/supabase-js@2.117.2'
 import { SYSTEM_PROMPT } from './prompt.ts'
 
-const MODEL = Deno.env.get('GEMINI_MODEL') || 'gemini-3.8-flash'
+const MODEL = Deno.env.get('GEMINI_MODEL') || 'gemini-3.5-flash-lite'
 // Optional second model tried when MODEL is overloaded (GEMINI_FALLBACK_MODEL secret).
 const FALLBACK_MODEL = Deno.env.get('GEMINI_FALLBACK_MODEL') || ''
 // How long the model thinks before it starts writing. Lower = faster first
