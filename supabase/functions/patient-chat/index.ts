@@ -20,7 +20,7 @@ import { ApiError, FinishReason, GoogleGenAI, type Content } from 'npm:@google/g
 import { createClient } from 'npm:@supabase/supabase-js@2.117.2'
 import { SYSTEM_PROMPT } from './prompt.ts'
 
-const MODEL = Deno.env.get('GEMINI_MODEL') || 'gemini-2.5-flash'
+const MODEL = Deno.env.get('GEMINI_MODEL') || 'gemini-3.8-flash'
 const MAX_CONTEXT_CHARS = 80_000
 const MAX_MESSAGES = 30
 const MAX_MESSAGE_CHARS = 4_000
@@ -122,7 +122,9 @@ Deno.serve(async (req) => {
         const message =
           status === 429
             ? 'The free AI limit is used up for now. Try again in a minute (or tomorrow if the daily limit is reached).'
-            : status === 400 || status === 401 || status === 403
+            : status === 404
+              ? `The AI model "${MODEL}" is not available. Set a current model with the GEMINI_MODEL secret.`
+              : status === 400 || status === 401 || status === 403
               ? 'The chat is not set up correctly: the server API key or model was rejected.'
               : status === 0
                 ? 'Could not reach the AI service. Try again.'
