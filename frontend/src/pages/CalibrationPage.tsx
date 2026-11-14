@@ -48,7 +48,8 @@ export function CalibrationPage() {
   const samplesRef = useRef<Partial<Record<PodId, number[]>>>({})
   // Whether this step reads the real muscle sensor: the hub is connected and Pod 1 is sending EMG.
   // Fixed when a step starts, so one step never mixes real and simulated samples.
-  const emgLive = hub.connectionState === 'connected' && EMG_PODS.every((p) => hub.pods[p.id]?.vrmsRaw !== undefined)
+  // Real sEMG readings are switched off for now: the effort step always uses the simulated reading.
+  const emgLive = false
   const [emgSource, setEmgSource] = useState<'hub' | 'simulated'>('simulated')
   const useRealRef = useRef(false)
   const podsRef = useRef(hub.pods)
@@ -180,7 +181,6 @@ export function CalibrationPage() {
         remainingSec={remainingSec}
         liveEffortPct={liveEffortPct}
         results={results}
-        emgSource={phase === 'idle' ? (emgLive ? 'hub' : 'simulated') : emgSource}
         onStartBaseline={startBaseline}
         onStartMvc={startMvc}
         onRecalibrate={recalibrate}

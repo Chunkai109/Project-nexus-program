@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/Button'
 import { ThemeToggle } from '@/components/ui/ThemeToggle'
 import { Logo } from '@/components/layout/Logo'
 import { TrendChart } from '@/components/charts/TrendChart'
-import { Details, MeasuredTag, SimulatedTag } from './PatientBits'
+import { Details } from './PatientBits'
 import { formatClock } from './format'
 import { TIP_RULES, sessionTip } from './sessionTip'
 import { aiClassOf, isInRange, type SessionStats } from '@/lib/sessionStats'
@@ -43,7 +43,6 @@ export function SessionSummaryView({
   stats,
   previous,
   avgEffortPct,
-  emgSource = 'simulated',
   banner,
   onDone,
 }: {
@@ -52,8 +51,6 @@ export function SessionSummaryView({
   previous: SessionStats | null
   /** Average muscle effort, shown only under Details. */
   avgEffortPct: number | null
-  /** Where muscle effort came from in this session. 'unknown' when the summary is opened later. */
-  emgSource?: 'hub' | 'mixed' | 'simulated' | 'unknown'
   banner?: ReactNode
   onDone: () => void
 }) {
@@ -195,17 +192,7 @@ export function SessionSummaryView({
         {avgEffortPct !== null && (
           <Details summary="Details">
             <p className="flex flex-wrap items-center gap-2">
-              Average muscle effort: <span className="font-semibold text-ink">{avgEffortPct}%</span>{' '}
-              {emgSource === 'hub' ? <MeasuredTag /> : emgSource === 'simulated' ? <SimulatedTag /> : null}
-            </p>
-            <p>
-              {emgSource === 'hub'
-                ? 'Measured by the muscle sensor on your bicep, against your resting and firm readings from the Check screen.'
-                : emgSource === 'mixed'
-                  ? 'Partly measured by the muscle sensor and partly simulated, because the sensor dropped out during the session.'
-                  : emgSource === 'simulated'
-                    ? 'Simulated from the arm angle, because the muscle sensor was not connected or its effort step was skipped.'
-                    : 'This page does not know whether this was measured or simulated. It only knows straight after a session.'}
+              Average muscle effort: <span className="font-semibold text-ink">{avgEffortPct}%</span>
             </p>
           </Details>
         )}

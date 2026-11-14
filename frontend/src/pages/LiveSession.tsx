@@ -155,7 +155,8 @@ export function LiveSession() {
   // resting and firm readings are what turn the sensor value into % effort). Otherwise the
   // flexion-based dummy above, and the screen and summary say it is simulated.
   const emgPod = hub.pods[EMG_POD_ID]
-  const emgReal = hub.connectionState === 'connected' && hub.calibration[EMG_POD_ID] !== undefined && emgPod?.emgActivationPct !== undefined
+  // Real sEMG is switched off for now: muscle effort always uses the flexion-based reading.
+  const emgReal = false as boolean
   const emgBicep = emgReal ? Math.round(emgPod!.emgActivationPct!) : emgFromFlexion(kneeFlexionDeg)
   const emgRepSources = useRef({ hub: 0, simulated: 0 })
   // Peak muscle effort since the last rep was counted. A rep is counted once the arm is back
@@ -456,16 +457,6 @@ export function LiveSession() {
                 : usingHubCurl
                   ? 'camera + hub sensors.'
                   : 'camera only.'}
-            </p>
-            <p>
-              Muscle effort:{' '}
-              {emgReal
-                ? 'from the muscle sensor on the bicep (Pod 1).'
-                : hub.connectionState !== 'connected'
-                  ? 'simulated, because the hub is not connected.'
-                  : emgPod?.vrmsRaw === undefined
-                    ? 'simulated, because the muscle sensor is not sending readings.'
-                    : 'simulated, because the muscle effort step on the Check screen was skipped.'}
             </p>
             {formCheck.status === 'result' && 'source' in formCheck.result && <p>Last result source: {formCheck.result.source}</p>}
             {faultLabel && <p>{faultLabel}</p>}
