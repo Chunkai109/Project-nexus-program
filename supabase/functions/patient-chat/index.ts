@@ -114,6 +114,8 @@ Deno.serve(async (req) => {
       // optional backup model.
       const attempts = [MODEL, MODEL, ...(FALLBACK_MODEL ? [FALLBACK_MODEL] : [])]
       let sentText = false
+      const startedAt = Date.now()
+      let firstTextAt = 0
       for (let i = 0; i < attempts.length; i++) {
         try {
           const answer = await ai.models.generateContentStream({
@@ -127,6 +129,7 @@ Deno.serve(async (req) => {
             if (chunk.promptFeedback?.blockReason) blocked = true
             const text = chunk.text
             if (text) {
+              if (!firstTextAt) firstTextAt = Date.now()
               sentText = true
               send(controller, { text })
             }
@@ -134,6 +137,7 @@ Deno.serve(async (req) => {
           }
           const stop = blocked || (finish && DECLINED.includes(finish)) ? 'refusal' : finish === FinishReason.MAX_TOKENS ? 'max_tokens' : 'end_turn'
           send(controller, { done: true, stop })
+          console.log(`patient-chat timing: model ${attempts[i]}, thinking ${THINKING}, first words after ${firstTextAt ? ((firstTextAt - startedAt) / 1000).toFixed(1) : '-'}s, done after ${((Date.now() - startedAt) / 1000).toFixed(1)}s, finish ${stop}`)
           break
         } catch (err) {
           const status = err instanceof ApiError ? err.status : 0
