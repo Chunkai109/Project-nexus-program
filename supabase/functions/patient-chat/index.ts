@@ -21,6 +21,8 @@ import { createClient } from 'npm:@supabase/supabase-js@2.117.2'
 import { SYSTEM_PROMPT } from './prompt.ts'
 
 const MODEL = Deno.env.get('GEMINI_MODEL') || 'gemini-3.8-flash'
+// Optional second model tried when MODEL is overloaded (GEMINI_FALLBACK_MODEL secret).
+const FALLBACK_MODEL = Deno.env.get('GEMINI_FALLBACK_MODEL') || ''
 // How long the model thinks before it starts writing. Lower = faster first
 // words. GEMINI_THINKING: MINIMAL, LOW (default), MEDIUM, HIGH, or "default"
 // to leave it to the model.
@@ -107,39 +109,57 @@ Deno.serve(async (req) => {
 
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
-      try {
-        const answer = await ai.models.generateContentStream({
-          model: MODEL,
-          contents,
-          config: { systemInstruction: SYSTEM_PROMPT, maxOutputTokens: 4096, abortSignal: req.signal, ...(THINKING_CONFIG ? { thinkingConfig: THINKING_CONFIG } : {}) },
-        })
-        let finish: string | undefined
-        let blocked = false
-        for await (const chunk of answer) {
-          if (chunk.promptFeedback?.blockReason) blocked = true
-          const text = chunk.text
-          if (text) send(controller, { text })
-          finish = chunk.candidates?.[0]?.finishReason ?? finish
+      // Google's free tier sometimes answers 500/503 ("overloaded"). Before any
+      // words have been sent, retry once on the same model, then once on the
+      // optional backup model.
+      const attempts = [MODEL, MODEL, ...(FALLBACK_MODEL ? [FALLBACK_MODEL] : [])]
+      let sentText = false
+      for (let i = 0; i < attempts.length; i++) {
+        try {
+          const answer = await ai.models.generateContentStream({
+            model: attempts[i],
+            contents,
+            config: { systemInstruction: SYSTEM_PROMPT, maxOutputTokens: 4096, abortSignal: req.signal, ...(THINKING_CONFIG ? { thinkingConfig: THINKING_CONFIG } : {}) },
+          })
+          let finish: string | undefined
+          let blocked = false
+          for await (const chunk of answer) {
+            if (chunk.promptFeedback?.blockReason) blocked = true
+            const text = chunk.text
+            if (text) {
+              sentText = true
+              send(controller, { text })
+            }
+            finish = chunk.candidates?.[0]?.finishReason ?? finish
+          }
+          const stop = blocked || (finish && DECLINED.includes(finish)) ? 'refusal' : finish === FinishReason.MAX_TOKENS ? 'max_tokens' : 'end_turn'
+          send(controller, { done: true, stop })
+          break
+        } catch (err) {
+          const status = err instanceof ApiError ? err.status : 0
+          console.error(`patient-chat failed (${attempts[i]}, try ${i + 1}/${attempts.length})`, err instanceof ApiError ? `${err.status} ${err.message}` : err)
+          const busy = status === 500 || status === 503
+          if (busy && !sentText && !req.signal.aborted && i + 1 < attempts.length) {
+            await new Promise((r) => setTimeout(r, 1500))
+            continue
+          }
+          const message =
+            busy
+              ? "Google's free AI is busy right now. Wait a minute and ask again."
+              : status === 429
+                ? 'The free AI limit is used up for now. Try again in a minute (or tomorrow if the daily limit is reached).'
+                : status === 404
+                  ? `The AI model "${attempts[i]}" is not available. Set a current model with the GEMINI_MODEL secret.`
+                  : status === 400 || status === 401 || status === 403
+                    ? 'The chat is not set up correctly: the server API key or model was rejected.'
+                    : status === 0
+                      ? 'Could not reach the AI service. Try again.'
+                      : 'The AI could not answer. Try again.'
+          send(controller, { error: message })
+          break
         }
-        const stop = blocked || (finish && DECLINED.includes(finish)) ? 'refusal' : finish === FinishReason.MAX_TOKENS ? 'max_tokens' : 'end_turn'
-        send(controller, { done: true, stop })
-      } catch (err) {
-        console.error('patient-chat failed', err instanceof ApiError ? `${err.status} ${err.message}` : err)
-        const status = err instanceof ApiError ? err.status : 0
-        const message =
-          status === 429
-            ? 'The free AI limit is used up for now. Try again in a minute (or tomorrow if the daily limit is reached).'
-            : status === 404
-              ? `The AI model "${MODEL}" is not available. Set a current model with the GEMINI_MODEL secret.`
-              : status === 400 || status === 401 || status === 403
-              ? 'The chat is not set up correctly: the server API key or model was rejected.'
-              : status === 0
-                ? 'Could not reach the AI service. Try again.'
-                : 'The AI could not answer. Try again.'
-        send(controller, { error: message })
-      } finally {
-        controller.close()
       }
+      controller.close()
     },
   })
 

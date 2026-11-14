@@ -58,6 +58,9 @@ sessions in Supabase. A browser version can come later from the same code in
    If answers are slow to start, `npx supabase secrets set GEMINI_THINKING=MINIMAL`
    makes the model think less before answering (default `LOW`; `default`
    leaves it to the model).
+   If Google is often "busy" (503), set a backup model that is tried when the
+   main one is overloaded, e.g. a Flash-Lite model listed in AI Studio:
+   `npx supabase secrets set GEMINI_FALLBACK_MODEL=<model name>`.
    Without these steps the panel shows "The chat is not set up on the server yet".
 
 ### 2. GitHub secrets
