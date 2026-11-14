@@ -65,8 +65,8 @@ function Hero() {
     <section aria-label="About SmartPhysio" className="relative h-[200px] overflow-hidden lg:h-auto lg:min-h-app lg:w-[55%]">
       <img
         src={rigPhoto}
-        alt="A person wearing the SmartPhysio prototype: sensor pads and a strap on the right upper arm, the hub on a waist belt and a battery box at the hip."
-        className="absolute inset-0 h-full w-full object-cover object-[50%_32%]"
+        alt="A person wearing the SmartPhysio prototype: a sensor board strapped to the upper arm, a sensor pod on a forearm strap, and the hub on a waist belt, wired together."
+        className="absolute inset-0 h-full w-full object-cover object-[50%_45%]"
       />
       {/* Navy overlay, stronger towards the bottom, so the white text stays readable over any part of the photo. */}
       <div
