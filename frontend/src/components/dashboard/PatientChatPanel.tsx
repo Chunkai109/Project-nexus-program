@@ -3,6 +3,7 @@ import { AlertTriangle, FlaskConical, Lightbulb, MessageSquareText, RotateCcw, S
 import { Button } from '@/components/ui/Button'
 import { buildPatientContext } from '@/lib/patientChat/patientContext'
 import { askPatientChat, PATIENT_CHAT_AVAILABLE, PatientChatError, type ChatEnd, type ChatTurn } from '@/lib/patientChat/askPatientChat'
+import { useDevPreview } from '@/components/layout/devPreviewState'
 import type { PatientPageData } from './PatientPageView'
 import { SectionCard } from './ui/SectionCard'
 
@@ -70,8 +71,11 @@ export function PatientChatPanel({ data }: { data: PatientPageData }) {
   const full = messages.length >= MAX_TURNS - 1
 
   // Rebuilt only when the patient's data changes, so a chat keeps the same summary.
+  // In the admin preview every patient is demo data, whatever the session records say.
+  const inPreview = useDevPreview().role !== null
+  const isDemo = data.isDemo || inPreview
   const [openedAt] = useState(() => Date.now())
-  const context = useMemo(() => buildPatientContext({ history: data.history, isDemo: data.isDemo, plans: data.plans, now: openedAt }), [data.history, data.isDemo, data.plans, openedAt])
+  const context = useMemo(() => buildPatientContext({ history: data.history, isDemo, plans: data.plans, now: openedAt }), [data.history, isDemo, data.plans, openedAt])
 
   useEffect(() => () => abortRef.current?.abort(), [])
   useEffect(() => {
@@ -153,7 +157,7 @@ export function PatientChatPanel({ data }: { data: PatientPageData }) {
         ) : undefined
       }
     >
-      {data.isDemo && (
+      {isDemo && (
         <p className="mb-4 flex items-start gap-2.5 rounded-xl bg-amber/10 px-4 py-3 text-[14px] font-medium text-amber-ink">
           <FlaskConical className="mt-0.5 h-4 w-4 flex-shrink-0" aria-hidden />
           No real sessions yet, so answers are based on demo data, not this patient's results.

@@ -120,7 +120,7 @@ function App() {
           element={
             <DevPreviewProvider>
               <AuthProvider>
-                {/* On a development build an admin can swap in the preview's own sign-in and sandbox data (DevPreview.tsx). */}
+                {/* An admin can swap in the preview's own sign-in and sandbox data (DevPreview.tsx). */}
                 <WithDevPreview real={(routes) => <AppDataProvider>{routes}</AppDataProvider>}>
                   <HubProvider>
                     <AppRoutes />

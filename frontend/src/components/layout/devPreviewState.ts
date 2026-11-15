@@ -1,8 +1,12 @@
 import { createContext, useContext } from 'react'
 import type { AuthUser, UserRole } from '@/types'
 
-/** True on a development build (`npm run dev`); false in the desktop installer. See DevPreview.tsx. */
-export const DEV_PREVIEW_AVAILABLE = import.meta.env.DEV
+/**
+ * The admin preview is available in every build, the desktop installer
+ * included. It only opens for a signed-in admin, and it runs on sandbox demo
+ * data that never reaches Supabase (see DevPreview.tsx). Set to false to hide it.
+ */
+export const ADMIN_PREVIEW_AVAILABLE: boolean = true
 
 export type PreviewRole = Extract<UserRole, 'patient' | 'physio'>
 export const STORAGE_KEY = 'smartphysio:dev-preview'

@@ -4,11 +4,12 @@ import { ArrowLeft, Eye } from 'lucide-react'
 import { PreviewAuthProvider, useAuth } from '@/lib/AuthContext'
 import { PreviewAppDataProvider, useAppData } from '@/lib/data/AppDataContext'
 import { homeFor } from '@/lib/homeFor'
-import { DEV_PREVIEW_AVAILABLE, DevPreviewContext, PREVIEW_PATIENT, STORAGE_KEY, previewUser, readStored, useDevPreview, type PreviewRole } from './devPreviewState'
+import { seedPreviewSandbox } from './previewSandboxSeed'
+import { ADMIN_PREVIEW_AVAILABLE, DevPreviewContext, PREVIEW_PATIENT, STORAGE_KEY, previewUser, readStored, useDevPreview, type PreviewRole } from './devPreviewState'
 
 /**
- * Developer preview: on a development build only (`npm run dev`), an admin
- * can open the app as a test patient or a test physio with no login.
+ * Admin preview: an admin can open the app as a test patient or a test
+ * physio with no login, on a full demo clinic (see previewSandboxSeed.ts).
  *
  * - The admin stays signed in underneath; "Back to Admin" ends the preview.
  * - The preview runs on its own sandbox data in this browser
@@ -16,14 +17,16 @@ import { DEV_PREVIEW_AVAILABLE, DevPreviewContext, PREVIEW_PATIENT, STORAGE_KEY,
  *   normal local data, so no real record can be seen or changed.
  * - The patient and physio previews share that sandbox, so a session done
  *   as the test patient shows up for the test physio.
- * - In a release build (the desktop installer) `import.meta.env.DEV` is
- *   false: the button is not shown and a stored preview is ignored.
+ * - Each preview starts from fresh demo data: the 12 labelled demo patients
+ *   with their history, plus the test patient with a plan and history.
+ * - Available in the desktop installer too; only admins can open it.
  */
 /** Holds which preview (if any) is open. Kept for this tab only, so a reload stays in the preview. */
 export function DevPreviewProvider({ children }: { children: ReactNode }) {
-  const [role, setRole] = useState<PreviewRole | null>(() => (DEV_PREVIEW_AVAILABLE ? readStored() : null))
+  const [role, setRole] = useState<PreviewRole | null>(() => (ADMIN_PREVIEW_AVAILABLE ? readStored() : null))
   const start = useCallback((next: PreviewRole) => {
-    if (!DEV_PREVIEW_AVAILABLE) return
+    if (!ADMIN_PREVIEW_AVAILABLE) return
+    seedPreviewSandbox()
     try {
       window.sessionStorage.setItem(STORAGE_KEY, next)
     } catch {
@@ -48,7 +51,7 @@ function PreviewBar({ role, onEnd }: { role: PreviewRole; onEnd: () => void }) {
     <div role="note" className="sticky top-0 z-50 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 bg-ink px-4 py-1.5 text-[14px] font-semibold text-canvas">
       <span className="inline-flex items-center gap-2">
         <Eye className="h-4 w-4 flex-shrink-0" aria-hidden />
-        Admin preview: {role === 'patient' ? 'patient app' : 'physio portal'}, as a test account. Sandbox data, nothing real is saved.
+        Admin preview: {role === 'patient' ? 'patient app' : 'physio portal'}, as a test account. Demo data only, nothing real is read or saved.
       </span>
       <button type="button" onClick={onEnd} className="inline-flex min-h-[32px] items-center gap-1.5 rounded-md px-2 underline">
         <ArrowLeft className="h-4 w-4" aria-hidden />
@@ -88,14 +91,14 @@ function SeedSandbox() {
 
 /**
  * Wraps the app's routes. When a preview is open and the signed-in account
- * is really an admin on a development build, the routes run inside the
+ * is really an admin, the routes run inside the
  * preview's own sign-in and sandbox data instead of the real ones.
  */
 export function WithDevPreview({ real, children }: { real: (children: ReactNode) => ReactNode; children: ReactNode }) {
   const { user, initializing } = useAuth()
   const { role, end } = useDevPreview()
   const navigate = useNavigate()
-  const active = DEV_PREVIEW_AVAILABLE && role !== null && user?.role === 'admin'
+  const active = ADMIN_PREVIEW_AVAILABLE && role !== null && user?.role === 'admin'
   const endPreview = useCallback(() => {
     end()
     navigate('/admin', { replace: true })

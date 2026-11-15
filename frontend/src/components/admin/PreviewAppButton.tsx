@@ -1,17 +1,17 @@
 import { useEffect, useRef, useState } from 'react'
 import { ChevronDown, Eye, Stethoscope, UserRound } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
-import { DEV_PREVIEW_AVAILABLE, useDevPreview, type PreviewRole } from '@/components/layout/devPreviewState'
+import { ADMIN_PREVIEW_AVAILABLE, useDevPreview, type PreviewRole } from '@/components/layout/devPreviewState'
 
 const OPTIONS: { role: PreviewRole; label: string; hint: string; icon: typeof UserRound }[] = [
-  { role: 'patient', label: 'Patient app', hint: 'As a test patient with one Bicep Curl plan', icon: UserRound },
-  { role: 'physio', label: 'Physio portal', hint: 'As a test physiotherapist', icon: Stethoscope },
+  { role: 'patient', label: 'Patient app', hint: 'As a test patient with a Bicep Curl plan and weeks of demo sessions. Live session uses the camera AI, and the hub if connected.', icon: UserRound },
+  { role: 'physio', label: 'Physio portal', hint: 'As a test physio with 12 demo patients. Includes the patient chat.', icon: Stethoscope },
 ]
 
 /**
  * "Preview the app": opens the app as a test patient or physio, with no
- * login. Development builds only; the button is not rendered in a release
- * build. See components/layout/DevPreview.tsx.
+ * login, on a fresh demo clinic. Available in every build, for admins only.
+ * See components/layout/DevPreview.tsx.
  */
 export function PreviewAppButton() {
   const { start } = useDevPreview()
@@ -30,7 +30,7 @@ export function PreviewAppButton() {
     }
   }, [open])
 
-  if (!DEV_PREVIEW_AVAILABLE) return null
+  if (!ADMIN_PREVIEW_AVAILABLE) return null
   return (
     <div ref={wrap} className="relative">
       <Button size="sm" className="min-h-[40px] text-[15px]" aria-expanded={open} aria-haspopup="true" onClick={() => setOpen((o) => !o)}>
@@ -40,7 +40,7 @@ export function PreviewAppButton() {
       </Button>
       {open && (
         <div className="absolute right-0 z-40 mt-2 w-80 rounded-xl border border-border-strong bg-surface p-2 shadow-[var(--shadow-ambient-lg)]">
-          <p className="px-2 pb-2 pt-1 text-[13px] text-ink-muted">Development build only. Opens with sandbox data in this browser; nothing real is read or changed.</p>
+          <p className="px-2 pb-2 pt-1 text-[13px] text-ink-muted">Opens on fresh demo data each time. Nothing real is read or changed.</p>
           {OPTIONS.map((o) => (
             <button
               key={o.role}
