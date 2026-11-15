@@ -69,6 +69,47 @@ export function HubProvider({ children }: { children: ReactNode }) {
   // the latest per-pod baseline/MVC without having to recreate the client.
   const calibrationRef = useRef<Partial<Record<PodId, EmgCalibration>>>({})
 
+  // The hub sends about 150 messages a second (3 pods x 50 Hz). Re-rendering
+  // the whole app for each one made the screens fall seconds behind the arm,
+  // so readings are collected here and drawn once per screen frame, always
+  // with the newest values. Rep counting still steps on every message above.
+  const pendingRef = useRef<{ pods: Partial<Record<PodId, Partial<PodLiveData>>>; curl: BicepCurlCounterResult | null }>({ pods: {}, curl: null })
+  const flushScheduledRef = useRef(false)
+  const flush = useCallback(() => {
+    flushScheduledRef.current = false
+    const { pods: queued, curl: queuedCurl } = pendingRef.current
+    pendingRef.current = { pods: {}, curl: null }
+    if (Object.keys(queued).length > 0)
+      setPods((prev) => {
+        const next = { ...prev }
+        for (const [id, reading] of Object.entries(queued)) next[Number(id) as PodId] = { ...prev[Number(id) as PodId], ...reading }
+        return next
+      })
+    if (queuedCurl) setCurl(queuedCurl)
+  }, [])
+  const scheduleFlush = useCallback(() => {
+    if (flushScheduledRef.current) return
+    flushScheduledRef.current = true
+    // requestAnimationFrame pauses in a hidden window; fall back to a timer there.
+    if (typeof document !== 'undefined' && document.hidden) window.setTimeout(flush, 100)
+    else window.requestAnimationFrame(flush)
+  }, [flush])
+  const queuePod = useCallback(
+    (podId: PodId, reading: Partial<PodLiveData>) => {
+      const pods = pendingRef.current.pods
+      pods[podId] = { ...pods[podId], ...reading }
+      scheduleFlush()
+    },
+    [scheduleFlush],
+  )
+  const queueCurl = useCallback(
+    (result: BicepCurlCounterResult) => {
+      pendingRef.current.curl = result
+      scheduleFlush()
+    },
+    [scheduleFlush],
+  )
+
   const getClient = useCallback(() => {
     if (!clientRef.current) {
       clientRef.current = new SmartPhysioSocketClient({
@@ -77,6 +118,7 @@ export function HubProvider({ children }: { children: ReactNode }) {
           setErrorMessage(state === 'error' ? (detail ?? 'Unknown error') : null)
           if (state === 'connected') setDeviceName(detail ?? 'SmartPhysio Hub')
           if (state === 'disconnected' || state === 'error') {
+            pendingRef.current = { pods: {}, curl: null }
             setPods({})
             curlCounterRef.current = new BicepCurlCounter()
             curlCounterRef.current.setDriftTolerance(driftToleranceRef.current)
@@ -85,47 +127,32 @@ export function HubProvider({ children }: { children: ReactNode }) {
           }
         },
         onImu: (packet) => {
-          setPods((prev) => ({
-            ...prev,
-            [packet.podId]: {
-              ...prev[packet.podId],
-              pitchDeg: packet.pitchDeg,
-              rollDeg: packet.rollDeg,
-              yawDeg: packet.yawDeg,
-            },
-          }))
+          queuePod(packet.podId, { pitchDeg: packet.pitchDeg, rollDeg: packet.rollDeg, yawDeg: packet.yawDeg })
           // Stepped here, synchronously per message, rather than in a React
           // effect — see bicepCurlCounter.ts for why that distinction matters.
           if (packet.podId === CURL_FLEX_POD_ID) {
             const result = curlCounterRef.current.updateFlex(packet.pitchDeg)
-            if (result) setCurl(result)
+            if (result) queueCurl(result)
             flexDriftRecorderRef.current.updateFlex(packet.pitchDeg)
           } else if (packet.podId === CURL_DRIFT_POD_ID) {
             const result = curlCounterRef.current.updateDrift(packet.pitchDeg)
-            if (result) setCurl(result)
+            if (result) queueCurl(result)
             flexDriftRecorderRef.current.updateDrift(packet.pitchDeg)
           }
         },
         onEmg: (packet) => {
-          setPods((prev) => ({
-            ...prev,
-            [packet.podId]: {
-              ...prev[packet.podId],
-              vrmsRaw: packet.vrmsNormalized,
-              emgActivationPct: emgActivationPercent(packet.vrmsNormalized, calibrationRef.current[packet.podId]),
-            },
-          }))
+          queuePod(packet.podId, {
+            vrmsRaw: packet.vrmsNormalized,
+            emgActivationPct: emgActivationPercent(packet.vrmsNormalized, calibrationRef.current[packet.podId]),
+          })
         },
         onPodStatus: (packet) => {
-          setPods((prev) => ({
-            ...prev,
-            [packet.podId]: { ...prev[packet.podId], battery: packet.batteryPct, signal: packet.signal },
-          }))
+          queuePod(packet.podId, { battery: packet.batteryPct, signal: packet.signal })
         },
       })
     }
     return clientRef.current
-  }, [])
+  }, [queuePod, queueCurl])
 
   const connect = useCallback(
     async (url: string = DEFAULT_HUB_WS_URL) => {

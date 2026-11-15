@@ -4,6 +4,9 @@ import { usePoseLandmarker } from '@/lib/pose/usePoseLandmarker'
 import { isArmVisible, type Side } from '@/lib/pose/poseMetrics'
 import { drawPoseSkeleton } from '@/lib/pose/drawPoseSkeleton'
 
+/** Cap on pose detections per second. The form-check model was trained on about 24 fps video (ASSUMED_TRAINING_FPS in ml/src/inference/predictor.py). */
+const POSE_MAX_FPS = 24
+
 export function CameraViewport({
   children,
   fallbackSkeleton,
@@ -101,9 +104,25 @@ export function CameraViewport({
     resizeObserver.observe(container)
     resizeCanvas()
 
+    // Pose detection is the heaviest work on the page and runs on the main
+    // thread. Running it on every screen frame (60/s) starved everything else:
+    // hub readings reached the screen about a second late. So it runs only when
+    // the camera has a new image, and at most POSE_MAX_FPS times a second, which
+    // is about the rate the form-check model was trained at.
+    // On a slow laptop (for example when MediaPipe falls back from the GPU to
+    // the CPU) one detection can take 100 ms or more; after each one the loop
+    // waits at least twice as long as it took, so pose detection never uses
+    // more than about half of the main thread.
+    let lastVideoTime = -1
+    let nextDetectAt = 0
     function loop() {
-      if (video!.readyState >= 2) {
-        const result = detectForVideo(video!, performance.now())
+      const now = performance.now()
+      const fresh = video!.currentTime !== lastVideoTime
+      if (video!.readyState >= 2 && fresh && now >= nextDetectAt) {
+        lastVideoTime = video!.currentTime
+        const result = detectForVideo(video!, now)
+        const took = performance.now() - now
+        nextDetectAt = now + Math.max(1000 / POSE_MAX_FPS, took * 3)
         const landmarks = result?.landmarks?.[0] ?? null
         const cssWidth = container!.clientWidth
         const cssHeight = container!.clientHeight
