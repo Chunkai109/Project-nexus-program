@@ -74,7 +74,7 @@ Deno.serve(async (req) => {
   const apiKey = Deno.env.get('GEMINI_API_KEY')
   if (!apiKey) return json(500, { error: 'The chat is not set up yet: GEMINI_API_KEY is missing on the server.' })
 
-  // Only physios (and admins, whom my_role() reports as physio) may ask.
+  // Only physios and admins may ask.
   const authHeader = req.headers.get('Authorization') ?? ''
   if (!authHeader.startsWith('Bearer ')) return json(401, { error: 'Sign in first.' })
   const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_ANON_KEY')!, {
@@ -83,7 +83,14 @@ Deno.serve(async (req) => {
   })
   const { data: role, error: roleError } = await supabase.rpc('my_role')
   if (roleError) return json(401, { error: 'Could not check your account. Sign in again.' })
-  if (role !== 'physio') return json(403, { error: 'Only physiotherapists can use the patient chat.' })
+  // Physios and admins may ask. Depending on the database version, my_role()
+  // reports an admin as 'admin' or as 'physio'; is_admin() settles it either way.
+  let allowed = role === 'physio' || role === 'admin'
+  if (!allowed) {
+    const { data: isAdmin } = await supabase.rpc('is_admin')
+    allowed = isAdmin === true
+  }
+  if (!allowed) return json(403, { error: 'Only physiotherapists and admins can use the patient chat.' })
 
   let body: unknown
   try {
