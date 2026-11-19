@@ -76,10 +76,11 @@ Use these as ground truth. If the code says otherwise, the code wins. Tell me so
 * Patient screens must work for someone with no technical background, mid-exercise.
 * Physio screens should answer "is this patient improving?" in seconds.
 * Label demo or placeholder data clearly. Never let it look like a real clinical record.
-* Run `npx tsc -b` and `npm run build` in `frontend/` before calling a change done.
+* Run `npx tsc -b`, `npm run lint`, `npm test` and `npm run build` in `frontend/` before calling a change done.
 
 **Machine learning**
 * Treat any "new model" as unproven until it is compared against the current one: check the file hash, the metrics and the API endpoints.
+* Run `pytest` from the repo root after touching splits, features or evaluation. `tests/ml/` guards against train/test leaks.
 * Report accuracy per class, not just overall. A model that misses "Swing" is a safety problem.
 * Note where training data is thin or comes from very few people.
 
@@ -103,6 +104,15 @@ Use these as ground truth. If the code says otherwise, the code wins. Tell me so
 * Lead with the patient or physio problem, then show how SmartPhysio solves it.
 * Every claim must be true of the current prototype. Mark future features as future.
 * No made-up statistics, testimonials or partners. Ask me for real numbers.
+
+# Workflow
+
+Every change follows `workflows/README.md`: **plan → test first (where it fits) → build → verify → review → commit only when asked**.
+
+* Tests first are required for logic (rep counting, drift, session stats, data mapping) and for ML splits and metrics; optional for UI layout; not possible for firmware here.
+* Commands: `/plan-change`, `/verify`, `/build-fix`.
+* Reviewer agents in `.claude/agents/`: `planner`, `dashboard-reviewer`, `ml-reviewer`, `firmware-reviewer`, `privacy-safety-reviewer`, `claims-checker`.
+* No hooks: nothing runs automatically.
 
 # Communication Style
 
